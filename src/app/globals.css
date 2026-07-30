@@ -1,26 +1,137 @@
 @import "tailwindcss";
 
+@theme {
+  --animate-sidebar-in: sidebar-in 0.25s ease-out;
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  /* Real value is set by SiteHeader via ResizeObserver; this is only the
+     first-paint fallback before that JS runs. */
+  --header-height: 65px;
+
+  /* next/font only publishes one CSS variable per loaded font (--font-display,
+     set on <html> in layout.tsx); --font-body aliases straight to it so every
+     component that already reads var(--font-body) keeps working under the
+     single-Inter-font system. */
+  --font-body: var(--font-display);
+
+  /* Single theme: the real Legal Efilings brand (yellow badge + black
+     wordmark) — one confident yellow/amber family for both action and
+     accent, matching the real logo rather than a separate multi-theme
+     picker.
+     Note: --color-action / --color-accent / --color-muted are what used to
+     be --color-seal / --color-yellow / --color-brass before an earlier
+     rename; kept as-is so every component that reads these names still
+     works without a second pass. */
+  --background: #f6f8fb;
+  --foreground: #0f172a;
+  --color-ink: #0f172a;
+  --color-ink-soft: #5b6b81;
+  --color-paper: #f6f8fb;
+  --color-paper-raised: #ffffff;
+  --color-line: #e2e8f0;
+  /* Action shade is a dark amber/gold (not the bright badge yellow) so
+     white button text stays legible; --color-accent is the real badge
+     yellow itself, for fills where white text isn't sitting on top. */
+  --color-action: #b58900;
+  --color-action-dark: #8a6700;
+  --color-action-tint: #fff6d9;
+  --color-accent: #fdc500;
+  --color-accent-dark: #8a6700;
+  --color-accent-tint: #fff8e6;
+  --color-muted: #a17a1f;
+  --color-muted-dark: #6b5215;
+  --color-muted-tint: #fbf3e3;
+  --gradient-accent-from: #b58900;
+  --gradient-accent-to: #fdc500;
+
+  /* A handful of surfaces (the hero's dark form card, the AI-assistant
+     header, the bottom CTA band) are deliberately dark panels regardless
+     of the rest of the page — not "the page's text color". */
+  --color-ink-fixed: #0f172a;
+
+  /* doola.com's own top offer banner runs on their brand blue specifically
+     — not their homepage's yellow — so this is scoped to that one banner
+     rather than reintroduced as a second site-wide accent color. */
+  --color-banner: #276ef1;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-ink: var(--color-ink);
+  --color-ink-soft: var(--color-ink-soft);
+  --color-paper: var(--color-paper);
+  --color-paper-raised: var(--color-paper-raised);
+  --color-line: var(--color-line);
+  --color-action: var(--color-action);
+  --color-action-dark: var(--color-action-dark);
+  --color-action-tint: var(--color-action-tint);
+  --color-accent: var(--color-accent);
+  --color-accent-dark: var(--color-accent-dark);
+  --color-accent-tint: var(--color-accent-tint);
+  --color-muted: var(--color-muted);
+  --color-muted-dark: var(--color-muted-dark);
+  --color-muted-tint: var(--color-muted-tint);
+  --font-sans: var(--font-body);
 }
 
 body {
-  background: var(--background);
+  background: var(--color-paper);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body), -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+}
+
+/* A single font family carries both display and body text — Inter,
+   referenced from doola.com's own site (their whole typographic identity
+   is one font at varying weights, not a separate serif/display face) —
+   with tight letter-spacing on headings to match. */
+h1, h2, h3 {
+  font-family: var(--font-display), -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  letter-spacing: -0.01em;
+  font-weight: 700;
+}
+
+.text-gradient {
+  background: linear-gradient(90deg, var(--gradient-accent-from), var(--gradient-accent-to));
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+/* Anchor targets under the sticky header: reserve exactly enough space to
+   clear it, however tall it actually renders. */
+.scroll-mt-nav {
+  scroll-margin-top: calc(var(--header-height) + 16px);
+}
+
+/* Reveal's fade/rise-in is set inline (so its start state renders before
+   any stylesheet asserts itself), but a user who's asked for reduced motion
+   should just see the content — never fading in, no transform. */
+@media (prefers-reduced-motion: reduce) {
+  .reveal {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
+/* Mobile nav sidebar's slide-in — safe to animate transform here because
+   the panel is only ever mounted while open (see SiteHeader), so it never
+   sits at rest at a negative offset the way an always-mounted, permanently
+   translated drawer would. That earlier approach expanded the page's
+   scrollable area and shifted the whole viewport (see: the mobile "hiding
+   content" bug); this one only exists at its final in-bounds position. */
+@keyframes sidebar-in {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-sidebar-in {
+    animation: none !important;
+  }
 }
