@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import { promises as fs } from "fs";
+import os from "os";
 import path from "path";
 import { LEAD_STAGES, type Lead, type LeadStage } from "@/lib/leads";
 
 // MOCK STORE — writes to a local JSON file instead of a real database.
 // Swap this for a Postgres insert once the backend/DB is wired up.
-const MOCK_DATA_DIR = path.join(process.cwd(), "data");
+// On Vercel the project directory is read-only at runtime (only /tmp is
+// writable), and /tmp there is wiped between deploys/cold starts — so
+// leads won't persist in production, only within a single warm instance.
+// That's an accepted limitation of the mock store, not a bug.
+const MOCK_DATA_DIR = process.env.VERCEL ? os.tmpdir() : path.join(process.cwd(), "data");
 const MOCK_LEADS_FILE = path.join(MOCK_DATA_DIR, "leads.mock.json");
 
 async function readLeads(): Promise<Lead[]> {
