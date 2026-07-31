@@ -42,3 +42,6 @@ next-env.d.ts
 
 # mock data (temporary — replaced by real DB integration)
 /data/
+
+# Supabase CLI local cache
+/supabase/.temp/
