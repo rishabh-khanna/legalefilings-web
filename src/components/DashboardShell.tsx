@@ -214,7 +214,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   if (session === "loading" || session === null) {
     return (
-      <div className="mx-auto max-w-[1600px] px-4 py-16 text-center">
+      <div className="mx-auto max-w-6xl px-4 py-16 text-center">
         <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
           Loading…
         </p>
@@ -227,7 +227,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       {/* Same soft-yellow welcome band every other page's hero uses, so the
           dashboard reads as part of the site instead of a bolted-on app. */}
       <div style={{ background: "linear-gradient(180deg, var(--color-accent-tint) 0%, var(--color-paper) 100%)" }}>
-        <div className="mx-auto max-w-[1600px] px-4 pt-10 pb-6">
+        <div className="mx-auto max-w-6xl px-4 pt-10 pb-6">
           <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "var(--color-action-dark)" }}>
             Your Account
           </p>
@@ -235,21 +235,25 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             <h1 className="text-2xl font-extrabold sm:text-3xl" style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)" }}>
               Welcome back, {session.name}
             </h1>
-            <Link
-              href={isStaffOrAdmin(session.profile) ? "/dashboard/admin/buy-for-customer" : "/pricing"}
-              className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
-              style={{ backgroundColor: "var(--color-ink-fixed)" }}
-            >
-              {isStaffOrAdmin(session.profile) ? "Buy Plan for Customer" : "Buy a New Plan"}
-              <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M4 10h12M11 5l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </Link>
+            {/* Staff/admin already have "Buy Plan for Customer" in the
+                sidebar nav — repeating it here as well read as redundant. */}
+            {!isStaffOrAdmin(session.profile) && (
+              <Link
+                href="/pricing"
+                className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
+                style={{ backgroundColor: "var(--color-ink-fixed)" }}
+              >
+                Buy a New Plan
+                <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M4 10h12M11 5l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" />
+                </svg>
+              </Link>
+            )}
           </div>
         </div>
       </div>
 
-      <div className="mx-auto max-w-[1600px] px-4 pb-16 lg:grid lg:grid-cols-[220px_1fr] lg:gap-8">
+      <div className="mx-auto max-w-6xl px-4 pb-16 lg:grid lg:grid-cols-[220px_1fr] lg:gap-8">
         {/* Mobile: horizontal scrollable tab row instead of a duplicate off-canvas menu — the site header's own hamburger already covers site-wide nav. */}
         <div className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-1 lg:hidden">
           {navItems.map((item) => {
