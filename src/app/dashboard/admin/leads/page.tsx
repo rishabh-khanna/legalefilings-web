@@ -2,7 +2,14 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { LEAD_STAGES, LEAD_STAGE_LABELS, type Lead, type LeadStage } from "@/lib/leads";
-import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { buildWhatsAppLink } from "@/lib/whatsapp";
+import { SITE_NAME } from "@/config/site";
+
+function leadWhatsAppMessage(lead: Lead) {
+  const firstName = lead.name.split(" ")[0];
+  const serviceLine = lead.service ? ` about ${lead.service}` : "";
+  return `Hi ${firstName}, this is ${SITE_NAME} following up on your enquiry${serviceLine}. How can we help you get started?`;
+}
 
 const STAGE_COLORS: Record<string, string> = {
   new: "bg-slate-100 text-slate-700",
@@ -25,9 +32,9 @@ export default function AdminDashboard() {
       .catch(() => setError("Could not load leads"));
 
     const kickoff = setTimeout(async () => {
-      const supabase = createSupabaseBrowserClient();
-      const { data } = await supabase.from("profiles").select("full_name").in("account_type", ["staff", "admin"]);
-      const names = (data ?? []).map((p) => p.full_name).filter((n): n is string => Boolean(n));
+      const res = await fetch("/api/team-members");
+      const data = await res.json();
+      const names = ((data.members ?? []) as { full_name: string | null }[]).map((p) => p.full_name).filter((n): n is string => Boolean(n));
       setStaffNames(["Unassigned", ...names]);
     }, 0);
     return () => clearTimeout(kickoff);
@@ -49,6 +56,28 @@ export default function AdminDashboard() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, ...patch }),
     }).catch(() => setError("Failed to save change"));
+  }
+
+  async function reload() {
+    const res = await fetch("/api/leads");
+    const data = await res.json();
+    setLeads(data.leads);
+  }
+
+  async function claimLead(id: string) {
+    setError(null);
+    const res = await fetch("/api/leads", {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ id, claim: true }),
+    });
+    if (!res.ok) {
+      setError("Someone else already claimed this lead — refreshed the list.");
+      await reload();
+      return;
+    }
+    const data = await res.json();
+    setLeads((prev) => (prev ? prev.map((l) => (l.id === id ? { ...l, assignedTo: data.lead.assignedTo } : l)) : prev));
   }
 
   return (
@@ -101,6 +130,7 @@ export default function AdminDashboard() {
               <th className="px-4 py-2.5">Assigned to</th>
               <th className="px-4 py-2.5">Notes</th>
               <th className="px-4 py-2.5">Received</th>
+              <th className="px-4 py-2.5"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-100">
@@ -141,17 +171,27 @@ export default function AdminDashboard() {
                   </select>
                 </td>
                 <td className="px-4 py-3">
-                  <select
-                    value={lead.assignedTo}
-                    onChange={(e) => updateLead(lead.id, { assignedTo: e.target.value })}
-                    className="rounded-md border border-slate-300 px-2 py-1 text-xs"
-                  >
-                    {staffNames.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </select>
+                  {lead.assignedTo === "Unassigned" ? (
+                    <button
+                      type="button"
+                      onClick={() => claimLead(lead.id)}
+                      className="rounded-full bg-amber-500 px-3 py-1 text-xs font-semibold text-white hover:bg-amber-600"
+                    >
+                      Claim
+                    </button>
+                  ) : (
+                    <select
+                      value={lead.assignedTo}
+                      onChange={(e) => updateLead(lead.id, { assignedTo: e.target.value })}
+                      className="rounded-md border border-slate-300 px-2 py-1 text-xs"
+                    >
+                      {staffNames.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </td>
                 <td className="px-4 py-3 min-w-[180px]">
                   <textarea
@@ -165,11 +205,21 @@ export default function AdminDashboard() {
                 <td className="px-4 py-3 text-slate-500 whitespace-nowrap">
                   {new Date(lead.createdAt).toLocaleDateString()}
                 </td>
+                <td className="px-4 py-3 whitespace-nowrap">
+                  <a
+                    href={buildWhatsAppLink(lead.phone, leadWhatsAppMessage(lead))}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700 hover:bg-green-200"
+                  >
+                    WhatsApp
+                  </a>
+                </td>
               </tr>
             ))}
             {leads !== null && visibleLeads.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
+                <td colSpan={8} className="px-4 py-10 text-center text-slate-400">
                   No leads {viewer !== "Everyone" ? `assigned to ${viewer}` : "yet"}.
                 </td>
               </tr>

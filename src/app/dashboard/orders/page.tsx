@@ -1,5 +1,6 @@
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
+import { getReportingChainIds } from "@/lib/reporting-chain";
 import { isStaffOrAdmin } from "@/lib/roles";
 
 type OrderRow = {
@@ -31,11 +32,17 @@ const STATUS_STYLE: Record<OrderRow["status"], { bg: string; fg: string }> = {
 
 export default async function OrderHistoryPage() {
   const profile = await getCurrentProfile();
-  const supabase = await createSupabaseServerClient();
+  const supabase = getSupabaseAdmin();
 
   let query = supabase.from("orders").select("*").order("created_at", { ascending: false });
-  if (profile && !isStaffOrAdmin(profile)) {
+  if (profile?.account_type === "customer") {
     query = query.eq("customer_id", profile.id);
+  } else if (profile && profile.account_type !== "admin") {
+    // A rater sees only orders assigned to them; a leader/group_leader
+    // sees their own plus their reporting chain's — not the whole
+    // company's order book.
+    const chain = await getReportingChainIds(profile.id);
+    query = query.in("assigned_to", [profile.id, ...chain]);
   }
   const { data } = await query;
   const orders = (data as OrderRow[] | null) ?? [];

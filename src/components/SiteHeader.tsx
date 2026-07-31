@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { SiteSearch } from "@/components/SiteSearch";
 import { Logo } from "@/components/Logo";
 import { PriceTagBadge } from "@/components/PriceTagBadge";
@@ -21,6 +22,16 @@ export function SiteHeader({ categories, searchIndex }: { categories: NavCategor
   const [expanded, setExpanded] = useState<string | null>(null);
   const [loggedIn, setLoggedIn] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
+  const router = useRouter();
+
+  async function handleLogout() {
+    const supabase = createSupabaseBrowserClient();
+    await supabase.auth.signOut();
+    setLoggedIn(false);
+    setOpen(false);
+    router.push("/login");
+    router.refresh();
+  }
 
   // Swaps "Sign In" for "Dashboard" once a real session exists, so a
   // logged-in visitor can get back to it from anywhere on the public site
@@ -122,7 +133,10 @@ export function SiteHeader({ categories, searchIndex }: { categories: NavCategor
                 You&apos;re signed in.{" "}
                 <Link href="/dashboard" className="font-semibold" style={{ color: "var(--color-action-dark)" }}>
                   Go to Dashboard →
-                </Link>
+                </Link>{" "}
+                <button type="button" onClick={handleLogout} className="font-semibold underline" style={{ color: "var(--color-ink-soft)" }}>
+                  Logout
+                </button>
               </>
             ) : (
               <>
@@ -368,6 +382,25 @@ export function SiteHeader({ categories, searchIndex }: { categories: NavCategor
                 </span>
                 {loggedIn ? "Dashboard" : "Login"}
               </Link>
+              {loggedIn && (
+                <button
+                  type="button"
+                  onClick={handleLogout}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-accent-tint)]"
+                  style={{ color: "var(--color-ink-soft)" }}
+                >
+                  <span
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                    style={{ backgroundColor: "var(--color-paper)", color: "var(--color-ink-soft)" }}
+                  >
+                    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.75">
+                      <path d="M15 4.5H8a1.5 1.5 0 0 0-1.5 1.5v12A1.5 1.5 0 0 0 8 19.5h7" strokeLinecap="round" strokeLinejoin="round" />
+                      <path d="M11 12h9.5m0 0-3-3m3 3-3 3" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
+                  </span>
+                  Logout
+                </button>
+              )}
             </div>
 
             <div className="mt-auto flex shrink-0 gap-3 border-t p-4" style={{ borderColor: "var(--color-line)" }}>

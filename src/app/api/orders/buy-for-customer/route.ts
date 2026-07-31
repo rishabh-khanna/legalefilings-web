@@ -53,6 +53,7 @@ export async function POST(request: Request) {
       invoice_number: invoiceNumber,
       order_id: order.id,
       customer_id: customerId,
+      created_by: profile.id,
       subtotal,
       tax_amount: taxAmount,
       total,

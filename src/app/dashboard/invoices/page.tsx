@@ -36,12 +36,10 @@ export default function InvoicesPage() {
   const [items, setItems] = useState<LineItemDraft[]>([{ ...EMPTY_ITEM }]);
   const [generating, setGenerating] = useState(false);
 
-  async function loadInvoices(supabase: ReturnType<typeof createSupabaseBrowserClient>) {
-    const { data } = await supabase
-      .from("invoices")
-      .select("id, invoice_number, total, status, created_at, profiles!invoices_customer_id_fkey(full_name)")
-      .order("created_at", { ascending: false });
-    setInvoices((data as InvoiceRow[] | null) ?? []);
+  async function loadInvoices() {
+    const res = await fetch("/api/invoices");
+    const data = await res.json();
+    setInvoices((data.invoices as InvoiceRow[] | undefined) ?? []);
   }
 
   useEffect(() => {
@@ -54,7 +52,7 @@ export default function InvoicesPage() {
       const { data: p } = await supabase.from("profiles").select("*").eq("id", user.id).single();
       if (p) setProfile({ ...p, email: user.email ?? "" });
 
-      await loadInvoices(supabase);
+      await loadInvoices();
 
       if (p && isStaffOrAdmin(p)) {
         const { data: custs } = await supabase.from("profiles").select("id, full_name").eq("account_type", "customer");
@@ -71,21 +69,18 @@ export default function InvoicesPage() {
 
   async function handleMarkPaid(id: string) {
     const res = await fetch(`/api/invoices/${id}/mark-paid`, { method: "POST" });
-    if (res.ok) {
-      const supabase = createSupabaseBrowserClient();
-      await loadInvoices(supabase);
-    }
+    if (res.ok) await loadInvoices();
   }
 
   async function handleGenerate(e: React.FormEvent) {
     e.preventDefault();
-    if (!customerId) return;
+    if (canManage && !customerId) return;
     setGenerating(true);
     const res = await fetch("/api/invoices", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        customerId,
+        customerId: canManage ? customerId : undefined,
         items: items
           .filter((i) => i.description && i.unitPrice)
           .map((i) => ({ description: i.description, quantity: Number(i.quantity) || 1, unitPrice: Number(i.unitPrice) })),
@@ -93,8 +88,7 @@ export default function InvoicesPage() {
     });
     setGenerating(false);
     if (res.ok) {
-      const supabase = createSupabaseBrowserClient();
-      await loadInvoices(supabase);
+      await loadInvoices();
       setItems([{ ...EMPTY_ITEM }]);
       setCustomerId("");
       setShowForm(false);
@@ -102,6 +96,8 @@ export default function InvoicesPage() {
   }
 
   const canManage = profile ? isStaffOrAdmin(profile) : false;
+  const isPaidCustomer = profile?.account_type === "customer" && profile.customer_tier === "paid";
+  const canGenerate = canManage || isPaidCustomer;
 
   if (loading) {
     return (
@@ -119,10 +115,14 @@ export default function InvoicesPage() {
             Invoices
           </h1>
           <p className="mt-1 text-sm" style={{ color: "var(--color-ink-soft)" }}>
-            {canManage ? "Generate and track invoices across customers." : "Invoices issued to your account."}
+            {canManage
+              ? "Generate and track invoices across customers."
+              : isPaidCustomer
+                ? "Invoices issued to your account — generate your own any time."
+                : "Invoices issued to your account."}
           </p>
         </div>
-        {canManage && (
+        {canGenerate && (
           <button
             type="button"
             onClick={() => setShowForm((v) => !v)}
@@ -134,24 +134,32 @@ export default function InvoicesPage() {
         )}
       </div>
 
-      {showForm && canManage && (
+      {!canManage && !isPaidCustomer && profile?.account_type === "customer" && (
+        <p className="mt-3 rounded-lg px-3 py-2 text-xs" style={{ backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}>
+          Generating your own invoices is a paid-tier feature.
+        </p>
+      )}
+
+      {showForm && canGenerate && (
         <form
           onSubmit={handleGenerate}
           className="mt-5 space-y-3 rounded-2xl border bg-white p-5 dark:bg-[var(--color-paper-raised)]"
           style={{ borderColor: "var(--color-line)" }}
         >
-          <select
-            required
-            value={customerId}
-            onChange={(e) => setCustomerId(e.target.value)}
-            className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]"
-            style={{ borderColor: "var(--color-line)" }}
-          >
-            <option value="">Select a customer…</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+          {canManage && (
+            <select
+              required
+              value={customerId}
+              onChange={(e) => setCustomerId(e.target.value)}
+              className="w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]"
+              style={{ borderColor: "var(--color-line)" }}
+            >
+              <option value="">Select a customer…</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          )}
 
           {items.map((item, i) => (
             <div key={i} className="grid gap-2 sm:grid-cols-[1fr_80px_120px]">

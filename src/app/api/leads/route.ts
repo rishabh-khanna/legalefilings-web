@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getCurrentProfile } from "@/lib/current-profile";
 import { sendLeadAcknowledgementEmail } from "@/lib/email";
+import { getReportingChainIds } from "@/lib/reporting-chain";
 import { LEAD_STAGES, type Lead, type LeadStage } from "@/lib/leads";
 
 // DB rows are snake_case; the frontend (admin CRM board, consultation form)
@@ -42,14 +44,47 @@ function toLead(row: LeadRow): Lead {
   };
 }
 
-export async function GET() {
+// The names a viewer is allowed to see leads for: themselves, their
+// reporting chain, and the shared "Unassigned" pool — new leads have to
+// be visible to everyone relevant so anyone can claim one, not just
+// whoever an admin happens to assign it to.
+async function visibleAssigneeNames(profile: { id: string; full_name: string | null }): Promise<string[]> {
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase.from("leads").select("*").order("created_at", { ascending: false });
+  const chainIds = await getReportingChainIds(profile.id);
+  const namesResult = chainIds.length > 0
+    ? await supabase.from("profiles").select("full_name").in("id", chainIds)
+    : { data: [] as { full_name: string | null }[] };
+  return [profile.full_name, "Unassigned", ...(namesResult.data ?? []).map((p) => p.full_name)].filter(
+    (n): n is string => Boolean(n)
+  );
+}
+
+// GET — staff/admin only. A rater sees leads assigned to them plus the
+// shared unclaimed pool; a leader/group_leader additionally sees their
+// reporting chain's; admin sees everything. leads.assigned_to is a
+// free-text staff name (see migration 20260730195500 — no real staff
+// accounts existed when that column was first used), so scoping matches
+// by name, not id.
+export async function GET() {
+  const profile = await getCurrentProfile();
+  if (!profile || profile.account_type === "customer") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
+  const supabase = getSupabaseAdmin();
+  let query = supabase.from("leads").select("*").order("created_at", { ascending: false });
+
+  if (profile.account_type !== "admin") {
+    query = query.in("assigned_to", await visibleAssigneeNames(profile));
+  }
+
+  const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const leads = (data as LeadRow[]).map(toLead);
   return NextResponse.json({ leads, count: leads.length });
 }
 
+// POST — the public consultation form; deliberately no auth requirement.
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
 
@@ -97,10 +132,47 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true, lead }, { status: 201 });
 }
 
+// PATCH — staff/admin only, and only on a lead already visible to them
+// (same scoping as GET) — a rater can update their own leads' stage/notes
+// or claim an unassigned one, but can't reach into another team's lead by
+// id. `claim: true` does an atomic "first to ask wins" assignment: it only
+// succeeds if the lead was still Unassigned at the moment of the update,
+// so two people racing to grab the same lead can't both end up owning it.
 export async function PATCH(request: Request) {
+  const profile = await getCurrentProfile();
+  if (!profile || profile.account_type === "customer") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const body = await request.json().catch(() => null);
   if (!body || typeof body.id !== "string") {
     return NextResponse.json({ error: "Lead id is required" }, { status: 400 });
+  }
+
+  const supabase = getSupabaseAdmin();
+
+  if (body.claim === true) {
+    if (!profile.full_name) return NextResponse.json({ error: "Your profile has no name set" }, { status: 400 });
+    const { data, error } = await supabase
+      .from("leads")
+      .update({ assigned_to: profile.full_name })
+      .eq("id", body.id)
+      .eq("assigned_to", "Unassigned")
+      .select()
+      .single();
+    if (error || !data) {
+      return NextResponse.json({ error: "This lead was already claimed by someone else" }, { status: 409 });
+    }
+    return NextResponse.json({ ok: true, lead: toLead(data as LeadRow) });
+  }
+
+  if (profile.account_type !== "admin") {
+    const { data: existing } = await supabase.from("leads").select("assigned_to").eq("id", body.id).single();
+    if (!existing) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+    const visibleNames = await visibleAssigneeNames(profile);
+    if (!existing.assigned_to || !visibleNames.includes(existing.assigned_to)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
 
   const { stage, assignedTo, notes } = body as Record<string, unknown>;
@@ -115,7 +187,6 @@ export async function PATCH(request: Request) {
     patch.notes = notes;
   }
 
-  const supabase = getSupabaseAdmin();
   const { data, error } = await supabase.from("leads").update(patch).eq("id", body.id).select().single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

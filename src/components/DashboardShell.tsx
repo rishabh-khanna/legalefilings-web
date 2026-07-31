@@ -349,7 +349,13 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </div>
         </aside>
 
-        <main>{children}</main>
+        {/* min-w-0 is load-bearing: a grid item's default min-width is
+            "auto", which lets it grow to fit a wide child (the leads/
+            invoices tables) instead of respecting the grid track — that
+            expands the whole page rather than letting the table's own
+            overflow-x-auto container scroll internally, which is what
+            made the right side of wide tables unreachable. */}
+        <main className="min-w-0">{children}</main>
       </div>
     </div>
   );

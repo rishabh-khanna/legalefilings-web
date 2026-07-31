@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
+import { canManageStaff } from "@/lib/reporting-chain";
 
 // POST /api/attendance — clock in/out for the logged-in staff member.
 export async function POST(request: Request) {
@@ -49,8 +50,9 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true, event: data }, { status: 201 });
 }
 
-// GET /api/attendance — own history, or (admin only) another staff
-// member's via ?staffId=, optionally scoped to ?month=YYYY-MM.
+// GET /api/attendance — own history, or (admin, or a leader/group_leader
+// for their own reporting chain) another staff member's via ?staffId=,
+// optionally scoped to ?month=YYYY-MM.
 export async function GET(request: Request) {
   const profile = await getCurrentProfile();
   if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
@@ -59,9 +61,10 @@ export async function GET(request: Request) {
   const requestedStaffId = searchParams.get("staffId");
   const month = searchParams.get("month");
 
-  const staffId = requestedStaffId && requestedStaffId !== profile.id
-    ? (profile.account_type === "admin" ? requestedStaffId : null)
-    : profile.id;
+  let staffId: string | null = profile.id;
+  if (requestedStaffId && requestedStaffId !== profile.id) {
+    staffId = (await canManageStaff(profile, requestedStaffId)) ? requestedStaffId : null;
+  }
   if (!staffId) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const supabase = getSupabaseAdmin();
