@@ -24,9 +24,9 @@ function getRemaining() {
 
 function Digit({ value, label }: { value: number; label: string }) {
   return (
-    <div className="flex flex-col items-center gap-0.5">
+    <div className="flex flex-col items-center gap-1">
       <span
-        className="flex h-7 w-7 items-center justify-center rounded text-xs font-bold sm:h-8 sm:w-8"
+        className="flex h-8 w-8 items-center justify-center rounded text-sm font-bold sm:h-9 sm:w-9"
         style={{ backgroundColor: "#ffffff", color: "var(--color-ink-fixed)" }}
       >
         {String(value).padStart(2, "0")}
@@ -58,7 +58,7 @@ export function CountdownTimer() {
   if (!t) return null;
 
   return (
-    <div className="hidden items-center gap-1.5 sm:flex" aria-live="off">
+    <div className="hidden items-center gap-2 sm:flex" aria-live="off">
       <Digit value={t.hours} label="Hours" />
       <Digit value={t.minutes} label="Min" />
       <Digit value={t.seconds} label="Sec" />

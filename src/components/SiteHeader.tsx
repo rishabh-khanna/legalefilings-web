@@ -9,7 +9,7 @@ import { CountdownTimer } from "@/components/CountdownTimer";
 import type { SearchEntry } from "@/lib/content";
 import { CONTACT_LINKS } from "@/config/site";
 import { CATEGORY_ICONS } from "@/components/CategoryIcons";
-import { getDemoSession } from "@/lib/demo-auth";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 export type NavCategoryData = {
   label: string;
@@ -22,11 +22,17 @@ export function SiteHeader({ categories, searchIndex }: { categories: NavCategor
   const [loggedIn, setLoggedIn] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
 
-  // Demo-only: swaps "Sign In" for "Dashboard" once the /dashboard demo
-  // session exists, so a logged-in visitor can get back to it from
-  // anywhere on the public site instead of the dashboard being a dead end.
+  // Swaps "Sign In" for "Dashboard" once a real session exists, so a
+  // logged-in visitor can get back to it from anywhere on the public site
+  // instead of the dashboard being a dead end.
   useEffect(() => {
-    const kickoff = setTimeout(() => setLoggedIn(Boolean(getDemoSession())), 0);
+    const kickoff = setTimeout(async () => {
+      const supabase = createSupabaseBrowserClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      setLoggedIn(Boolean(user));
+    }, 0);
     return () => clearTimeout(kickoff);
   }, []);
 
@@ -80,23 +86,23 @@ export function SiteHeader({ categories, searchIndex }: { categories: NavCategor
           the vertical space it eats from an already-tight phone screen
           when the visitor is actively trying to navigate. */}
       <div
-        className={`${open ? "hidden lg:flex" : "flex"} flex-wrap items-center justify-center gap-x-4 gap-y-1.5 px-4 py-3 text-center`}
+        className={`${open ? "hidden lg:flex" : "flex"} flex-wrap items-center justify-center gap-x-5 gap-y-1.5 px-4 py-2.5 text-center sm:py-3`}
         style={{ backgroundColor: "var(--color-banner)" }}
       >
         <PriceTagBadge label="50% OFF" sub="UP TO" />
         <div className="text-left">
-          <p className="text-sm font-bold text-white sm:text-base">Our Best Prices Yet: Register Your Business Today!</p>
-          <p className="text-xs text-white/60">Save up to 50% on select registrations — government fees included.</p>
+          <p className="text-sm font-bold text-white sm:text-lg">Our Best Prices Yet: Register Your Business Today!</p>
+          <p className="text-xs text-white/60 sm:text-sm">Save up to 50% on select registrations — government fees included.</p>
         </div>
         <CountdownTimer />
         <Link
           href="/contact"
           onClick={() => setOpen(false)}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-xs font-semibold transition-transform hover:scale-[1.03] sm:text-sm"
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full px-5 py-2.5 text-sm font-semibold transition-transform hover:scale-[1.03]"
           style={{ backgroundColor: "var(--color-accent)", color: "var(--color-ink-fixed)" }}
         >
           Claim My Offer
-          <svg aria-hidden="true" viewBox="0 0 20 20" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth="2.5">
+          <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2.5">
             <path d="M4 10h12M11 5l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" />
           </svg>
         </Link>
@@ -113,7 +119,7 @@ export function SiteHeader({ categories, searchIndex }: { categories: NavCategor
           <span>
             {loggedIn ? (
               <>
-                Signed in as a demo client.{" "}
+                You&apos;re signed in.{" "}
                 <Link href="/dashboard" className="font-semibold" style={{ color: "var(--color-action-dark)" }}>
                   Go to Dashboard →
                 </Link>
