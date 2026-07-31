@@ -1,12 +1,12 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
-import { canManageStaff } from "@/lib/reporting-chain";
+import { canApproveFor } from "@/lib/reporting-chain";
 
 // PATCH /api/leave-requests/[id] — approve or reject. Admin can act on
-// anyone; a leader/group_leader can act on their own reporting chain
-// (their team); a rater/customer can't approve anything, including
-// themselves.
+// anyone; anyone else must be the requester's *direct* manager (one level
+// up, not any level up the chain) — see canApproveFor. Never the
+// requester themselves.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await getCurrentProfile();
   if (!profile || profile.account_type === "customer") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -26,10 +26,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!existing) return NextResponse.json({ error: "Request not found" }, { status: 404 });
   if (existing.status !== "pending") return NextResponse.json({ error: "Already reviewed" }, { status: 409 });
 
-  const allowed = profile.account_type === "admin"
-    ? true
-    : existing.staff_id !== profile.id && (await canManageStaff(profile, existing.staff_id));
-  if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await canApproveFor(profile, existing.staff_id))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const { data, error } = await supabase
     .from("leave_requests")

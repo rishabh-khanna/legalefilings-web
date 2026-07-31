@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useActionMessage } from "@/lib/use-action-message";
+import { ActionMessage } from "@/components/ActionMessage";
 
 type LeaveRequest = {
   id: string;
@@ -35,6 +37,7 @@ export default function LeavePage() {
   const [endDate, setEndDate] = useState("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const { message, showSuccess, showError } = useActionMessage();
 
   async function load() {
     const res = await fetch("/api/leave-requests");
@@ -62,6 +65,10 @@ export default function LeavePage() {
       setEndDate("");
       setReason("");
       await load();
+      showSuccess("Leave request submitted.");
+    } else {
+      const data = await res.json().catch(() => null);
+      showError(data?.error ?? "Failed to submit leave request.");
     }
   }
 
@@ -85,6 +92,10 @@ export default function LeavePage() {
         >
           {showForm ? "Cancel" : "+ Apply for Leave"}
         </button>
+      </div>
+
+      <div className="mt-4">
+        <ActionMessage message={message} />
       </div>
 
       {showForm && (

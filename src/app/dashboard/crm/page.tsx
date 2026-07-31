@@ -7,6 +7,8 @@ import { CitySelect } from "@/components/CitySelect";
 import { LEAD_STAGE_LABELS, type LeadStage } from "@/lib/leads";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { SITE_NAME } from "@/config/site";
+import { useActionMessage } from "@/lib/use-action-message";
+import { ActionMessage } from "@/components/ActionMessage";
 
 type LeadRow = {
   id: string;
@@ -33,6 +35,8 @@ export default function CrmPage() {
   const [showForm, setShowForm] = useState(false);
   const [selectedState, setSelectedState] = useState("");
   const [loading, setLoading] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const { message, showSuccess, showError } = useActionMessage();
 
   async function reload(supabase: ReturnType<typeof createSupabaseBrowserClient>, name: string) {
     const { data } = await supabase.from("leads").select("*").eq("assigned_to", name).order("created_at", { ascending: false });
@@ -57,10 +61,11 @@ export default function CrmPage() {
 
   async function handleAdd(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    setSubmitting(true);
     const form = e.currentTarget;
     const data = new FormData(form);
     const supabase = createSupabaseBrowserClient();
-    await supabase.from("leads").insert({
+    const { error } = await supabase.from("leads").insert({
       name: String(data.get("name") ?? ""),
       company: String(data.get("company") ?? "") || null,
       email: String(data.get("email") ?? ""),
@@ -71,10 +76,16 @@ export default function CrmPage() {
       assigned_to: staffName,
       source: "crm_manual",
     });
+    setSubmitting(false);
+    if (error) {
+      showError("Failed to save lead — please try again.");
+      return;
+    }
     if (staffName) await reload(supabase, staffName);
     form.reset();
     setSelectedState("");
     setShowForm(false);
+    showSuccess("Lead added.");
   }
 
   if (loading) {
@@ -106,6 +117,10 @@ export default function CrmPage() {
         </button>
       </div>
 
+      <div className="mt-4">
+        <ActionMessage message={message} />
+      </div>
+
       {showForm && (
         <form
           onSubmit={handleAdd}
@@ -132,10 +147,11 @@ export default function CrmPage() {
           />
           <button
             type="submit"
-            className="sm:col-span-2 rounded-full py-2.5 text-sm font-semibold text-white"
+            disabled={submitting}
+            className="sm:col-span-2 rounded-full py-2.5 text-sm font-semibold text-white disabled:opacity-60"
             style={{ backgroundColor: "var(--color-action)" }}
           >
-            Save Lead
+            {submitting ? "Saving…" : "Save Lead"}
           </button>
         </form>
       )}

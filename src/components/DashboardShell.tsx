@@ -214,7 +214,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
   if (session === "loading" || session === null) {
     return (
-      <div className="mx-auto max-w-6xl px-4 py-16 text-center">
+      <div className="mx-auto max-w-[1600px] px-4 py-16 text-center">
         <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
           Loading…
         </p>
@@ -227,7 +227,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       {/* Same soft-yellow welcome band every other page's hero uses, so the
           dashboard reads as part of the site instead of a bolted-on app. */}
       <div style={{ background: "linear-gradient(180deg, var(--color-accent-tint) 0%, var(--color-paper) 100%)" }}>
-        <div className="mx-auto max-w-6xl px-4 pt-10 pb-6">
+        <div className="mx-auto max-w-[1600px] px-4 pt-10 pb-6">
           <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "var(--color-action-dark)" }}>
             Your Account
           </p>
@@ -249,7 +249,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      <div className="mx-auto max-w-6xl px-4 pb-16 lg:grid lg:grid-cols-[220px_1fr] lg:gap-8">
+      <div className="mx-auto max-w-[1600px] px-4 pb-16 lg:grid lg:grid-cols-[220px_1fr] lg:gap-8">
         {/* Mobile: horizontal scrollable tab row instead of a duplicate off-canvas menu — the site header's own hamburger already covers site-wide nav. */}
         <div className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-1 lg:hidden">
           {navItems.map((item) => {

@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { formatHoursMinutes } from "@/lib/format-duration";
+import { useActionMessage } from "@/lib/use-action-message";
+import { ActionMessage } from "@/components/ActionMessage";
 
 type AttendanceEvent = {
   id: string;
@@ -70,7 +72,7 @@ export default function AttendancePage() {
   const [corrections, setCorrections] = useState<CorrectionRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [clocking, setClocking] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const { message, showSuccess, showError } = useActionMessage();
   const [showCorrectionForm, setShowCorrectionForm] = useState(false);
   const [corrDate, setCorrDate] = useState("");
   const [corrIn, setCorrIn] = useState("");
@@ -107,7 +109,6 @@ export default function AttendancePage() {
 
   async function handleClock(type: "check_in" | "check_out") {
     setClocking(true);
-    setError(null);
     const location = await getLocation();
     const res = await fetch("/api/attendance", {
       method: "POST",
@@ -118,8 +119,9 @@ export default function AttendancePage() {
     setClocking(false);
     if (res.ok) {
       await load();
+      showSuccess(type === "check_in" ? "Clocked in." : "Clocked out.");
     } else {
-      setError(data.error ?? "Failed to record");
+      showError(data.error ?? "Failed to record");
     }
   }
 
@@ -137,6 +139,10 @@ export default function AttendancePage() {
       setCorrOut("");
       setCorrReason("");
       await load();
+      showSuccess("Correction request submitted.");
+    } else {
+      const data = await res.json().catch(() => null);
+      showError(data?.error ?? "Failed to submit correction request.");
     }
   }
 
@@ -187,7 +193,10 @@ export default function AttendancePage() {
         >
           Clock Out
         </button>
-        {error && <p className="text-sm text-red-600">{error}</p>}
+      </div>
+
+      <div className="mt-4">
+        <ActionMessage message={message} />
       </div>
 
       <div className="mt-6 flex items-center justify-between">

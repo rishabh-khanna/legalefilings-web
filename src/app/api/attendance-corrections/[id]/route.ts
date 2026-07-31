@@ -1,13 +1,14 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
-import { canManageStaff } from "@/lib/reporting-chain";
+import { canApproveFor } from "@/lib/reporting-chain";
 
 // PATCH /api/attendance-corrections/[id] — approve or reject. Admin can
-// act on anyone; a leader/group_leader can act on their reporting chain,
-// not themselves. Approving inserts the actual attendance_events rows for
-// that day, so the corrected punch shows up in reports the same as a
-// normal clock in/out.
+// act on anyone; anyone else must be the requester's *direct* manager (one
+// level up, not any level up) — see canApproveFor. Never the requester
+// themselves. Approving inserts the actual attendance_events rows for that
+// day, so the corrected punch shows up in reports the same as a normal
+// clock in/out.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await getCurrentProfile();
   if (!profile || profile.account_type === "customer") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
@@ -31,10 +32,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     .single();
   if (fetchError || !correction) return NextResponse.json({ error: "Request not found or already reviewed" }, { status: 404 });
 
-  const allowed = profile.account_type === "admin"
-    ? true
-    : correction.staff_id !== profile.id && (await canManageStaff(profile, correction.staff_id));
-  if (!allowed) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!(await canApproveFor(profile, correction.staff_id))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   if (decision === "approve") {
     const inserts = [];

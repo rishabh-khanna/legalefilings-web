@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useActionMessage } from "@/lib/use-action-message";
+import { ActionMessage } from "@/components/ActionMessage";
 
 type LeaveRow = {
   id: string;
@@ -24,6 +26,7 @@ export default function AdminLeaveRequestsPage() {
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const { message, showSuccess, showError } = useActionMessage();
 
   async function load() {
     const res = await fetch("/api/leave-requests");
@@ -46,6 +49,14 @@ export default function AdminLeaveRequestsPage() {
       setRejectingId(null);
       setRejectReason("");
       await load();
+      showSuccess(decision === "approve" ? "Leave approved." : "Leave rejected.");
+    } else {
+      const data = await res.json().catch(() => null);
+      showError(
+        res.status === 403
+          ? "Only this person's direct manager (or admin) can approve or reject their leave."
+          : (data?.error ?? "Failed to save decision.")
+      );
     }
   }
 
@@ -55,6 +66,9 @@ export default function AdminLeaveRequestsPage() {
     <div>
       <h2 className="text-xl font-bold" style={{ color: "var(--color-ink)" }}>Leave Requests</h2>
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
+      <div className="mt-4">
+        <ActionMessage message={message} />
+      </div>
 
       <div className="mt-5 space-y-3">
         {(requests ?? []).map((r) => {

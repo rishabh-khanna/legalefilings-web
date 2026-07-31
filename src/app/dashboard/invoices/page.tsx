@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { isStaffOrAdmin, type Profile } from "@/lib/roles";
+import { useActionMessage } from "@/lib/use-action-message";
+import { ActionMessage } from "@/components/ActionMessage";
 
 type InvoiceRow = {
   id: string;
@@ -35,6 +37,7 @@ export default function InvoicesPage() {
   const [customerId, setCustomerId] = useState("");
   const [items, setItems] = useState<LineItemDraft[]>([{ ...EMPTY_ITEM }]);
   const [generating, setGenerating] = useState(false);
+  const { message, showSuccess, showError } = useActionMessage();
 
   async function loadInvoices() {
     const res = await fetch("/api/invoices");
@@ -69,7 +72,12 @@ export default function InvoicesPage() {
 
   async function handleMarkPaid(id: string) {
     const res = await fetch(`/api/invoices/${id}/mark-paid`, { method: "POST" });
-    if (res.ok) await loadInvoices();
+    if (res.ok) {
+      await loadInvoices();
+      showSuccess("Invoice marked paid.");
+    } else {
+      showError("Failed to mark invoice paid.");
+    }
   }
 
   async function handleGenerate(e: React.FormEvent) {
@@ -92,6 +100,10 @@ export default function InvoicesPage() {
       setItems([{ ...EMPTY_ITEM }]);
       setCustomerId("");
       setShowForm(false);
+      showSuccess("Invoice generated.");
+    } else {
+      const data = await res.json().catch(() => null);
+      showError(data?.error ?? "Failed to generate invoice.");
     }
   }
 
@@ -132,6 +144,10 @@ export default function InvoicesPage() {
             {showForm ? "Cancel" : "+ Generate Invoice"}
           </button>
         )}
+      </div>
+
+      <div className="mt-3">
+        <ActionMessage message={message} />
       </div>
 
       {!canManage && !isPaidCustomer && profile?.account_type === "customer" && (

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { formatHoursMinutes } from "@/lib/format-duration";
+import { useActionMessage } from "@/lib/use-action-message";
+import { ActionMessage } from "@/components/ActionMessage";
 
 type StaffOption = { id: string; name: string };
 type AttendanceEvent = { event_type: "check_in" | "check_out"; occurred_at: string; location: string | null };
@@ -43,6 +45,7 @@ function groupByDay(events: AttendanceEvent[]) {
 }
 
 export default function AdminAttendancePage() {
+  const { message, showSuccess, showError } = useActionMessage();
   const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
   const [staffId, setStaffId] = useState("");
   const [month, setMonth] = useState(currentMonth());
@@ -88,6 +91,14 @@ export default function AdminAttendancePage() {
         const refreshed = await fetch(`/api/attendance?staffId=${staffId}&month=${month}`).then((r) => r.json());
         setEvents(refreshed.events ?? []);
       }
+      showSuccess(decision === "approve" ? "Correction approved." : "Correction rejected.");
+    } else {
+      const data = await res.json().catch(() => null);
+      showError(
+        res.status === 403
+          ? "Only this person's direct manager (or admin) can approve or reject their correction."
+          : (data?.error ?? "Failed to save decision.")
+      );
     }
   }
 
@@ -96,6 +107,9 @@ export default function AdminAttendancePage() {
   return (
     <div>
       <h2 className="text-xl font-bold" style={{ color: "var(--color-ink)" }}>Attendance</h2>
+      <div className="mt-3">
+        <ActionMessage message={message} />
+      </div>
 
       <div className="mt-4 flex flex-wrap items-end gap-3">
         <div>

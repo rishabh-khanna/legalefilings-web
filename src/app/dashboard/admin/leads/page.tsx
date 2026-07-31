@@ -4,6 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { LEAD_STAGES, LEAD_STAGE_LABELS, type Lead, type LeadStage } from "@/lib/leads";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { SITE_NAME } from "@/config/site";
+import { useActionMessage } from "@/lib/use-action-message";
+import { ActionMessage } from "@/components/ActionMessage";
 
 function leadWhatsAppMessage(lead: Lead) {
   const firstName = lead.name.split(" ")[0];
@@ -24,6 +26,7 @@ export default function AdminDashboard() {
   const [staffNames, setStaffNames] = useState<string[]>(["Unassigned"]);
   const [viewer, setViewer] = useState("Everyone");
   const [error, setError] = useState<string | null>(null);
+  const { message, showSuccess, showError } = useActionMessage();
 
   useEffect(() => {
     fetch("/api/leads")
@@ -49,13 +52,18 @@ export default function AdminDashboard() {
     return sorted.filter((l) => l.assignedTo === viewer);
   }, [leads, viewer]);
 
-  async function updateLead(id: string, patch: Partial<Lead>) {
+  async function updateLead(id: string, patch: Partial<Lead>, successText = "Saved.") {
     setLeads((prev) => (prev ? prev.map((l) => (l.id === id ? { ...l, ...patch } : l)) : prev));
-    await fetch("/api/leads", {
+    const res = await fetch("/api/leads", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, ...patch }),
-    }).catch(() => setError("Failed to save change"));
+    }).catch(() => null);
+    if (!res || !res.ok) {
+      showError("Failed to save change.");
+      return;
+    }
+    showSuccess(successText);
   }
 
   async function reload() {
@@ -72,12 +80,13 @@ export default function AdminDashboard() {
       body: JSON.stringify({ id, claim: true }),
     });
     if (!res.ok) {
-      setError("Someone else already claimed this lead — refreshed the list.");
+      showError("Someone else already claimed this lead — refreshed the list.");
       await reload();
       return;
     }
     const data = await res.json();
     setLeads((prev) => (prev ? prev.map((l) => (l.id === id ? { ...l, assignedTo: data.lead.assignedTo } : l)) : prev));
+    showSuccess("Lead claimed.");
   }
 
   return (
@@ -118,6 +127,7 @@ export default function AdminDashboard() {
       )}
 
       {error && <p className="text-sm text-red-600 mb-4">{error}</p>}
+      <ActionMessage message={message} />
 
       <div className="overflow-x-auto rounded-lg border border-slate-200">
         <table className="w-full text-sm">
@@ -160,7 +170,7 @@ export default function AdminDashboard() {
                 <td className="px-4 py-3">
                   <select
                     value={lead.stage}
-                    onChange={(e) => updateLead(lead.id, { stage: e.target.value as LeadStage })}
+                    onChange={(e) => updateLead(lead.id, { stage: e.target.value as LeadStage }, "Stage updated.")}
                     className={`rounded-full px-2 py-1 text-xs font-medium ${STAGE_COLORS[lead.stage] ?? "bg-slate-100"}`}
                   >
                     {LEAD_STAGES.map((s) => (
@@ -182,7 +192,7 @@ export default function AdminDashboard() {
                   ) : (
                     <select
                       value={lead.assignedTo}
-                      onChange={(e) => updateLead(lead.id, { assignedTo: e.target.value })}
+                      onChange={(e) => updateLead(lead.id, { assignedTo: e.target.value }, "Reassigned.")}
                       className="rounded-md border border-slate-300 px-2 py-1 text-xs"
                     >
                       {staffNames.map((s) => (
@@ -196,7 +206,7 @@ export default function AdminDashboard() {
                 <td className="px-4 py-3 min-w-[180px]">
                   <textarea
                     defaultValue={lead.notes}
-                    onBlur={(e) => updateLead(lead.id, { notes: e.target.value })}
+                    onBlur={(e) => updateLead(lead.id, { notes: e.target.value }, "Note saved.")}
                     placeholder="Add a note…"
                     rows={2}
                     className="w-full rounded-md border border-slate-300 px-2 py-1 text-xs"
