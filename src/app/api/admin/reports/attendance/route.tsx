@@ -4,6 +4,7 @@ import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { SITE_NAME } from "@/config/site";
+import { formatHoursMinutes } from "@/lib/format-duration";
 
 const styles = StyleSheet.create({
   page: { padding: 40, fontSize: 10, color: "#0f172a" },
@@ -121,19 +122,19 @@ export async function GET(request: Request) {
     byDay.set(day, entry);
   }
 
-  let totalHoursNum = 0;
+  let totalMs = 0;
   const rows = Array.from(byDay.entries())
     .sort()
     .map(([day, entry]) => {
-      const hoursNum = entry.checkIn && entry.checkOut
-        ? (new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime()) / 3600000
+      const durationMs = entry.checkIn && entry.checkOut
+        ? new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime()
         : 0;
-      totalHoursNum += hoursNum;
+      totalMs += durationMs;
       return {
         date: day,
         checkIn: entry.checkIn ? new Date(entry.checkIn).toLocaleTimeString("en-IN") : "—",
         checkOut: entry.checkOut ? new Date(entry.checkOut).toLocaleTimeString("en-IN") : "—",
-        hours: hoursNum ? hoursNum.toFixed(2) : "—",
+        hours: durationMs ? formatHoursMinutes(durationMs) : "—",
       };
     });
 
@@ -141,7 +142,7 @@ export async function GET(request: Request) {
   const monthLabel = new Date(`${month}-01`).toLocaleDateString("en-IN", { month: "long", year: "numeric" });
 
   const buffer = await renderToBuffer(
-    <AttendanceReportPdf staffName={staffName} month={monthLabel} rows={rows} totalDays={rows.length} totalHours={totalHoursNum.toFixed(2)} />
+    <AttendanceReportPdf staffName={staffName} month={monthLabel} rows={rows} totalDays={rows.length} totalHours={formatHoursMinutes(totalMs)} />
   );
 
   const filename = `attendance-${staffName.replace(/\s+/g, "_")}-${month}.pdf`;

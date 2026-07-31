@@ -5,6 +5,8 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { StateSelect } from "@/components/StateSelect";
 import { CitySelect } from "@/components/CitySelect";
 import { LEAD_STAGE_LABELS, type LeadStage } from "@/lib/leads";
+import { buildWhatsAppLink } from "@/lib/whatsapp";
+import { SITE_NAME } from "@/config/site";
 
 type LeadRow = {
   id: string;
@@ -147,6 +149,7 @@ export default function CrmPage() {
               <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Contact</th>
               <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Location</th>
               <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Status</th>
+              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}></th>
             </tr>
           </thead>
           <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
@@ -168,12 +171,23 @@ export default function CrmPage() {
                       {LEAD_STAGE_LABELS[l.status]}
                     </span>
                   </td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <a
+                      href={buildWhatsAppLink(l.phone, `Hi ${l.name.split(" ")[0]}, this is ${SITE_NAME} following up on your enquiry. How can we help you get started?`)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold"
+                      style={{ backgroundColor: "#d0f4db", color: "#116a2c" }}
+                    >
+                      WhatsApp
+                    </a>
+                  </td>
                 </tr>
               );
             })}
             {leads.length === 0 && (
               <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>
+                <td colSpan={6} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>
                   No leads assigned to you yet.
                 </td>
               </tr>

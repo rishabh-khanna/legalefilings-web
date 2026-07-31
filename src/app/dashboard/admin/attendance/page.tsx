@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { formatHoursMinutes } from "@/lib/format-duration";
 
 type StaffOption = { id: string; name: string };
 type AttendanceEvent = { event_type: "check_in" | "check_out"; occurred_at: string; location: string | null };
@@ -51,9 +51,9 @@ export default function AdminAttendancePage() {
 
   useEffect(() => {
     const kickoff = setTimeout(async () => {
-      const supabase = createSupabaseBrowserClient();
-      const { data } = await supabase.from("profiles").select("id, full_name").in("account_type", ["staff", "admin"]);
-      const opts = (data ?? []).map((p) => ({ id: p.id, name: p.full_name ?? "Unnamed" }));
+      const res = await fetch("/api/team-members");
+      const data = await res.json();
+      const opts = ((data.members ?? []) as { id: string; full_name: string | null }[]).map((p) => ({ id: p.id, name: p.full_name ?? "Unnamed" }));
       setStaffOptions(opts);
       if (opts[0]) setStaffId(opts[0].id);
     }, 0);
@@ -134,7 +134,7 @@ export default function AdminAttendancePage() {
           <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
             {groupByDay(events).map(([day, entry]) => {
               const hours = entry.checkIn && entry.checkOut
-                ? ((new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime()) / 3600000).toFixed(1)
+                ? formatHoursMinutes(new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime())
                 : "—";
               const inLink = mapLink(entry.checkInLoc ?? null);
               const outLink = mapLink(entry.checkOutLoc ?? null);

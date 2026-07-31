@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { formatHoursMinutes } from "@/lib/format-duration";
 
 type AttendanceEvent = {
   id: string;
@@ -237,7 +238,7 @@ export default function AttendancePage() {
           <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
             {groupByDay(events).map(([day, entry]) => {
               const hours = entry.checkIn && entry.checkOut
-                ? ((new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime()) / 3600000).toFixed(1)
+                ? formatHoursMinutes(new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime())
                 : "—";
               const inLink = mapLink(entry.checkInLoc ?? null);
               const outLink = mapLink(entry.checkOutLoc ?? null);
