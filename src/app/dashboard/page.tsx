@@ -1,8 +1,8 @@
-"use client";
-
 import Link from "next/link";
 import { GlowBadge } from "@/components/CategoryIcons";
-import { MOCK_CRM_CONTACTS, MOCK_INVOICES, MOCK_ORDERS } from "@/lib/dashboard-data";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getCurrentProfile } from "@/lib/current-profile";
+import { isStaffOrAdmin } from "@/lib/roles";
 
 const PersonIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
@@ -22,23 +22,45 @@ const OrderIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
-export default function DashboardOverviewPage() {
-  const pendingInvoices = MOCK_INVOICES.filter((i) => i.status !== "Paid").length;
-  const activeOrders = MOCK_ORDERS.filter((o) => o.status !== "Completed").length;
+export default async function DashboardOverviewPage() {
+  const profile = await getCurrentProfile();
+  const supabase = await createSupabaseServerClient();
+  const staff = profile ? isStaffOrAdmin(profile) : false;
 
-  const stats = [
-    { label: "CRM Contacts", value: MOCK_CRM_CONTACTS.length, sub: `${MOCK_CRM_CONTACTS.filter((c) => c.status === "Lead").length} new leads`, icon: PersonIcon, href: "/dashboard/crm" },
-    { label: "Invoices", value: MOCK_INVOICES.length, sub: `${pendingInvoices} awaiting payment`, icon: InvoiceIcon, href: "/dashboard/invoices" },
-    { label: "Orders", value: MOCK_ORDERS.length, sub: `${activeOrders} in progress`, icon: OrderIcon, href: "/dashboard/orders" },
-  ];
+  let ordersQuery = supabase.from("orders").select("id, service, status, created_at").order("created_at", { ascending: false });
+  let invoicesQuery = supabase.from("invoices").select("id, invoice_number, total, status, created_at").order("created_at", { ascending: false });
+  if (profile && !staff) {
+    ordersQuery = ordersQuery.eq("customer_id", profile.id);
+    invoicesQuery = invoicesQuery.eq("customer_id", profile.id);
+  }
+
+  const [{ data: orders }, { data: invoices }, leadsCount] = await Promise.all([
+    ordersQuery,
+    invoicesQuery,
+    staff && profile
+      ? supabase.from("leads").select("id", { count: "exact", head: true }).eq("assigned_to", profile.full_name ?? "")
+      : Promise.resolve({ count: 0 }),
+  ]);
+
+  const orderList = orders ?? [];
+  const invoiceList = invoices ?? [];
+  const activeOrders = orderList.filter((o) => !["completed", "cancelled"].includes(o.status)).length;
+  const pendingInvoices = invoiceList.filter((i) => i.status !== "paid").length;
+
+  const stats = staff
+    ? [
+        { label: "My Leads", value: leadsCount.count ?? 0, sub: "assigned to you", icon: PersonIcon, href: "/dashboard/crm" },
+        { label: "Invoices", value: invoiceList.length, sub: `${pendingInvoices} awaiting payment`, icon: InvoiceIcon, href: "/dashboard/invoices" },
+        { label: "Orders", value: orderList.length, sub: `${activeOrders} in progress`, icon: OrderIcon, href: "/dashboard/orders" },
+      ]
+    : [
+        { label: "Invoices", value: invoiceList.length, sub: `${pendingInvoices} awaiting payment`, icon: InvoiceIcon, href: "/dashboard/invoices" },
+        { label: "Orders", value: orderList.length, sub: `${activeOrders} in progress`, icon: OrderIcon, href: "/dashboard/orders" },
+      ];
 
   return (
     <div>
-      <p className="rounded-lg px-3 py-2 text-xs" style={{ backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}>
-        Demo dashboard — everything below is mock data for review. The real backend comes next.
-      </p>
-
-      <div className="mt-6 grid gap-4 sm:grid-cols-3">
+      <div className={`grid gap-4 ${staff ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
         {stats.map((stat) => (
           <Link
             key={stat.label}
@@ -71,14 +93,14 @@ export default function DashboardOverviewPage() {
             </Link>
           </div>
           <ul className="mt-3 space-y-3">
-            {MOCK_ORDERS.slice(0, 3).map((order) => (
+            {orderList.slice(0, 3).map((order) => (
               <li key={order.id} className="flex items-center justify-between text-sm">
                 <div>
                   <p className="font-medium" style={{ color: "var(--color-ink)" }}>
                     {order.service}
                   </p>
                   <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>
-                    {order.id} · {order.date}
+                    {order.id.slice(0, 8)} · {new Date(order.created_at).toLocaleDateString("en-IN")}
                   </p>
                 </div>
                 <span className="text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>
@@ -86,6 +108,11 @@ export default function DashboardOverviewPage() {
                 </span>
               </li>
             ))}
+            {orderList.length === 0 && (
+              <li className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
+                No orders yet.
+              </li>
+            )}
           </ul>
         </div>
 
@@ -99,21 +126,26 @@ export default function DashboardOverviewPage() {
             </Link>
           </div>
           <ul className="mt-3 space-y-3">
-            {MOCK_INVOICES.slice(0, 3).map((inv) => (
+            {invoiceList.slice(0, 3).map((inv) => (
               <li key={inv.id} className="flex items-center justify-between text-sm">
                 <div>
                   <p className="font-medium" style={{ color: "var(--color-ink)" }}>
-                    {inv.client}
+                    {inv.invoice_number}
                   </p>
                   <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>
-                    {inv.id} · {inv.date}
+                    {new Date(inv.created_at).toLocaleDateString("en-IN")}
                   </p>
                 </div>
                 <span className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
-                  ₹{inv.amount.toLocaleString("en-IN")}
+                  ₹{Number(inv.total).toLocaleString("en-IN")}
                 </span>
               </li>
             ))}
+            {invoiceList.length === 0 && (
+              <li className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
+                No invoices yet.
+              </li>
+            )}
           </ul>
         </div>
       </div>

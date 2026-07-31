@@ -1,39 +1,86 @@
 "use client";
 
-import { useState } from "react";
-import { MOCK_CRM_CONTACTS, type CrmContact } from "@/lib/dashboard-data";
+import { useEffect, useState } from "react";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { StateSelect } from "@/components/StateSelect";
 import { CitySelect } from "@/components/CitySelect";
+import { LEAD_STAGE_LABELS, type LeadStage } from "@/lib/leads";
 
-const STATUS_STYLE: Record<CrmContact["status"], { bg: string; fg: string }> = {
-  Lead: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
-  Active: { bg: "#d0f4db", fg: "#116a2c" },
-  "Past Client": { bg: "var(--color-paper)", fg: "var(--color-ink-soft)" },
+type LeadRow = {
+  id: string;
+  name: string;
+  company: string | null;
+  email: string;
+  phone: string;
+  city: string | null;
+  state: string | null;
+  status: LeadStage;
+};
+
+const STATUS_STYLE: Record<LeadStage, { bg: string; fg: string }> = {
+  new: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
+  contacted: { bg: "#fff6d9", fg: "#8a6700" },
+  in_progress: { bg: "#fff6d9", fg: "#8a6700" },
+  won: { bg: "#d0f4db", fg: "#116a2c" },
+  lost: { bg: "var(--color-paper)", fg: "var(--color-ink-soft)" },
 };
 
 export default function CrmPage() {
-  const [contacts, setContacts] = useState<CrmContact[]>(MOCK_CRM_CONTACTS);
+  const [leads, setLeads] = useState<LeadRow[]>([]);
+  const [staffName, setStaffName] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
   const [selectedState, setSelectedState] = useState("");
+  const [loading, setLoading] = useState(true);
 
-  function handleAdd(e: React.FormEvent<HTMLFormElement>) {
+  async function reload(supabase: ReturnType<typeof createSupabaseBrowserClient>, name: string) {
+    const { data } = await supabase.from("leads").select("*").eq("assigned_to", name).order("created_at", { ascending: false });
+    setLeads((data as LeadRow[] | null) ?? []);
+  }
+
+  useEffect(() => {
+    const kickoff = setTimeout(async () => {
+      const supabase = createSupabaseBrowserClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).single();
+      const name = profile?.full_name ?? user.email ?? "";
+      setStaffName(name);
+      await reload(supabase, name);
+      setLoading(false);
+    }, 0);
+    return () => clearTimeout(kickoff);
+  }, []);
+
+  async function handleAdd(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const form = e.currentTarget;
     const data = new FormData(form);
-    const contact: CrmContact = {
-      id: `c${Date.now()}`,
+    const supabase = createSupabaseBrowserClient();
+    await supabase.from("leads").insert({
       name: String(data.get("name") ?? ""),
-      company: String(data.get("company") ?? ""),
+      company: String(data.get("company") ?? "") || null,
       email: String(data.get("email") ?? ""),
       phone: String(data.get("phone") ?? ""),
-      city: String(data.get("city") ?? ""),
-      state: String(data.get("state") ?? ""),
-      status: "Lead",
-    };
-    setContacts((prev) => [contact, ...prev]);
+      city: String(data.get("city") ?? "") || null,
+      state: String(data.get("state") ?? "") || null,
+      status: "new",
+      assigned_to: staffName,
+      source: "crm_manual",
+    });
+    if (staffName) await reload(supabase, staffName);
     form.reset();
     setSelectedState("");
     setShowForm(false);
+  }
+
+  if (loading) {
+    return (
+      <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
+        Loading…
+      </p>
+    );
   }
 
   return (
@@ -41,10 +88,10 @@ export default function CrmPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold" style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)" }}>
-            CRM
+            My Leads
           </h1>
           <p className="mt-1 text-sm" style={{ color: "var(--color-ink-soft)" }}>
-            Your own customer contacts — {contacts.length} total.
+            Leads assigned to you — {leads.length} total.
           </p>
         </div>
         <button
@@ -53,7 +100,7 @@ export default function CrmPage() {
           className="rounded-full px-4 py-2 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
           style={{ backgroundColor: "var(--color-ink-fixed)" }}
         >
-          {showForm ? "Cancel" : "+ Add Contact"}
+          {showForm ? "Cancel" : "+ Add Lead"}
         </button>
       </div>
 
@@ -68,6 +115,7 @@ export default function CrmPage() {
           <input name="email" type="email" required placeholder="Email" className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]" style={{ borderColor: "var(--color-line)" }} />
           <input name="phone" placeholder="Phone" className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]" style={{ borderColor: "var(--color-line)" }} />
           <StateSelect
+            name="state"
             className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]"
             style={{ borderColor: "var(--color-line)" }}
             value={selectedState}
@@ -75,6 +123,7 @@ export default function CrmPage() {
           />
           <CitySelect
             key={selectedState}
+            name="city"
             state={selectedState}
             className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]"
             style={{ borderColor: "var(--color-line)" }}
@@ -84,7 +133,7 @@ export default function CrmPage() {
             className="sm:col-span-2 rounded-full py-2.5 text-sm font-semibold text-white"
             style={{ backgroundColor: "var(--color-action)" }}
           >
-            Save Contact
+            Save Lead
           </button>
         </form>
       )}
@@ -101,27 +150,34 @@ export default function CrmPage() {
             </tr>
           </thead>
           <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
-            {contacts.map((c) => {
-              const style = STATUS_STYLE[c.status];
+            {leads.map((l) => {
+              const style = STATUS_STYLE[l.status];
               return (
-                <tr key={c.id} className="align-top" style={{ borderColor: "var(--color-line)" }}>
-                  <td className="px-4 py-3 font-medium" style={{ color: "var(--color-ink)" }}>{c.name}</td>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{c.company || "—"}</td>
+                <tr key={l.id} className="align-top" style={{ borderColor: "var(--color-line)" }}>
+                  <td className="px-4 py-3 font-medium" style={{ color: "var(--color-ink)" }}>{l.name}</td>
+                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{l.company || "—"}</td>
                   <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>
-                    <div>{c.email}</div>
-                    <div>{c.phone}</div>
+                    <div>{l.email}</div>
+                    <div>{l.phone}</div>
                   </td>
                   <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>
-                    {[c.city, c.state].filter(Boolean).join(", ") || "—"}
+                    {[l.city, l.state].filter(Boolean).join(", ") || "—"}
                   </td>
                   <td className="px-4 py-3">
                     <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: style.bg, color: style.fg }}>
-                      {c.status}
+                      {LEAD_STAGE_LABELS[l.status]}
                     </span>
                   </td>
                 </tr>
               );
             })}
+            {leads.length === 0 && (
+              <tr>
+                <td colSpan={5} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>
+                  No leads assigned to you yet.
+                </td>
+              </tr>
+            )}
           </tbody>
         </table>
       </div>

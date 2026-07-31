@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getDemoSession } from "@/lib/demo-auth";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { StateSelect } from "@/components/StateSelect";
 import { CitySelect } from "@/components/CitySelect";
 
@@ -12,35 +12,64 @@ export default function ProfilePage() {
   const [company, setCompany] = useState("");
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
+  const [dateOfBirth, setDateOfBirth] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     // Deferred (not called synchronously in the effect body) — same pattern
     // used elsewhere in this codebase (CountdownTimer, AiAssistant) to avoid
     // the cascading-render lint rule.
-    const kickoff = setTimeout(() => {
-      const session = getDemoSession();
-      if (session) {
-        setName(session.name);
-        setEmail(session.email);
+    const kickoff = setTimeout(async () => {
+      const supabase = createSupabaseBrowserClient();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data: profile } = await supabase.from("profiles").select("*").eq("id", user.id).single();
+      setEmail(user.email ?? "");
+      if (profile) {
+        setName(profile.full_name ?? "");
+        setPhone(profile.phone ?? "");
+        setCompany(profile.company ?? "");
+        setCity(profile.city ?? "");
+        setState(profile.state ?? "");
+        setDateOfBirth(profile.date_of_birth ?? "");
       }
-      setPhone("+91 98765 43210");
-      setCompany("Bloom Retail Pvt Ltd");
-      setCity("Mumbai");
-      setState("Maharashtra");
+      setLoading(false);
     }, 0);
     return () => clearTimeout(kickoff);
   }, []);
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    // No backend yet — this just confirms the form works.
+    setSaving(true);
+    const supabase = createSupabaseBrowserClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) {
+      await supabase
+        .from("profiles")
+        .update({ full_name: name, phone, company, city, state, date_of_birth: dateOfBirth || null })
+        .eq("id", user.id);
+    }
+    setSaving(false);
     setSaved(true);
     setTimeout(() => setSaved(false), 3000);
   }
 
   const inputClass = "w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]";
   const labelClass = "block text-sm font-medium mb-1";
+
+  if (loading) {
+    return (
+      <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
+        Loading…
+      </p>
+    );
+  }
 
   return (
     <div>
@@ -72,13 +101,20 @@ export default function ProfilePage() {
           <label htmlFor="profile-email" className={labelClass} style={{ color: "var(--color-ink)" }}>
             Email
           </label>
-          <input id="profile-email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+          <input id="profile-email" type="email" value={email} disabled className={`${inputClass} opacity-60`} style={{ borderColor: "var(--color-line)" }} />
         </div>
         <div>
           <label htmlFor="profile-phone" className={labelClass} style={{ color: "var(--color-ink)" }}>
             Phone
           </label>
           <input id="profile-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+        </div>
+        <div>
+          <label htmlFor="profile-dob" className={labelClass} style={{ color: "var(--color-ink)" }}>
+            Date of Birth
+          </label>
+          <input id="profile-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+          <p className="mt-1 text-xs" style={{ color: "var(--color-ink-soft)" }}>We&apos;ll send you a birthday surprise 🎂</p>
         </div>
         <div className="grid grid-cols-2 gap-3">
           <div>
@@ -113,16 +149,17 @@ export default function ProfilePage() {
 
         {saved && (
           <p className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "#d0f4db", color: "#116a2c" }}>
-            Saved — though there&apos;s no backend yet, so this won&apos;t persist after a refresh.
+            Saved.
           </p>
         )}
 
         <button
           type="submit"
-          className="rounded-full px-6 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
+          disabled={saving}
+          className="rounded-full px-6 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02] disabled:opacity-60"
           style={{ backgroundColor: "var(--color-action)" }}
         >
-          Save Changes
+          {saving ? "Saving…" : "Save Changes"}
         </button>
       </form>
     </div>

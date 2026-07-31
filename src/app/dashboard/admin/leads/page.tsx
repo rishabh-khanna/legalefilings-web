@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { LEAD_STAGES, LEAD_STAGE_LABELS, MOCK_STAFF, MOCK_VIEWERS, type Lead, type LeadStage } from "@/lib/leads";
+import { LEAD_STAGES, LEAD_STAGE_LABELS, type Lead, type LeadStage } from "@/lib/leads";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 const STAGE_COLORS: Record<string, string> = {
   new: "bg-slate-100 text-slate-700",
@@ -13,7 +14,8 @@ const STAGE_COLORS: Record<string, string> = {
 
 export default function AdminDashboard() {
   const [leads, setLeads] = useState<Lead[] | null>(null);
-  const [viewer, setViewer] = useState("Admin");
+  const [staffNames, setStaffNames] = useState<string[]>(["Unassigned"]);
+  const [viewer, setViewer] = useState("Everyone");
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -21,6 +23,14 @@ export default function AdminDashboard() {
       .then((res) => res.json())
       .then((data) => setLeads(data.leads))
       .catch(() => setError("Could not load leads"));
+
+    const kickoff = setTimeout(async () => {
+      const supabase = createSupabaseBrowserClient();
+      const { data } = await supabase.from("profiles").select("full_name").in("account_type", ["staff", "admin"]);
+      const names = (data ?? []).map((p) => p.full_name).filter((n): n is string => Boolean(n));
+      setStaffNames(["Unassigned", ...names]);
+    }, 0);
+    return () => clearTimeout(kickoff);
   }, []);
 
   const visibleLeads = useMemo(() => {
@@ -28,7 +38,7 @@ export default function AdminDashboard() {
     const sorted = [...leads].sort(
       (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
     );
-    if (viewer === "Admin") return sorted;
+    if (viewer === "Everyone") return sorted;
     return sorted.filter((l) => l.assignedTo === viewer);
   }, [leads, viewer]);
 
@@ -42,12 +52,12 @@ export default function AdminDashboard() {
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-4 py-8">
+    <div>
       <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
         <div>
-          <h1 className="text-xl font-bold" style={{ color: "var(--color-ink)" }}>
+          <h2 className="text-xl font-bold" style={{ color: "var(--color-ink)" }}>
             Leads
-          </h1>
+          </h2>
           <p className="text-sm text-slate-500">
             {leads === null ? "Loading…" : `${visibleLeads.length} lead${visibleLeads.length === 1 ? "" : "s"}`}
           </p>
@@ -62,7 +72,8 @@ export default function AdminDashboard() {
             onChange={(e) => setViewer(e.target.value)}
             className="rounded-md border border-slate-300 px-2 py-1.5"
           >
-            {MOCK_VIEWERS.map((v) => (
+            <option value="Everyone">Everyone</option>
+            {staffNames.filter((s) => s !== "Unassigned").map((v) => (
               <option key={v} value={v}>
                 {v}
               </option>
@@ -71,9 +82,9 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {viewer !== "Admin" && (
+      {viewer !== "Everyone" && (
         <p className="mb-4 text-xs text-slate-500 rounded-md bg-slate-50 border border-slate-200 px-3 py-2">
-          Staff view: showing only leads assigned to {viewer}. Admin sees everything.
+          Showing only leads assigned to {viewer}.
         </p>
       )}
 
@@ -134,9 +145,8 @@ export default function AdminDashboard() {
                     value={lead.assignedTo}
                     onChange={(e) => updateLead(lead.id, { assignedTo: e.target.value })}
                     className="rounded-md border border-slate-300 px-2 py-1 text-xs"
-                    disabled={viewer !== "Admin"}
                   >
-                    {MOCK_STAFF.map((s) => (
+                    {staffNames.map((s) => (
                       <option key={s} value={s}>
                         {s}
                       </option>
@@ -160,18 +170,13 @@ export default function AdminDashboard() {
             {leads !== null && visibleLeads.length === 0 && (
               <tr>
                 <td colSpan={7} className="px-4 py-10 text-center text-slate-400">
-                  No leads {viewer !== "Admin" ? `assigned to ${viewer}` : "yet"}.
+                  No leads {viewer !== "Everyone" ? `assigned to ${viewer}` : "yet"}.
                 </td>
               </tr>
             )}
           </tbody>
         </table>
       </div>
-
-      <p className="mt-4 text-xs text-slate-400">
-        Mock data + mock viewer switcher — no real authentication yet. This page is not linked from the public
-        site and has no access control; add real auth before deploying.
-      </p>
     </div>
   );
 }

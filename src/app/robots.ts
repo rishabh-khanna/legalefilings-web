@@ -6,9 +6,9 @@ export default function robots(): MetadataRoute.Robots {
     rules: {
       userAgent: "*",
       allow: "/",
-      // /admin has no real auth yet (mock viewer switcher only) — keep it out
-      // of search results regardless.
-      disallow: ["/api/", "/thankyou-page", "/admin"],
+      // /dashboard is the account area (customer/staff/admin) — auth-gated,
+      // but keep it out of search results regardless.
+      disallow: ["/api/", "/thankyou-page", "/dashboard"],
     },
     sitemap: `${SITE_URL}/sitemap.xml`,
   };

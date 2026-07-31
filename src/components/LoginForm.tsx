@@ -4,32 +4,39 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CONTACT_LINKS } from "@/config/site";
-import { setDemoSession } from "@/lib/demo-auth";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
 type LoginMethod = "email" | "phone";
-
-// Demo credentials for the /dashboard mock — there's no real backend yet
-// (that comes after this dummy is reviewed), so this is a hardcoded check,
-// not real authentication.
-const DEMO_USER = "admin";
-const DEMO_PASSWORD = "admin";
 
 export function LoginForm() {
   const router = useRouter();
   const [method, setMethod] = useState<LoginMethod>("email");
   const [showPassword, setShowPassword] = useState(false);
   const [notice, setNotice] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [emailValue, setEmailValue] = useState("");
   const [passwordValue, setPasswordValue] = useState("");
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (emailValue.trim().toLowerCase() === DEMO_USER && passwordValue === DEMO_PASSWORD) {
-      setDemoSession({ name: "Demo Client", email: "admin@legalefilings.com" });
-      router.push("/dashboard");
+    setErrorMessage(null);
+    setSubmitting(true);
+
+    const supabase = createSupabaseBrowserClient();
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email: emailValue.trim(),
+      password: passwordValue,
+    });
+
+    if (error || !data.user) {
+      setSubmitting(false);
+      setErrorMessage("Incorrect email or password.");
       return;
     }
-    setNotice(true);
+
+    router.push("/dashboard");
+    router.refresh();
   }
 
   const tabClass = (active: boolean) =>
@@ -58,10 +65,6 @@ export function LoginForm() {
       <p className="text-center text-xs" style={{ color: "var(--color-ink-soft)" }}>
         💡 You can log in with either your email or phone number once you have an account.
       </p>
-      <p className="rounded-lg px-3 py-2 text-center text-xs" style={{ backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}>
-        Demo dashboard — sign in with <span className="font-semibold">admin</span> / <span className="font-semibold">admin</span>.
-      </p>
-
       {method === "email" ? (
         <div>
           <label htmlFor="login-email" className="block text-sm font-medium mb-1" style={{ color: "var(--color-ink)" }}>
@@ -158,9 +161,14 @@ export function LoginForm() {
         </Link>
       </div>
 
+      {errorMessage && (
+        <p className="rounded-lg px-4 py-3 text-sm" style={{ backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}>
+          {errorMessage}
+        </p>
+      )}
       {notice && (
         <p className="rounded-lg px-4 py-3 text-sm" style={{ backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}>
-          Client accounts aren&apos;t live yet — we&apos;ll let you know when they are.{" "}
+          Google sign-in isn&apos;t set up yet.{" "}
           <Link href="/contact" className="font-medium underline">
             Contact us
           </Link>{" "}
@@ -170,10 +178,11 @@ export function LoginForm() {
 
       <button
         type="submit"
-        className="w-full rounded-full py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
+        disabled={submitting}
+        className="w-full rounded-full py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02] disabled:opacity-60"
         style={{ backgroundColor: "var(--color-action)" }}
       >
-        Sign in
+        {submitting ? "Signing in…" : "Sign in"}
       </button>
 
       <div className="relative py-2 text-center text-xs" style={{ color: "var(--color-ink-soft)" }}>

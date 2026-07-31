@@ -14,13 +14,6 @@ export const LEAD_STAGE_LABELS: Record<LeadStage, string> = {
   lost: "Lost",
 };
 
-// Mock staff directory — swap for real user accounts when auth is added.
-export const MOCK_STAFF = ["Unassigned", "Priya", "Rahul", "Ananya"] as const;
-
-// Mock viewer list for the admin dashboard's role switcher — "Admin" sees
-// every lead; a staff name sees only leads assigned to them.
-export const MOCK_VIEWERS = ["Admin", ...MOCK_STAFF.filter((s) => s !== "Unassigned")] as const;
-
 export type Lead = {
   id: string;
   name: string;

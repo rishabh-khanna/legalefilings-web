@@ -1,41 +1,52 @@
 import { NextResponse } from "next/server";
-import { promises as fs } from "fs";
-import os from "os";
-import path from "path";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { sendLeadAcknowledgementEmail } from "@/lib/email";
 import { LEAD_STAGES, type Lead, type LeadStage } from "@/lib/leads";
 
-// MOCK STORE — writes to a local JSON file instead of a real database.
-// Swap this for a Postgres insert once the backend/DB is wired up.
-// On Vercel the project directory is read-only at runtime (only /tmp is
-// writable), and /tmp there is wiped between deploys/cold starts — so
-// leads won't persist in production, only within a single warm instance.
-// That's an accepted limitation of the mock store, not a bug.
-const MOCK_DATA_DIR = process.env.VERCEL ? os.tmpdir() : path.join(process.cwd(), "data");
-const MOCK_LEADS_FILE = path.join(MOCK_DATA_DIR, "leads.mock.json");
+// DB rows are snake_case; the frontend (admin CRM board, consultation form)
+// speaks the camelCase `Lead` shape — translate at the boundary rather than
+// changing either side to match the other.
+type LeadRow = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  city: string | null;
+  state: string | null;
+  service: string | null;
+  plan: string | null;
+  plan_price: string | null;
+  message: string | null;
+  status: LeadStage;
+  assigned_to: string | null;
+  notes: string;
+  created_at: string;
+};
 
-async function readLeads(): Promise<Lead[]> {
-  try {
-    const raw = await fs.readFile(MOCK_LEADS_FILE, "utf-8");
-    const parsed = JSON.parse(raw) as Partial<Lead>[];
-    // backfill fields for leads saved before the CRM columns existed
-    return parsed.map((l) => ({
-      stage: "new",
-      assignedTo: "Unassigned",
-      notes: "",
-      ...l,
-    })) as Lead[];
-  } catch {
-    return [];
-  }
-}
-
-async function writeLeads(leads: Lead[]) {
-  await fs.mkdir(MOCK_DATA_DIR, { recursive: true });
-  await fs.writeFile(MOCK_LEADS_FILE, JSON.stringify(leads, null, 2));
+function toLead(row: LeadRow): Lead {
+  return {
+    id: row.id,
+    name: row.name,
+    email: row.email,
+    phone: row.phone,
+    city: row.city ?? undefined,
+    state: row.state ?? "",
+    service: row.service ?? undefined,
+    plan: row.plan ?? undefined,
+    planPrice: row.plan_price ?? undefined,
+    message: row.message ?? undefined,
+    createdAt: row.created_at,
+    stage: row.status,
+    assignedTo: row.assigned_to ?? "Unassigned",
+    notes: row.notes,
+  };
 }
 
 export async function GET() {
-  const leads = await readLeads();
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase.from("leads").select("*").order("created_at", { ascending: false });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const leads = (data as LeadRow[]).map(toLead);
   return NextResponse.json({ leads, count: leads.length });
 }
 
@@ -55,26 +66,33 @@ export async function POST(request: Request) {
     );
   }
 
-  const lead: Lead = {
-    id: crypto.randomUUID(),
-    name: String(name),
-    email: String(email),
-    phone: String(phone),
-    city: city ? String(city) : undefined,
-    state: state ? String(state) : "",
-    service: service ? String(service) : undefined,
-    plan: plan ? String(plan) : undefined,
-    planPrice: planPrice ? String(planPrice) : undefined,
-    message: message ? String(message) : undefined,
-    createdAt: new Date().toISOString(),
-    stage: "new",
-    assignedTo: "Unassigned",
-    notes: "",
-  };
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase
+    .from("leads")
+    .insert({
+      name: String(name),
+      email: String(email),
+      phone: String(phone),
+      city: city ? String(city) : null,
+      state: state ? String(state) : null,
+      service: service ? String(service) : null,
+      plan: plan ? String(plan) : null,
+      plan_price: planPrice ? String(planPrice) : null,
+      message: message ? String(message) : null,
+    })
+    .select()
+    .single();
 
-  const leads = await readLeads();
-  leads.push(lead);
-  await writeLeads(leads);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  const lead = toLead(data as LeadRow);
+
+  // Best-effort: a failed acknowledgment email shouldn't fail the lead
+  // submission itself — the lead is already saved by this point.
+  try {
+    await sendLeadAcknowledgementEmail(lead);
+  } catch (err) {
+    console.error("Failed to send lead acknowledgement email:", err);
+  }
 
   return NextResponse.json({ ok: true, lead }, { status: 201 });
 }
@@ -85,23 +103,23 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Lead id is required" }, { status: 400 });
   }
 
-  const leads = await readLeads();
-  const index = leads.findIndex((l) => l.id === body.id);
-  if (index === -1) {
-    return NextResponse.json({ error: "Lead not found" }, { status: 404 });
-  }
-
   const { stage, assignedTo, notes } = body as Record<string, unknown>;
+  const patch: Record<string, unknown> = {};
   if (typeof stage === "string" && (LEAD_STAGES as readonly string[]).includes(stage)) {
-    leads[index].stage = stage as LeadStage;
+    patch.status = stage;
   }
   if (typeof assignedTo === "string") {
-    leads[index].assignedTo = assignedTo;
+    patch.assigned_to = assignedTo;
   }
   if (typeof notes === "string") {
-    leads[index].notes = notes;
+    patch.notes = notes;
   }
 
-  await writeLeads(leads);
-  return NextResponse.json({ ok: true, lead: leads[index] });
+  const supabase = getSupabaseAdmin();
+  const { data, error } = await supabase.from("leads").update(patch).eq("id", body.id).select().single();
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  if (!data) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+
+  return NextResponse.json({ ok: true, lead: toLead(data as LeadRow) });
 }
