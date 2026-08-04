@@ -1,42 +1,22 @@
 "use client";
 
-import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { CommandPalette } from "@/components/crm/CommandPalette";
+import { ToastProvider } from "@/components/crm/Toaster";
 
-const TABS = [
-  { href: "/dashboard/admin/leads", label: "Leads CRM" },
-  { href: "/dashboard/admin/account-requests", label: "Account Requests" },
-  { href: "/dashboard/admin/users", label: "Create User" },
-  { href: "/dashboard/admin/attendance", label: "Attendance" },
-  { href: "/dashboard/admin/leave-requests", label: "Leave Requests" },
-  { href: "/dashboard/admin/analytics", label: "Analytics" },
-];
-
+// The full set of admin pages already lives in the left sidebar
+// (DashboardShell's ADMIN_ONLY_ITEMS + TEAM_MANAGEMENT_ITEMS +
+// ANALYTICS_ITEM) — this used to repeat every one of those links again as
+// a row of pill tabs up top, which was pure duplication once the sidebar
+// had all of them. Just the quick-jump search stays here.
 export default function AdminSectionLayout({ children }: { children: React.ReactNode }) {
-  const pathname = usePathname();
-
   return (
-    <div>
-      <nav className="flex gap-2 overflow-x-auto border-b" style={{ borderColor: "var(--color-line)" }}>
-        {TABS.map((tab) => {
-          const active = pathname.startsWith(tab.href);
-          return (
-            <Link
-              key={tab.href}
-              href={tab.href}
-              className="shrink-0 border-b-2 px-3 py-2.5 text-sm font-medium transition-colors"
-              style={
-                active
-                  ? { borderColor: "var(--color-action)", color: "var(--color-ink)" }
-                  : { borderColor: "transparent", color: "var(--color-ink-soft)" }
-              }
-            >
-              {tab.label}
-            </Link>
-          );
-        })}
-      </nav>
-      <div className="mt-6">{children}</div>
-    </div>
+    <ToastProvider>
+      <div>
+        <div className="flex justify-end">
+          <CommandPalette />
+        </div>
+        <div className="mt-4">{children}</div>
+      </div>
+    </ToastProvider>
   );
 }

@@ -1,7 +1,9 @@
+import { Package, Loader2, CheckCircle2, IndianRupee } from "lucide-react";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { getReportingChainIds } from "@/lib/reporting-chain";
 import { isStaffOrAdmin } from "@/lib/roles";
+import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 
 type OrderRow = {
   id: string;
@@ -46,19 +48,29 @@ export default async function OrderHistoryPage() {
   }
   const { data } = await query;
   const orders = (data as OrderRow[] | null) ?? [];
+  const activeOrders = orders.filter((o) => !["completed", "cancelled"].includes(o.status)).length;
+  const completedOrders = orders.filter((o) => o.status === "completed").length;
+  const totalValue = orders.reduce((sum, o) => sum + Number(o.plan_price ?? 0), 0);
 
   return (
     <div>
-      <h1 className="text-2xl font-extrabold" style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)" }}>
-        {profile && isStaffOrAdmin(profile) ? "Orders" : "Order History"}
-      </h1>
-      <p className="mt-1 text-sm" style={{ color: "var(--color-ink-soft)" }}>
-        {profile && isStaffOrAdmin(profile)
-          ? "Every engagement across all customers."
-          : "Every registration and filing you've ordered with us."}
-      </p>
+      <DashboardPageHero
+        title={profile && isStaffOrAdmin(profile) ? "Orders" : "Order History"}
+        subtitle={
+          profile && isStaffOrAdmin(profile)
+            ? "Every engagement across all customers."
+            : "Every registration and filing you've ordered with us."
+        }
+      >
+        <div className="relative mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <HeroKpi icon={Package} label="Total Orders" value={orders.length} />
+          <HeroKpi icon={Loader2} label="In Progress" value={activeOrders} />
+          <HeroKpi icon={CheckCircle2} label="Completed" value={completedOrders} />
+          <HeroKpi icon={IndianRupee} label="Total Value" value={`₹${totalValue.toLocaleString("en-IN")}`} />
+        </div>
+      </DashboardPageHero>
 
-      <div className="mt-5 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
+      <div className="overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
         <table className="w-full min-w-[560px] text-left text-sm">
           <thead>
             <tr style={{ backgroundColor: "var(--color-muted-tint)" }}>

@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
-import { BrandFace } from "@/components/BrandFace";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { isStaffOrAdmin, roleLabel, type Profile } from "@/lib/roles";
 
@@ -29,10 +28,23 @@ const STAFF_BASE_ITEMS: NavItem[] = [
   { href: "/dashboard/orders", label: "Orders" },
   { href: "/dashboard/attendance", label: "Attendance" },
   { href: "/dashboard/leave", label: "Leave" },
+  { href: "/dashboard/payslips", label: "My Payslips" },
+  { href: "/dashboard/holidays", label: "Holidays" },
+  { href: "/dashboard/documents", label: "Documents" },
   // Viewable by every staff level — only admin can actually act on one
   // (enforced in the API and reflected in the page itself), but everyone
   // should be able to see what's pending.
   { href: "/dashboard/admin/account-requests", label: "Account Requests" },
+];
+
+// Payroll/HR letters/reports/company settings are admin-only — matches
+// the ADMIN_ONLY_SECTIONS guard in proxy.ts.
+const ADMIN_ONLY_ITEMS: NavItem[] = [
+  { href: "/dashboard/admin/employees", label: "Employees" },
+  { href: "/dashboard/admin/payroll", label: "Payroll" },
+  { href: "/dashboard/admin/hr-letters", label: "HR Letters" },
+  { href: "/dashboard/admin/reports", label: "Reports" },
+  { href: "/dashboard/admin/company-settings", label: "Company Settings" },
 ];
 
 // Only a leader/group_leader/admin gets team-management views — a rater
@@ -65,6 +77,9 @@ function buildNavItems(profile: Profile): NavItem[] {
   }
   if (isAdmin || profile.staff_level === "group_leader") {
     items.push(ANALYTICS_ITEM);
+  }
+  if (isAdmin) {
+    items.push(...ADMIN_ONLY_ITEMS);
   }
   items.push(PROFILE_ITEM);
   return items;
@@ -139,6 +154,12 @@ const NAV_ICONS: Record<string, (props: { className?: string }) => React.JSX.Ele
       <path d="M18 9v6M15 12h6" strokeLinecap="round" />
     </svg>
   ),
+  "/dashboard/admin/employees": ({ className }) => (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
+      <rect x="3.5" y="4.5" width="17" height="15" rx="2" />
+      <path d="M3.5 9.5h17M8 13h3M8 16h6" strokeLinecap="round" />
+    </svg>
+  ),
   "/dashboard/admin/attendance": ({ className }) => (
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
       <circle cx="12" cy="12" r="8.5" />
@@ -163,7 +184,99 @@ const NAV_ICONS: Record<string, (props: { className?: string }) => React.JSX.Ele
       <path d="M17 13h4M19 11v4" strokeLinecap="round" />
     </svg>
   ),
+  "/dashboard/payslips": ({ className }) => (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
+      <rect x="4" y="3.5" width="16" height="17" rx="2" />
+      <path d="M8 8h8M8 11.5h8M8 15h5" strokeLinecap="round" />
+      <circle cx="16.5" cy="17" r="2.75" fill="currentColor" stroke="none" opacity="0.15" />
+    </svg>
+  ),
+  "/dashboard/holidays": ({ className }) => (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
+      <rect x="3.5" y="4.5" width="17" height="16" rx="2" />
+      <path d="M3.5 9.5h17M8 3v3M16 3v3" strokeLinecap="round" />
+      <path d="M8 14l1.5 1.5L12.5 12" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  "/dashboard/documents": ({ className }) => (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
+      <path d="M7 3.5h7l4 4V20a.5.5 0 0 1-.5.5h-10A.5.5 0 0 1 7 20V4a.5.5 0 0 1 .5-.5Z" strokeLinejoin="round" />
+      <path d="M14 3.5V8h4" strokeLinejoin="round" />
+      <path d="M9.5 12.5h5M9.5 15.5h5" strokeLinecap="round" />
+    </svg>
+  ),
+  "/dashboard/admin/hr-letters": ({ className }) => (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
+      <path d="M4 6.5h16v11a.5.5 0 0 1-.5.5h-15a.5.5 0 0 1-.5-.5v-11Z" strokeLinejoin="round" />
+      <path d="m4.5 6.5 7.5 6 7.5-6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  "/dashboard/admin/payroll": ({ className }) => (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 7v10M14.5 9.3c0-1-.9-1.8-2.5-1.8s-2.6.9-2.6 1.9c0 2.6 5.1 1.2 5.1 3.8 0 1-1 1.9-2.6 1.9s-2.5-.8-2.5-1.8" strokeLinecap="round" />
+    </svg>
+  ),
+  "/dashboard/admin/reports": ({ className }) => (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
+      <path d="M4 20V10M11 20V4M18 20v-7" strokeLinecap="round" />
+      <path d="M3.5 20.5h17" strokeLinecap="round" />
+    </svg>
+  ),
+  "/dashboard/admin/company-settings": ({ className }) => (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3v2.5M12 18.5V21M21 12h-2.5M5.5 12H3M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8M18.4 18.4l-1.8-1.8M7.4 7.4 5.6 5.6" strokeLinecap="round" />
+    </svg>
+  ),
 };
+
+// A rotating set of tints so the sidebar reads as colorful rather than
+// one gray icon after another — each item's icon sits in its own tinted
+// circle regardless of active state, keyed by position so it's stable
+// across renders without needing per-route color assignments.
+const ICON_TINTS = [
+  { bg: "#fff1cc", fg: "#8a6700" },
+  { bg: "#dbe7ff", fg: "#1d4fb8" },
+  { bg: "#dcfce3", fg: "#116a2c" },
+  { bg: "#fde2e2", fg: "#b42318" },
+  { bg: "#ede9fe", fg: "#5b21b6" },
+  { bg: "#fce7f3", fg: "#9d174d" },
+  { bg: "#e0f2fe", fg: "#075985" },
+];
+
+// A personalized gradient initials avatar instead of the same generic
+// brand mark (BrandFace) next to every single user's name — that's
+// exactly the "same image for everyone" flatness this was meant to fix.
+// Color is hashed from the name, so the same person always gets the same
+// gradient rather than a random one on every render.
+const AVATAR_GRADIENTS = [
+  "linear-gradient(135deg, #fdc500, #ff8a3d)",
+  "linear-gradient(135deg, #60a5fa, #6366f1)",
+  "linear-gradient(135deg, #34d399, #059669)",
+  "linear-gradient(135deg, #f472b6, #db2777)",
+  "linear-gradient(135deg, #a78bfa, #7c3aed)",
+  "linear-gradient(135deg, #fb923c, #ea580c)",
+];
+
+function initialsFor(name: string) {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
+}
+
+function ProfileAvatar({ name, className = "" }: { name: string; className?: string }) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  const gradient = AVATAR_GRADIENTS[hash % AVATAR_GRADIENTS.length];
+  return (
+    <span
+      className={`flex shrink-0 items-center justify-center rounded-full font-bold text-white ${className}`}
+      style={{ background: gradient }}
+    >
+      {initialsFor(name)}
+    </span>
+  );
+}
 
 const DEFAULT_NAV_ICON = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
@@ -232,16 +345,22 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             Your Account
           </p>
           <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
-            <h1 className="text-2xl font-extrabold sm:text-3xl" style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)" }}>
-              Welcome back, {session.name}
-            </h1>
+            <div className="flex items-center gap-3.5">
+              <ProfileAvatar name={session.name} className="h-12 w-12 text-lg shadow-sm sm:h-14 sm:w-14" />
+              <div>
+                <h1 className="text-2xl font-extrabold sm:text-3xl" style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)" }}>
+                  Welcome back, {session.name}
+                </h1>
+                <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>{roleLabel(session.profile)}</p>
+              </div>
+            </div>
             {/* Staff/admin already have "Buy Plan for Customer" in the
                 sidebar nav — repeating it here as well read as redundant. */}
             {!isStaffOrAdmin(session.profile) && (
               <Link
                 href="/pricing"
                 className="inline-flex items-center gap-2 rounded-full px-5 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
-                style={{ backgroundColor: "var(--color-ink-fixed)" }}
+                style={{ backgroundColor: "var(--color-action)" }}
               >
                 Buy a New Plan
                 <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
@@ -256,19 +375,27 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       <div className="mx-auto max-w-6xl px-4 pb-16 lg:grid lg:grid-cols-[220px_1fr] lg:gap-8">
         {/* Mobile: horizontal scrollable tab row instead of a duplicate off-canvas menu — the site header's own hamburger already covers site-wide nav. */}
         <div className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-1 lg:hidden">
-          {navItems.map((item) => {
+          {navItems.map((item, i) => {
             const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+            const Icon = NAV_ICONS[item.href] ?? DEFAULT_NAV_ICON;
+            const tint = ICON_TINTS[i % ICON_TINTS.length];
             return (
               <Link
                 key={item.href}
                 href={item.href}
-                className="shrink-0 rounded-full border px-4 py-2 text-sm font-medium transition-colors"
+                className="flex shrink-0 items-center gap-2 rounded-full border px-4 py-2 text-sm font-medium transition-colors"
                 style={
                   active
-                    ? { backgroundColor: "var(--color-ink-fixed)", borderColor: "var(--color-ink-fixed)", color: "#fff" }
+                    ? { backgroundColor: "var(--color-action)", borderColor: "var(--color-action)", color: "#fff" }
                     : { borderColor: "var(--color-line)", color: "var(--color-ink-soft)" }
                 }
               >
+                <span
+                  className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+                  style={{ backgroundColor: active ? "rgba(255,255,255,0.2)" : tint.bg, color: active ? "#fff" : tint.fg }}
+                >
+                  <Icon className="h-3 w-3" />
+                </span>
                 {item.label}
               </Link>
             );
@@ -279,7 +406,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           className="mb-6 flex items-center gap-3 rounded-2xl border bg-white p-4 dark:bg-[var(--color-paper-raised)] lg:hidden"
           style={{ borderColor: "var(--color-line)" }}
         >
-          <BrandFace className="h-9 w-9 shrink-0" />
+          <ProfileAvatar name={session.name} className="h-9 w-9 text-sm" />
           <div className="min-w-0 flex-1">
             <p className="truncate text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
               {session.name}
@@ -304,21 +431,27 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
         <aside className="hidden lg:block">
           <nav className="flex flex-col gap-1 rounded-2xl border bg-white p-3 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-            {navItems.map((item) => {
+            {navItems.map((item, i) => {
               const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
               const Icon = NAV_ICONS[item.href] ?? DEFAULT_NAV_ICON;
+              const tint = ICON_TINTS[i % ICON_TINTS.length];
               return (
                 <Link
                   key={item.href}
                   href={item.href}
-                  className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors"
+                  className="flex items-center gap-3 rounded-xl px-3 py-2 text-sm font-medium transition-colors"
                   style={
                     active
                       ? { backgroundColor: "var(--color-accent-tint)", color: "var(--color-ink)" }
                       : { color: "var(--color-ink-soft)" }
                   }
                 >
-                  <Icon className="h-[18px] w-[18px] shrink-0" />
+                  <span
+                    className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
+                    style={{ backgroundColor: tint.bg, color: tint.fg }}
+                  >
+                    <Icon className="h-[16px] w-[16px]" />
+                  </span>
                   {item.label}
                 </Link>
               );
@@ -329,7 +462,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             className="mt-4 flex items-center gap-3 rounded-2xl border bg-white p-4 dark:bg-[var(--color-paper-raised)]"
             style={{ borderColor: "var(--color-line)" }}
           >
-            <BrandFace className="h-9 w-9 shrink-0" />
+            <ProfileAvatar name={session.name} className="h-9 w-9 text-sm" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
                 {session.name}

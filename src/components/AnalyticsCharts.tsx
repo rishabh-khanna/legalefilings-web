@@ -1,15 +1,16 @@
 "use client";
 
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, Pie, PieChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { GlassCard } from "@/components/crm/GlassCard";
 
 const COLORS = ["#fdc500", "#8a6700", "#1a9d5b", "#b42318", "#5b6b81", "#0f172a"];
 
 function ChartCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-2xl border bg-white p-5 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
+    <GlassCard className="p-5" hover={false}>
       <h3 className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>{title}</h3>
       <div className="mt-4 h-64">{children}</div>
-    </div>
+    </GlassCard>
   );
 }
 

@@ -3,9 +3,8 @@
 import { useState } from "react";
 import type { PricingPlan } from "@/lib/content";
 import { openQuoteModal } from "@/lib/quote-modal";
+import { openPaymentModal } from "@/lib/payment-modal";
 import { SectionHeading } from "@/components/SectionHeading";
-
-const FEATURES_SHOWN = 7;
 
 // A small rotating set of plan icons — referenced from doola.com's own
 // pricing cards (rocket / lightning-bolt / cube, one per tier) — cycled by
@@ -46,7 +45,6 @@ export function PricingPlans({
   /** Passed through to the quote modal so the lead record says which service the plan is for — required on pages that list more than one service's plans (e.g. /pricing), where QuoteModal can't assume a single static service. */
   serviceTitle?: string;
 }) {
-  const [expanded, setExpanded] = useState<Record<number, boolean>>({});
   // The highlighted card starts on the first plan (shown as "Most Popular")
   // but is really a selection — clicking any other plan moves the highlight
   // there instead of leaving it stuck on the first one.
@@ -83,9 +81,6 @@ export function PricingPlans({
       <div className={`${showHeading ? "mt-10" : "mt-5"} grid gap-6 sm:grid-cols-2 lg:grid-cols-3`}>
         {plans.map((plan, i) => {
           const featured = i === selected;
-          const isOpen = expanded[i] ?? false;
-          const visibleFeatures = isOpen ? plan.features : plan.features.slice(0, FEATURES_SHOWN);
-          const hiddenCount = plan.features.length - FEATURES_SHOWN;
           const selectThis = () => {
             setSelected(i);
             setUserSelected(true);
@@ -163,42 +158,47 @@ export function PricingPlans({
                   <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>+ Govt. fee extra</p>
                 )}
 
-                {plan.features.length > 0 && (
-                  <>
-                    <p className="mt-6 text-sm" style={{ color: "var(--color-ink-soft)" }}>
-                      What&apos;s included in <span className="font-semibold" style={{ color: "var(--color-ink)" }}>{plan.name}</span>,
-                    </p>
-                    <ul className="mt-2.5 space-y-2 text-sm" style={{ color: "var(--color-ink)" }}>
-                      {visibleFeatures.map((f) => (
-                        <li key={f} className="flex items-start gap-2">
-                          <svg
-                            aria-hidden="true"
-                            viewBox="0 0 20 20"
-                            className="mt-0.5 h-4 w-4 shrink-0"
-                            fill="none"
-                            stroke="var(--color-action-dark)"
-                            strokeWidth="2.5"
-                          >
-                            <path d="m4 10.5 3.5 3.5L16 6" strokeLinecap="round" strokeLinejoin="round" />
-                          </svg>
-                          {f}
-                        </li>
-                      ))}
-                    </ul>
-                    {hiddenCount > 0 && (
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setExpanded((prev) => ({ ...prev, [i]: !isOpen }));
-                        }}
-                        className="mt-2 self-start text-sm font-medium"
-                        style={{ color: "var(--color-action-dark)" }}
-                      >
-                        {isOpen ? "Show less" : `+${hiddenCount} more`}
-                      </button>
-                    )}
-                  </>
+                {/* One unified checklist — tick for included, cross for
+                    excluded — instead of two separately-headed "what's
+                    included" / "what's not" sections. Full list, no
+                    scroll/truncation: cards in the same row still stretch
+                    to equal height (CSS grid default) and the spacer
+                    below pins every button to the same baseline, so a
+                    shorter tier just gets a bit of open space above its
+                    button instead of a cramped scroll box. */}
+                {(plan.features.length > 0 || (plan.excludedFeatures?.length ?? 0) > 0) && (
+                  <ul className="mt-6 space-y-2 text-sm">
+                    {plan.features.map((f) => (
+                      <li key={f} className="flex items-start gap-2" style={{ color: "var(--color-ink)" }}>
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 20 20"
+                          className="mt-0.5 h-4 w-4 shrink-0"
+                          fill="none"
+                          stroke="var(--color-action-dark)"
+                          strokeWidth="2.5"
+                        >
+                          <path d="m4 10.5 3.5 3.5L16 6" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        {f}
+                      </li>
+                    ))}
+                    {plan.excludedFeatures?.map((f) => (
+                      <li key={f} className="flex items-start gap-2" style={{ color: "var(--color-ink-soft)" }}>
+                        <svg
+                          aria-hidden="true"
+                          viewBox="0 0 20 20"
+                          className="mt-0.5 h-4 w-4 shrink-0"
+                          fill="none"
+                          stroke="#dc2626"
+                          strokeWidth="2.5"
+                        >
+                          <path d="m6 6 8 8M14 6l-8 8" strokeLinecap="round" strokeLinejoin="round" />
+                        </svg>
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
                 )}
 
                 {/* Cards in the same row stretch to equal height by default
@@ -212,12 +212,24 @@ export function PricingPlans({
                   onClick={(e) => {
                     e.stopPropagation();
                     selectThis();
-                    openQuoteModal({ plan: { name: plan.name, price: priceNow }, service: serviceTitle });
+                    openPaymentModal({ plan: { name: plan.name, price: priceNow }, service: serviceTitle ?? plan.name });
                   }}
                   className="mt-7 block rounded-full py-3 text-center text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
-                  style={{ backgroundColor: "var(--color-ink-fixed)" }}
+                  style={{ backgroundColor: "var(--color-action)" }}
                 >
-                  Select Plan
+                  Pay Now
+                </button>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    selectThis();
+                    openQuoteModal({ plan: { name: plan.name, price: priceNow }, service: serviceTitle });
+                  }}
+                  className="mt-2 block rounded-full py-3 text-center text-sm font-semibold transition-colors hover:bg-black/5"
+                  style={{ border: "1px solid var(--color-ink-fixed)", color: "var(--color-ink-fixed)" }}
+                >
+                  Get a Quote
                 </button>
               </div>
             </div>

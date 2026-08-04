@@ -5,6 +5,7 @@ import "./globals.css";
 import { NAV_CATEGORIES, getPage, getSearchIndex } from "@/lib/content";
 import { type NavCategoryData } from "@/components/SiteHeader";
 import { SiteChrome } from "@/components/SiteChrome";
+import { AmbientBackground } from "@/components/AmbientBackground";
 import { SITE_NAME } from "@/config/site";
 import { SocialLinks } from "@/components/SocialLinks";
 
@@ -44,6 +45,7 @@ export default function RootLayout({
       {/* Defensive: clips any horizontal scrollable overflow so a stray
           off-viewport element can never shift/clip visible page content. */}
       <body className="min-h-full flex flex-col overflow-x-hidden pb-12 sm:pb-0" style={{ color: "var(--color-ink)" }}>
+        <AmbientBackground />
         <SiteChrome
           navCategories={navCategories}
           searchIndex={searchIndex}

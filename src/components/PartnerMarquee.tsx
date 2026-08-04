@@ -8,8 +8,8 @@ import { BUSINESS_STATS } from "@/config/site";
 // or backer list, so it's deliberately left out here.)
 const PARTNER_LOGOS = [
   { src: "/images/wp/download-2.png", alt: "Patil Kaki" },
-  { src: "/images/wp/imresizer-1710239019088-removebg-preview-2.png", alt: "Anillo" },
-  { src: "/images/wp/imresizer-1710239258201-2.jpg", alt: "PediaXone" },
+  { src: "/images/wp/imresizer-1710239019088-removebg-preview.png", alt: "Anillo" },
+  { src: "/images/wp/imresizer-1710239258201.jpg", alt: "PediaXone" },
   { src: "/images/wp/logo-dark-2.png", alt: "Client logo" },
   { src: "/images/wp/Xpert_logo_blue_transparent.png", alt: "XpertTutor" },
 ];

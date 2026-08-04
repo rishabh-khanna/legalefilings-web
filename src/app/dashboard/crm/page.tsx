@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Users, Sparkles, Trophy, Clock } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { StateSelect } from "@/components/StateSelect";
 import { CitySelect } from "@/components/CitySelect";
@@ -9,6 +10,7 @@ import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { SITE_NAME } from "@/config/site";
 import { useActionMessage } from "@/lib/use-action-message";
 import { ActionMessage } from "@/components/ActionMessage";
+import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 
 type LeadRow = {
   id: string;
@@ -88,6 +90,13 @@ export default function CrmPage() {
     showSuccess("Lead added.");
   }
 
+  const leadStats = useMemo(() => {
+    const won = leads.filter((l) => l.status === "won").length;
+    const inProgress = leads.filter((l) => l.status === "contacted" || l.status === "in_progress").length;
+    const fresh = leads.filter((l) => l.status === "new").length;
+    return { total: leads.length, won, inProgress, fresh };
+  }, [leads]);
+
   if (loading) {
     return (
       <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
@@ -98,26 +107,27 @@ export default function CrmPage() {
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold" style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)" }}>
-            My Leads
-          </h1>
-          <p className="mt-1 text-sm" style={{ color: "var(--color-ink-soft)" }}>
-            Leads assigned to you — {leads.length} total.
-          </p>
+      <DashboardPageHero title="My Leads" subtitle="Leads assigned to you — track them from first contact to close.">
+        <div className="relative mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <HeroKpi icon={Users} label="Total" value={leadStats.total} />
+          <HeroKpi icon={Sparkles} label="New" value={leadStats.fresh} />
+          <HeroKpi icon={Clock} label="In Progress" value={leadStats.inProgress} />
+          <HeroKpi icon={Trophy} label="Won" value={leadStats.won} />
         </div>
+      </DashboardPageHero>
+
+      <div className="flex flex-wrap items-center justify-end gap-4">
         <button
           type="button"
           onClick={() => setShowForm((v) => !v)}
           className="rounded-full px-4 py-2 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
-          style={{ backgroundColor: "var(--color-ink-fixed)" }}
+          style={{ backgroundColor: "var(--color-action)" }}
         >
           {showForm ? "Cancel" : "+ Add Lead"}
         </button>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-3">
         <ActionMessage message={message} />
       </div>
 

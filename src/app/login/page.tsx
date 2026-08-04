@@ -27,8 +27,8 @@ const CHECKLIST = [
 export default function LoginPage() {
   return (
     // Grid columns stretch to match each other by default — the right
-    // column's real height (name/email/phone/password fields + Google
-    // button + footer links) is taller than one screen, so the left
+    // column's real height (name/email/phone/password fields + footer
+    // links) is taller than one screen, so the left
     // column's yellow background correctly stretches to match it too (this
     // is what makes it reach the bottom instead of stopping short). What
     // shouldn't stretch is the CONTENT inside the left column: it used to

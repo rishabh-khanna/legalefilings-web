@@ -2,11 +2,13 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { NAV_CATEGORIES } from "@/content/nav-taxonomy";
 import { getPage, getServiceContent } from "@/lib/content";
+import { PRICING_OVERRIDES } from "@/content/pricing-overrides";
 import { PricingPlans } from "@/components/PricingPlans";
 import { MoneyBackBanner } from "@/components/MoneyBackBanner";
 import { SectionHeading } from "@/components/SectionHeading";
 import { CtaBand } from "@/components/CtaBand";
 import { QuoteModal } from "@/components/QuoteModal";
+import { PaymentModal } from "@/components/PaymentModal";
 import { CATEGORY_ICONS, GlowBadge } from "@/components/CategoryIcons";
 import { SITE_NAME } from "@/config/site";
 
@@ -18,7 +20,11 @@ export const metadata: Metadata = {
 // One page listing every service's real pricing cards (same cards each
 // service page already renders), grouped the same way the nav groups them —
 // referenced from doola.com's own dedicated pricing page, which is where
-// their homepage "See Plans & Pricing" button sends you.
+// their homepage "See Plans & Pricing" button sends you. Flat one-off fees
+// (a single registration/filing, not a tiered plan) live on their own page
+// (/pricing/rate-card) rather than being crammed onto the bottom of this
+// one — two different shopping modes ("which tier fits my company" vs.
+// "what does just this one filing cost") deserve two different pages.
 export default function PricingPage() {
   const categories = NAV_CATEGORIES.map((cat) => ({
     label: cat.label,
@@ -26,7 +32,8 @@ export default function PricingPage() {
       .map((slug) => {
         const page = getPage(slug);
         if (!page) return null;
-        const { plans } = getServiceContent(page);
+        const { plans: parsedPlans } = getServiceContent(page);
+        const plans = PRICING_OVERRIDES[slug] ?? parsedPlans;
         if (plans.length === 0) return null;
         return { slug, title: page.title, plans };
       })
@@ -60,6 +67,30 @@ export default function PricingPage() {
           </a>
         ))}
       </nav>
+
+      {/* The other of the two pricing "modes" — impossible to miss up
+          here (not a small link buried at the bottom) for anyone who
+          landed on this page wanting a single flat-fee filing rather than
+          a tiered company/compliance plan. */}
+      <Link
+        href="/pricing/rate-card"
+        className="mt-8 flex flex-wrap items-center justify-between gap-4 rounded-2xl p-6 transition-transform hover:scale-[1.01]"
+        style={{ backgroundColor: "var(--color-ink-fixed)" }}
+      >
+        <div>
+          <p className="text-lg font-bold text-white">Just need one filing, not a full plan?</p>
+          <p className="mt-1 text-sm text-white/70">See our complete flat-fee price list — every one-off registration and compliance filing, one page.</p>
+        </div>
+        <span
+          className="inline-flex shrink-0 items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold"
+          style={{ backgroundColor: "var(--color-accent)", color: "var(--color-ink)" }}
+        >
+          View Flat-Fee Price List
+          <svg aria-hidden="true" viewBox="0 0 20 20" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M4 10h12M11 5l5 5-5 5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+      </Link>
 
       <div className="mt-14">
         <MoneyBackBanner />
@@ -111,6 +142,7 @@ export default function PricingPage() {
       </div>
 
       <QuoteModal />
+      <PaymentModal />
     </div>
   );
 }

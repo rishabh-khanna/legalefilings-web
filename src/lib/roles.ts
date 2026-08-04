@@ -19,6 +19,21 @@ export type Profile = {
   state: string | null;
   date_of_birth: string | null;
   crm_status: "lead" | "active" | "past_client";
+  // Employee master fields (Module 2 of the HRMS spec) — nullable since
+  // customers and most existing staff rows won't have these filled in.
+  employee_id: string | null;
+  aadhaar_number: string | null;
+  pan_number: string | null;
+  department: string | null;
+  designation: string | null;
+  date_of_joining: string | null;
+  bank_account_number: string | null;
+  bank_ifsc: string | null;
+  bank_name: string | null;
+  uan_number: string | null;
+  esic_number: string | null;
+  emergency_contact_name: string | null;
+  emergency_contact_phone: string | null;
 };
 
 export const STAFF_LEVEL_LABELS: Record<StaffLevel, string> = {

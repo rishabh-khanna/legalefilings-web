@@ -52,8 +52,14 @@
 
   /* doola.com's own top offer banner runs on their brand blue specifically
      — not their homepage's yellow — so this is scoped to that one banner
-     rather than reintroduced as a second site-wide accent color. */
+     rather than reintroduced as a second site-wide accent color. -dark/
+     -tint are the same hue, for the one other spot (MoneyBackBanner) that
+     also uses blue as a deliberate one-off trust accent — previously an
+     unrelated hand-picked lavender-blue that didn't read as the same
+     color family as the banner above it on the homepage. */
   --color-banner: #276ef1;
+  --color-banner-dark: #1b4ba4;
+  --color-banner-tint: #e5eefd;
 }
 
 @theme inline {
@@ -122,6 +128,31 @@ h1, h2, h3 {
    translated drawer would. That earlier approach expanded the page's
    scrollable area and shifted the whole viewport (see: the mobile "hiding
    content" bug); this one only exists at its final in-bounds position. */
+/* Ambient background orbs (AmbientBackground component) — slow, subtle
+   drift so every page has a faint sense of motion instead of feeling
+   static, without being a distraction. Three different durations/paths
+   so they don't visibly sync up with each other. */
+@keyframes ambient-drift-a {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(4%, 6%) scale(1.08); }
+}
+@keyframes ambient-drift-b {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-5%, 4%) scale(1.05); }
+}
+@keyframes ambient-drift-c {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(3%, -5%) scale(1.1); }
+}
+.ambient-orb-a { animation: ambient-drift-a 22s ease-in-out infinite; }
+.ambient-orb-b { animation: ambient-drift-b 28s ease-in-out infinite; }
+.ambient-orb-c { animation: ambient-drift-c 34s ease-in-out infinite; }
+@media (prefers-reduced-motion: reduce) {
+  .ambient-orb-a, .ambient-orb-b, .ambient-orb-c {
+    animation: none !important;
+  }
+}
+
 @keyframes sidebar-in {
   from {
     transform: translateX(-100%);

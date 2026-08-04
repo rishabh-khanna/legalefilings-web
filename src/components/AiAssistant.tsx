@@ -17,25 +17,10 @@ type Message = { role: "user" | "assistant"; text: string; links?: AssistantRepl
 
 export function AiAssistant({ searchIndex }: { searchIndex: SearchEntry[] }) {
   const [open, setOpen] = useState(false);
-  const [showGreeting, setShowGreeting] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Message[]>([]);
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
-
-  // A persistent "how can I help?" bubble next to the FAB whenever the
-  // assistant is closed — not a one-time dismissible tooltip. It hides the
-  // moment the panel opens and comes right back once it's closed again, so
-  // it's always there to invite the next question rather than a single
-  // greeting that vanishes forever after the first visit.
-  useEffect(() => {
-    const timer = setTimeout(() => setShowGreeting(!open), open ? 0 : 1000);
-    return () => clearTimeout(timer);
-  }, [open]);
-
-  function dismissGreeting() {
-    setShowGreeting(false);
-  }
 
   // Cmd/Ctrl+K opens the assistant from anywhere — the same entry point as
   // the floating button, not a second competing widget.
@@ -70,40 +55,6 @@ export function AiAssistant({ searchIndex }: { searchIndex: SearchEntry[] }) {
 
   return (
     <>
-      {showGreeting && !open && (
-        <div className="fixed right-6 z-30 hidden max-w-[220px] items-start gap-2 sm:flex" style={{ bottom: 160 }}>
-          <div
-            role="button"
-            tabIndex={0}
-            onClick={() => setOpen(true)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" || e.key === " ") {
-                e.preventDefault();
-                setOpen(true);
-              }
-            }}
-            className="relative cursor-pointer rounded-2xl rounded-br-sm border bg-white dark:bg-[var(--color-paper-raised)] p-3.5 pr-7 text-sm leading-snug shadow-xl"
-            style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
-          >
-            👋 Hi! How can I help you today?
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                dismissGreeting();
-              }}
-              aria-label="Dismiss"
-              className="absolute right-2 top-2 flex h-4 w-4 items-center justify-center rounded-full"
-              style={{ color: "var(--color-ink-soft)" }}
-            >
-              <svg aria-hidden="true" viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.5">
-                <path d="M18 6 6 18M6 6l12 12" strokeLinecap="round" />
-              </svg>
-            </button>
-          </div>
-        </div>
-      )}
-
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

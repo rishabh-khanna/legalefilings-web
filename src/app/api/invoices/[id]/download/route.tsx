@@ -3,6 +3,7 @@ import { renderToBuffer } from "@react-pdf/renderer";
 import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
+import { getReportingChainIds } from "@/lib/reporting-chain";
 import { isStaffOrAdmin } from "@/lib/roles";
 import { SITE_NAME, BUSINESS_PHONE } from "@/config/site";
 
@@ -116,8 +117,21 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     .single();
 
   if (error || !invoice) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
-  if (!isStaffOrAdmin(profile) && invoice.customer_id !== profile.id) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+
+  const isOwnCustomerInvoice = invoice.customer_id === profile.id;
+  if (!isOwnCustomerInvoice) {
+    if (!isStaffOrAdmin(profile)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    // Same scoping as the invoices list: a non-admin can only download an
+    // invoice they created or one their reporting chain created, not any
+    // invoice in the system by guessing/being handed its id.
+    if (profile.account_type !== "admin") {
+      const chain = await getReportingChainIds(profile.id);
+      if (!invoice.created_by || ![profile.id, ...chain].includes(invoice.created_by)) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+    }
   }
 
   const buffer = await renderToBuffer(

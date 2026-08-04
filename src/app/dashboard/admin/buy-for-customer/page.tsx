@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { DashboardPageHero } from "@/components/crm/DashboardPageHero";
 
 type CustomerOption = { id: string; name: string };
 
@@ -16,9 +16,10 @@ export default function BuyForCustomerPage() {
 
   useEffect(() => {
     const kickoff = setTimeout(async () => {
-      const supabase = createSupabaseBrowserClient();
-      const { data } = await supabase.from("profiles").select("id, full_name").eq("account_type", "customer");
-      setCustomers(((data ?? []) as { id: string; full_name: string | null }[]).map((c) => ({ id: c.id, name: c.full_name ?? "Unnamed" })));
+      const res = await fetch("/api/customers");
+      const data = await res.json();
+      const custs = (data.customers ?? []) as { id: string; full_name: string | null }[];
+      setCustomers(custs.map((c) => ({ id: c.id, name: c.full_name ?? "Unnamed" })));
     }, 0);
     return () => clearTimeout(kickoff);
   }, []);
@@ -54,39 +55,40 @@ export default function BuyForCustomerPage() {
 
   return (
     <div>
-      <h2 className="text-xl font-bold" style={{ color: "var(--color-ink)" }}>Buy a Plan for a Customer</h2>
-      <p className="mt-1 text-sm" style={{ color: "var(--color-ink-soft)" }}>
-        For a customer who called in or you&apos;re onboarding directly — this creates the order, generates a payment
-        request link, and emails it to them.
-      </p>
-      <p className="mt-2 rounded-lg px-3 py-2 text-xs" style={{ backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}>
+      <DashboardPageHero
+        title="Buy a Plan for a Customer"
+        subtitle="For a customer who called in or you're onboarding directly — this creates the order, generates a payment request link, and emails it to them."
+      />
+      <p className="rounded-lg px-3 py-2 text-xs" style={{ backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}>
         No payment gateway is connected yet — the link shows the amount due and lets the customer contact us to pay. Mark it paid from the Invoices page once payment is confirmed.
       </p>
 
-      <form onSubmit={handleSubmit} className="mt-5 max-w-lg space-y-4 rounded-2xl border bg-white p-6 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-        <div>
-          <label className={labelClass} style={{ color: "var(--color-ink)" }}>Customer</label>
-          <select required value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }}>
-            <option value="">Select a customer…</option>
-            {customers.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
-          <p className="mt-1 text-xs" style={{ color: "var(--color-ink-soft)" }}>
-            Customer needs an account first — use Create User if they don&apos;t have one yet.
-          </p>
-        </div>
-        <div>
-          <label className={labelClass} style={{ color: "var(--color-ink)" }}>Service</label>
-          <input required placeholder="e.g. Private Limited Company Registration" value={service} onChange={(e) => setService(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
-        </div>
-        <div>
-          <label className={labelClass} style={{ color: "var(--color-ink)" }}>Plan</label>
-          <input required placeholder="e.g. Standard" value={plan} onChange={(e) => setPlan(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
-        </div>
-        <div>
-          <label className={labelClass} style={{ color: "var(--color-ink)" }}>Price (₹)</label>
-          <input required type="number" min="0" value={price} onChange={(e) => setPrice(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+      <form onSubmit={handleSubmit} className="mt-5 space-y-4 rounded-2xl border bg-white p-6 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="sm:col-span-2">
+            <label className={labelClass} style={{ color: "var(--color-ink)" }}>Customer</label>
+            <select required value={customerId} onChange={(e) => setCustomerId(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }}>
+              <option value="">Select a customer…</option>
+              {customers.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs" style={{ color: "var(--color-ink-soft)" }}>
+              Customer needs an account first — use Create User if they don&apos;t have one yet.
+            </p>
+          </div>
+          <div>
+            <label className={labelClass} style={{ color: "var(--color-ink)" }}>Service</label>
+            <input required placeholder="e.g. Private Limited Company Registration" value={service} onChange={(e) => setService(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+          </div>
+          <div>
+            <label className={labelClass} style={{ color: "var(--color-ink)" }}>Plan</label>
+            <input required placeholder="e.g. Standard" value={plan} onChange={(e) => setPlan(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+          </div>
+          <div>
+            <label className={labelClass} style={{ color: "var(--color-ink)" }}>Price (₹)</label>
+            <input required type="number" min="0" value={price} onChange={(e) => setPrice(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+          </div>
         </div>
 
         {result && (

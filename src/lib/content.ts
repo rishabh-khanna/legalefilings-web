@@ -195,6 +195,8 @@ export type PricingPlan = {
   discount?: string;
   price: string;
   features: string[];
+  /** Things this tier explicitly does NOT include (shown with a red cross rather than a checkmark) — the source WordPress pages rendered these as a second, separately-iconed list right under the included one, e.g. a Mandatory tier missing GST/TDS/PF filings that the Standard tier includes. */
+  excludedFeatures?: string[];
 };
 
 const isPrice = (t: string) => t.trim().startsWith("₹");
@@ -378,9 +380,14 @@ export function getServiceContent(page: Page): {
       const before = group.slice(0, firstPriceIdx === -1 ? group.length : firstPriceIdx);
       const after = firstPriceIdx === -1 ? [] : group.slice(firstPriceIdx + 1);
       const description = before.find(isDescriptionBlock) ?? after.find(isDescriptionBlock);
-      const features = group
-        .filter((g): g is { type: "list"; items: string[] } => g.type === "list")
-        .flatMap((g) => g.items);
+      // The source pages render a tier's included and excluded items as two
+      // separate icon-list widgets (checkmark icon vs. red-cross icon) —
+      // that split survives here as two consecutive "list" blocks. The
+      // first is what's included; a second one (only present when the
+      // tier actually excludes something) is what isn't.
+      const listBlocks = group.filter((g): g is { type: "list"; items: string[] } => g.type === "list");
+      const features = listBlocks[0]?.items ?? [];
+      const excludedFeatures = listBlocks.slice(1).flatMap((g) => g.items);
 
       // Elementor desktop+mobile copies can repeat whole plans — keep the first
       // occurrence of each plan name only.
@@ -392,6 +399,7 @@ export function getServiceContent(page: Page): {
           discount: discount?.text,
           price: prices[prices.length - 1].text,
           features,
+          excludedFeatures: excludedFeatures.length > 0 ? excludedFeatures : undefined,
         });
       }
       i = j;

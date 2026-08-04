@@ -1,7 +1,7 @@
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { AccountType, CustomerTier, StaffLevel } from "@/lib/roles";
 
-function generateTempPassword() {
+export function generateTempPassword() {
   // Not shown to the end user directly (admin relays it, or it goes out
   // by email once that's wired up) — random enough for a one-time
   // credential the user is expected to change on first real login.
@@ -23,7 +23,21 @@ export type CreateUserInput = {
   city?: string;
   state?: string;
   dateOfBirth?: string;
+  department?: string;
+  designation?: string;
 };
+
+// EMP-YYYYMM-XXXX — human-readable and roughly chronological, not a
+// strict sequence (no counter table to keep consistent under
+// concurrent signups); good enough for an ID that mainly needs to be
+// unique and recognizable on a payslip or letter, not audited as a
+// gapless sequence.
+function generateEmployeeId() {
+  const now = new Date();
+  const yyyymm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const suffix = Math.floor(1000 + Math.random() * 9000);
+  return `EMP-${yyyymm}-${suffix}`;
+}
 
 // Shared by both the admin "quick add user" form and the account-request
 // approval flow — one place that creates the auth user + profile row
@@ -55,6 +69,9 @@ export async function createUserWithProfile(input: CreateUserInput) {
     state: input.state ?? null,
     date_of_birth: input.dateOfBirth ?? null,
     crm_status: input.accountType === "customer" ? "active" : "lead",
+    employee_id: input.accountType !== "customer" ? generateEmployeeId() : null,
+    department: input.accountType !== "customer" ? (input.department ?? null) : null,
+    designation: input.accountType !== "customer" ? (input.designation ?? null) : null,
   });
 
   if (profileError) {

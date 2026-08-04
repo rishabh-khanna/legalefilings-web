@@ -6,12 +6,14 @@ import { ContentBlocks } from "@/components/ContentBlocks";
 import { PricingPlans } from "@/components/PricingPlans";
 import { ProcessTimeline } from "@/components/ProcessTimeline";
 import { QuoteModal } from "@/components/QuoteModal";
+import { PaymentModal } from "@/components/PaymentModal";
 import { QuoteWidget } from "@/components/QuoteWidget";
 import { ConsultationForm } from "@/components/ConsultationForm";
 import { StructureComparisonTable } from "@/components/StructureComparisonTable";
 import { CtaBand } from "@/components/CtaBand";
 import { CATEGORY_ICONS, GlowBadge } from "@/components/CategoryIcons";
 import { STRUCTURE_COMPARISON } from "@/content/structure-comparison";
+import { PRICING_OVERRIDES } from "@/content/pricing-overrides";
 import { SITE_URL, SITE_NAME, BUSINESS_STATS } from "@/config/site";
 
 export async function generateStaticParams() {
@@ -43,7 +45,8 @@ export default async function ServicePage({
 
   const category = getCategoryForSlug(slug);
   const CategoryIcon = category ? CATEGORY_ICONS[category.label] : undefined;
-  const { intro, trustBadge, before, plans, after } = getServiceContent(page);
+  const { intro, trustBadge, before, plans: parsedPlans, after } = getServiceContent(page);
+  const plans = PRICING_OVERRIDES[slug] ?? parsedPlans;
   const {
     title: processTitle,
     steps: processSteps,
@@ -206,6 +209,7 @@ export default async function ServicePage({
 
       <QuoteWidget serviceTitle={page.title} />
       <QuoteModal serviceTitle={page.title} />
+      <PaymentModal />
     </div>
   );
 }

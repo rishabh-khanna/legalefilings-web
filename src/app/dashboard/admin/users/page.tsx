@@ -5,6 +5,7 @@ import { StateSelect } from "@/components/StateSelect";
 import { CitySelect } from "@/components/CitySelect";
 import { STAFF_LEVEL_LABELS } from "@/lib/roles";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { DashboardPageHero } from "@/components/crm/DashboardPageHero";
 
 export default function CreateUserPage() {
   const [isAdmin, setIsAdmin] = useState(false);
@@ -17,6 +18,8 @@ export default function CreateUserPage() {
   const [state, setState] = useState("");
   const [city, setCity] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
+  const [department, setDepartment] = useState("");
+  const [designation, setDesignation] = useState("");
   const [message, setMessage] = useState("");
   const [customerTier, setCustomerTier] = useState<"free" | "paid">("free");
   const [staffLevel, setStaffLevel] = useState<"rater" | "leader" | "group_leader">("rater");
@@ -58,6 +61,8 @@ export default function CreateUserPage() {
         city,
         state,
         dateOfBirth: isAdmin ? dateOfBirth : undefined,
+        department: accountType !== "customer" ? department : undefined,
+        designation: accountType !== "customer" ? designation : undefined,
         message: isAdmin ? undefined : message,
       }),
     });
@@ -76,6 +81,8 @@ export default function CreateUserPage() {
       setCity("");
       setState("");
       setDateOfBirth("");
+      setDepartment("");
+      setDesignation("");
       setMessage("");
     } else {
       setResult({ ok: false, text: data.error ?? "Failed to submit." });
@@ -91,69 +98,83 @@ export default function CreateUserPage() {
 
   return (
     <div>
-      <h2 className="text-xl font-bold" style={{ color: "var(--color-ink)" }}>{isAdmin ? "Create User" : "Request New User"}</h2>
-      <p className="mt-1 text-sm" style={{ color: "var(--color-ink-soft)" }}>
-        {isAdmin
-          ? "Direct account creation — for a customer who called in, or to skip the request/approval flow for staff."
-          : "Ask admin to create an account for a customer or new staff member — goes to the Account Requests queue for approval."}
-      </p>
+      <DashboardPageHero
+        title={isAdmin ? "Create User" : "Request New User"}
+        subtitle={
+          isAdmin
+            ? "Direct account creation — for a customer who called in, or to skip the request/approval flow for staff."
+            : "Ask admin to create an account for a customer or new staff member — goes to the Account Requests queue for approval."
+        }
+      />
 
-      <form onSubmit={handleSubmit} className="mt-5 max-w-lg space-y-4 rounded-2xl border bg-white p-6 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-        <div>
-          <label className={labelClass} style={{ color: "var(--color-ink)" }}>Account Type</label>
-          <select value={accountType} onChange={(e) => setAccountType(e.target.value as typeof accountType)} className={inputClass} style={{ borderColor: "var(--color-line)" }}>
-            <option value="customer">Customer</option>
-            <option value="staff">Staff</option>
-            {isAdmin && <option value="admin">Admin</option>}
-          </select>
-        </div>
-
-        {accountType === "customer" && (
+      <form onSubmit={handleSubmit} className="space-y-4 rounded-2xl border bg-white p-6 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
-            <label className={labelClass} style={{ color: "var(--color-ink)" }}>Tier</label>
-            <select value={customerTier} onChange={(e) => setCustomerTier(e.target.value as typeof customerTier)} className={inputClass} style={{ borderColor: "var(--color-line)" }}>
-              <option value="free">Free</option>
-              <option value="paid">Paid</option>
+            <label className={labelClass} style={{ color: "var(--color-ink)" }}>Account Type</label>
+            <select value={accountType} onChange={(e) => setAccountType(e.target.value as typeof accountType)} className={inputClass} style={{ borderColor: "var(--color-line)" }}>
+              <option value="customer">Customer</option>
+              <option value="staff">Staff</option>
+              {isAdmin && <option value="admin">Admin</option>}
             </select>
           </div>
-        )}
 
-        {accountType === "staff" && (
-          <div>
-            <label className={labelClass} style={{ color: "var(--color-ink)" }}>Staff Level</label>
-            <select value={staffLevel} onChange={(e) => setStaffLevel(e.target.value as typeof staffLevel)} className={inputClass} style={{ borderColor: "var(--color-line)" }}>
-              {Object.entries(STAFF_LEVEL_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </select>
-          </div>
-        )}
+          {accountType === "customer" && (
+            <div>
+              <label className={labelClass} style={{ color: "var(--color-ink)" }}>Tier</label>
+              <select value={customerTier} onChange={(e) => setCustomerTier(e.target.value as typeof customerTier)} className={inputClass} style={{ borderColor: "var(--color-line)" }}>
+                <option value="free">Free</option>
+                <option value="paid">Paid</option>
+              </select>
+            </div>
+          )}
 
-        <div>
-          <label className={labelClass} style={{ color: "var(--color-ink)" }}>Full Name</label>
-          <input required value={fullName} onChange={(e) => setFullName(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
-        </div>
-        <div>
-          <label className={labelClass} style={{ color: "var(--color-ink)" }}>Email</label>
-          <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
-        </div>
-        <div>
-          <label className={labelClass} style={{ color: "var(--color-ink)" }}>Phone</label>
-          <input value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
-        </div>
-        {isAdmin && (
+          {accountType === "staff" && (
+            <div>
+              <label className={labelClass} style={{ color: "var(--color-ink)" }}>Staff Level</label>
+              <select value={staffLevel} onChange={(e) => setStaffLevel(e.target.value as typeof staffLevel)} className={inputClass} style={{ borderColor: "var(--color-line)" }}>
+                {Object.entries(STAFF_LEVEL_LABELS).map(([value, label]) => (
+                  <option key={value} value={value}>{label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {accountType !== "customer" && (
+            <>
+              <div>
+                <label className={labelClass} style={{ color: "var(--color-ink)" }}>Department</label>
+                <input value={department} onChange={(e) => setDepartment(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+              </div>
+              <div>
+                <label className={labelClass} style={{ color: "var(--color-ink)" }}>Designation</label>
+                <input value={designation} onChange={(e) => setDesignation(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+              </div>
+            </>
+          )}
+
           <div>
-            <label className={labelClass} style={{ color: "var(--color-ink)" }}>Date of Birth</label>
-            <input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+            <label className={labelClass} style={{ color: "var(--color-ink)" }}>Full Name</label>
+            <input required value={fullName} onChange={(e) => setFullName(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
           </div>
-        )}
-        {accountType === "customer" && (
           <div>
-            <label className={labelClass} style={{ color: "var(--color-ink)" }}>Company</label>
-            <input value={company} onChange={(e) => setCompany(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+            <label className={labelClass} style={{ color: "var(--color-ink)" }}>Email</label>
+            <input required type="email" value={email} onChange={(e) => setEmail(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
           </div>
-        )}
-        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className={labelClass} style={{ color: "var(--color-ink)" }}>Phone</label>
+            <input value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+          </div>
+          {isAdmin && (
+            <div>
+              <label className={labelClass} style={{ color: "var(--color-ink)" }}>Date of Birth</label>
+              <input type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+            </div>
+          )}
+          {accountType === "customer" && (
+            <div>
+              <label className={labelClass} style={{ color: "var(--color-ink)" }}>Company</label>
+              <input value={company} onChange={(e) => setCompany(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+            </div>
+          )}
           <div>
             <label className={labelClass} style={{ color: "var(--color-ink)" }}>State</label>
             <StateSelect value={state} onChange={(e) => { setState(e.target.value); setCity(""); }} className={inputClass} style={{ borderColor: "var(--color-line)" }} />

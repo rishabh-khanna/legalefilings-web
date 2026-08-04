@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Clock, CheckCircle2, XCircle } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { STAFF_LEVEL_LABELS, type AccountType, type CustomerTier, type StaffLevel } from "@/lib/roles";
+import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 
 type RequestRow = {
   id: string;
@@ -107,16 +109,28 @@ export default function AccountRequestsPage() {
     }
   }
 
+  const stats = useMemo(() => {
+    const all = requests ?? [];
+    return {
+      pending: all.filter((r) => r.status === "pending").length,
+      approved: all.filter((r) => r.status === "approved").length,
+      rejected: all.filter((r) => r.status === "rejected").length,
+    };
+  }, [requests]);
+
   if (requests === null && !error) {
     return <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>Loading…</p>;
   }
 
   return (
     <div>
-      <h2 className="text-xl font-bold" style={{ color: "var(--color-ink)" }}>Account Requests</h2>
-      <p className="mt-1 text-sm" style={{ color: "var(--color-ink-soft)" }}>
-        Self-service staff signups and account requests submitted by your team.
-      </p>
+      <DashboardPageHero title="Account Requests" subtitle="Self-service staff signups and account requests submitted by your team.">
+        <div className="relative mt-6 grid grid-cols-3 gap-4">
+          <HeroKpi icon={Clock} label="Pending" value={stats.pending} />
+          <HeroKpi icon={CheckCircle2} label="Approved" value={stats.approved} />
+          <HeroKpi icon={XCircle} label="Rejected" value={stats.rejected} />
+        </div>
+      </DashboardPageHero>
 
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 

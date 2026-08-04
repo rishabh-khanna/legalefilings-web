@@ -4,14 +4,17 @@
 // holds a money bag by a loop of string, with a looping "return" arrow
 // suggesting the refund coming back. Single-color blue line art, deliberately
 // a little uneven (varied stroke widths, a slight tilt) for a sketched feel
-// rather than a slick vector-perfect icon.
+// rather than a slick vector-perfect icon. Stroke color matches
+// --color-banner-dark (globals.css) — hardcoded rather than var() because
+// SVG presentation attributes don't reliably resolve CSS custom
+// properties across browsers; keep this in sync with that variable.
 export function RefundIllustration({ className = "" }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 180 140"
       className={className}
       fill="none"
-      stroke="#2b4fd8"
+      stroke="#1b4ba4"
       strokeLinecap="round"
       strokeLinejoin="round"
     >

@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Clock, CheckCircle2, XCircle } from "lucide-react";
 import { useActionMessage } from "@/lib/use-action-message";
 import { ActionMessage } from "@/components/ActionMessage";
+import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 
 type LeaveRow = {
   id: string;
@@ -60,11 +62,27 @@ export default function AdminLeaveRequestsPage() {
     }
   }
 
+  const stats = useMemo(() => {
+    const all = requests ?? [];
+    return {
+      pending: all.filter((r) => r.status === "pending").length,
+      approved: all.filter((r) => r.status === "approved").length,
+      rejected: all.filter((r) => r.status === "rejected").length,
+    };
+  }, [requests]);
+
   if (requests === null && !error) return <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>Loading…</p>;
 
   return (
     <div>
-      <h2 className="text-xl font-bold" style={{ color: "var(--color-ink)" }}>Leave Requests</h2>
+      <DashboardPageHero title="Leave Requests" subtitle="Approve or reject leave requests from your reporting chain.">
+        <div className="relative mt-6 grid grid-cols-3 gap-4">
+          <HeroKpi icon={Clock} label="Pending" value={stats.pending} />
+          <HeroKpi icon={CheckCircle2} label="Approved" value={stats.approved} />
+          <HeroKpi icon={XCircle} label="Rejected" value={stats.rejected} />
+        </div>
+      </DashboardPageHero>
+
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
       <div className="mt-4">
         <ActionMessage message={message} />

@@ -2,13 +2,14 @@ import { notFound } from "next/navigation";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { Logo } from "@/components/Logo";
 import { CONTACT_LINKS, SITE_NAME } from "@/config/site";
+import { PayNowButton } from "@/components/PayNowButton";
 
 // Public payment-request page — the invoice's own UUID acts as the access
 // token (unguessable, same pattern many small invoicing tools use for a
 // "view my invoice" link), so a customer can open this straight from the
-// email without needing to sign in. No payment gateway is wired up yet
-// (see the note on the page itself) — this shows the amount and gives the
-// customer a way to actually pay by contacting the team directly.
+// email without needing to sign in. Razorpay Checkout handles the actual
+// payment (see PayNowButton); calling/WhatsApp stays as a fallback for
+// anyone who'd rather pay another way.
 export default async function PayPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const supabase = getSupabaseAdmin();
@@ -18,6 +19,12 @@ export default async function PayPage({ params }: { params: Promise<{ id: string
     .select("*, profiles!invoices_customer_id_fkey(full_name, company), invoice_line_items(*)")
     .eq("id", id)
     .single();
+
+  let customerEmail = "";
+  if (invoice) {
+    const { data: authUser } = await supabase.auth.admin.getUserById(invoice.customer_id);
+    customerEmail = authUser?.user?.email ?? "";
+  }
 
   if (!invoice) notFound();
 
@@ -68,14 +75,15 @@ export default async function PayPage({ params }: { params: Promise<{ id: string
           </p>
         ) : (
           <>
-            <p className="mt-6 text-sm" style={{ color: "var(--color-ink-soft)" }}>
-              To complete payment, reach out directly — a real team member will confirm the payment method and mark this invoice paid.
+            <PayNowButton invoiceId={invoice.id} customerName={invoice.profiles?.full_name ?? "Customer"} customerEmail={customerEmail} />
+            <p className="mt-4 text-center text-xs" style={{ color: "var(--color-ink-soft)" }}>
+              Prefer another way? Reach out directly and a team member will confirm the payment method.
             </p>
-            <div className="mt-4 flex gap-3">
+            <div className="mt-3 flex gap-3">
               <a
                 href={CONTACT_LINKS.tel}
-                className="flex-1 rounded-full py-2.5 text-center text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
-                style={{ backgroundColor: "var(--color-action)" }}
+                className="flex-1 rounded-full py-2.5 text-center text-sm font-semibold transition-colors hover:bg-[var(--color-accent-tint)]"
+                style={{ border: "1px solid var(--color-line)", color: "var(--color-ink)" }}
               >
                 Call to Pay
               </a>

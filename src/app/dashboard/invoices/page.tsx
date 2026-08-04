@@ -1,10 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { FileText, CheckCircle2, Clock, IndianRupee } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { isStaffOrAdmin, type Profile } from "@/lib/roles";
 import { useActionMessage } from "@/lib/use-action-message";
 import { ActionMessage } from "@/components/ActionMessage";
+import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 
 type InvoiceRow = {
   id: string;
@@ -58,8 +60,10 @@ export default function InvoicesPage() {
       await loadInvoices();
 
       if (p && isStaffOrAdmin(p)) {
-        const { data: custs } = await supabase.from("profiles").select("id, full_name").eq("account_type", "customer");
-        setCustomers(((custs ?? []) as { id: string; full_name: string | null }[]).map((c) => ({ id: c.id, name: c.full_name ?? "Unnamed" })));
+        const custRes = await fetch("/api/customers");
+        const custData = await custRes.json();
+        const custs = (custData.customers ?? []) as { id: string; full_name: string | null }[];
+        setCustomers(custs.map((c) => ({ id: c.id, name: c.full_name ?? "Unnamed" })));
       }
       setLoading(false);
     }, 0);
@@ -110,6 +114,11 @@ export default function InvoicesPage() {
   const canManage = profile ? isStaffOrAdmin(profile) : false;
   const isPaidCustomer = profile?.account_type === "customer" && profile.customer_tier === "paid";
   const canGenerate = canManage || isPaidCustomer;
+  const invoiceStats = useMemo(() => {
+    const paid = invoices.filter((i) => i.status === "paid").length;
+    const totalValue = invoices.filter((i) => i.status !== "cancelled").reduce((sum, i) => sum + Number(i.total), 0);
+    return { total: invoices.length, paid, pending: invoices.length - paid, totalValue };
+  }, [invoices]);
 
   if (loading) {
     return (
@@ -121,25 +130,31 @@ export default function InvoicesPage() {
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold" style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)" }}>
-            Invoices
-          </h1>
-          <p className="mt-1 text-sm" style={{ color: "var(--color-ink-soft)" }}>
-            {canManage
-              ? "Generate and track invoices across customers."
-              : isPaidCustomer
-                ? "Invoices issued to your account — generate your own any time."
-                : "Invoices issued to your account."}
-          </p>
+      <DashboardPageHero
+        title="Invoices"
+        subtitle={
+          canManage
+            ? "Generate and track invoices across customers."
+            : isPaidCustomer
+              ? "Invoices issued to your account — generate your own any time."
+              : "Invoices issued to your account."
+        }
+      >
+        <div className="relative mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <HeroKpi icon={FileText} label="Total" value={invoiceStats.total} />
+          <HeroKpi icon={CheckCircle2} label="Paid" value={invoiceStats.paid} />
+          <HeroKpi icon={Clock} label="Pending" value={invoiceStats.pending} />
+          <HeroKpi icon={IndianRupee} label="Total Value" value={`₹${invoiceStats.totalValue.toLocaleString("en-IN")}`} />
         </div>
+      </DashboardPageHero>
+
+      <div className="flex flex-wrap items-center justify-end gap-4">
         {canGenerate && (
           <button
             type="button"
             onClick={() => setShowForm((v) => !v)}
             className="rounded-full px-4 py-2 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
-            style={{ backgroundColor: "var(--color-ink-fixed)" }}
+            style={{ backgroundColor: "var(--color-action)" }}
           >
             {showForm ? "Cancel" : "+ Generate Invoice"}
           </button>

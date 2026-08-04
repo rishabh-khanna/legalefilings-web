@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Users, CalendarCheck, ClipboardList } from "lucide-react";
 import { formatHoursMinutes } from "@/lib/format-duration";
 import { useActionMessage } from "@/lib/use-action-message";
 import { ActionMessage } from "@/components/ActionMessage";
+import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 
 type StaffOption = { id: string; name: string };
 type AttendanceEvent = { event_type: "check_in" | "check_out"; occurred_at: string; location: string | null };
@@ -106,7 +108,14 @@ export default function AdminAttendancePage() {
 
   return (
     <div>
-      <h2 className="text-xl font-bold" style={{ color: "var(--color-ink)" }}>Attendance</h2>
+      <DashboardPageHero title="Team Attendance" subtitle="Review check-ins and manage correction requests across your team.">
+        <div className="relative mt-6 grid grid-cols-3 gap-4">
+          <HeroKpi icon={Users} label="Team Members" value={staffOptions.length} />
+          <HeroKpi icon={CalendarCheck} label="Days Logged" value={groupByDay(events).length} />
+          <HeroKpi icon={ClipboardList} label="Pending Corrections" value={pendingCorrections.length} />
+        </div>
+      </DashboardPageHero>
+
       <div className="mt-3">
         <ActionMessage message={message} />
       </div>
@@ -128,7 +137,7 @@ export default function AdminAttendancePage() {
           <a
             href={`/api/admin/reports/attendance?staffId=${staffId}&month=${month}`}
             className="rounded-full px-4 py-2 text-sm font-semibold text-white"
-            style={{ backgroundColor: "var(--color-ink-fixed)" }}
+            style={{ backgroundColor: "var(--color-action)" }}
           >
             Download PDF
           </a>

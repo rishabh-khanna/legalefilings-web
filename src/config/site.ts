@@ -23,6 +23,11 @@ export const CONTACT_LINKS = {
   whatsapp: `https://wa.me/${BUSINESS_WHATSAPP.number}`,
 } as const;
 
+/** Public-facing inbox — matches EMAIL_FROM_ADDRESS (server-only env var) so the address customers see and the one mail actually sends from are the same. */
+export const CONTACT_EMAIL = "info@legalefilings.com";
+
+export const SITE_DOMAIN = "www.legalefilings.com";
+
 // Placeholder until real profile URLs are provided — swap the "#" values
 // out, nothing else needs to change.
 export const SOCIAL_LINKS = {

@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { fullName, email, phone, accountType, customerTier, staffLevel, company, city, state, dateOfBirth } = body as Record<string, unknown>;
+  const { fullName, email, phone, accountType, customerTier, staffLevel, company, city, state, dateOfBirth, department, designation } = body as Record<string, unknown>;
   if (!fullName || !email || !accountType) {
     return NextResponse.json({ error: "fullName, email, and accountType are required" }, { status: 400 });
   }
@@ -35,6 +35,8 @@ export async function POST(request: Request) {
       city: city ? String(city) : undefined,
       state: state ? String(state) : undefined,
       dateOfBirth: dateOfBirth ? String(dateOfBirth) : undefined,
+      department: department ? String(department) : undefined,
+      designation: designation ? String(designation) : undefined,
     });
     return NextResponse.json({ ok: true, userId, tempPassword }, { status: 201 });
   } catch (err) {

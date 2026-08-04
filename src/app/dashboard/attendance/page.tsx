@@ -1,9 +1,11 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { Clock3, CalendarCheck, Hourglass } from "lucide-react";
 import { formatHoursMinutes } from "@/lib/format-duration";
 import { useActionMessage } from "@/lib/use-action-message";
 import { ActionMessage } from "@/components/ActionMessage";
+import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 
 type AttendanceEvent = {
   id: string;
@@ -154,13 +156,19 @@ export default function AttendancePage() {
 
   const elapsedMs = clockedIn && lastEvent ? now - new Date(lastEvent.occurred_at).getTime() : 0;
 
+  const pendingCorrections = corrections.filter((c) => c.status === "pending").length;
+
   return (
     <div>
-      <h1 className="text-2xl font-extrabold" style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)" }}>
-        Attendance
-      </h1>
+      <DashboardPageHero title="Attendance" subtitle="Clock in, track your hours, and request corrections.">
+        <div className="relative mt-6 grid grid-cols-3 gap-4">
+          <HeroKpi icon={Clock3} label="Today" value={clockedIn ? "Clocked In" : "Not Clocked In"} />
+          <HeroKpi icon={CalendarCheck} label="Days Logged" value={groupByDay(events).length} />
+          <HeroKpi icon={Hourglass} label="Pending Corrections" value={pendingCorrections} />
+        </div>
+      </DashboardPageHero>
 
-      <div className="mt-5 flex flex-wrap items-center gap-4 rounded-2xl border bg-white p-5 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
+      <div className="flex flex-wrap items-center gap-4 rounded-2xl border bg-white p-5 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
         <div>
           <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>Today</p>
           <p className="text-lg font-semibold" style={{ color: "var(--color-ink)" }}>

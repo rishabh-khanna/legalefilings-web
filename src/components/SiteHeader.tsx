@@ -203,12 +203,53 @@ export function SiteHeader({ categories, searchIndex }: { categories: NavCategor
               </div>
             </div>
           ))}
-          <Link
-            href="/pricing"
-            className="whitespace-nowrap py-2 text-[var(--color-ink-soft)] transition-colors hover:text-[var(--color-ink)]"
-          >
-            Pricing
-          </Link>
+          {/* Same hover-dropdown pattern as the category items above, not a
+              plain link — two real destinations live under "Pricing" now
+              (tiered plans vs. the flat-fee price list), so it needed the
+              same sub-menu treatment they get. */}
+          <div className="group relative">
+            <button className="relative flex items-center gap-1 whitespace-nowrap py-2 text-[var(--color-ink-soft)] transition-colors hover:text-[var(--color-ink)]">
+              Pricing
+              <svg
+                aria-hidden="true"
+                viewBox="0 0 24 24"
+                className="h-3.5 w-3.5 shrink-0 transition-transform duration-150 group-hover:rotate-180"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              <span
+                aria-hidden="true"
+                className="absolute -bottom-0.5 left-0 h-0.5 w-full origin-center scale-x-0 rounded-full transition-transform duration-200 group-hover:scale-x-100"
+                style={{ backgroundColor: "var(--color-action)" }}
+              />
+            </button>
+            <div className="invisible absolute left-0 top-full z-10 w-64 translate-y-1 pt-2 opacity-0 transition-all duration-150 group-hover:visible group-hover:translate-y-0 group-hover:opacity-100">
+              <div
+                className="overflow-hidden rounded-xl border py-2 shadow-[0_4px_6px_rgba(15,23,42,0.03),0_16px_32px_rgba(15,23,42,0.10)]"
+                style={{ borderColor: "var(--color-line)", backgroundColor: "var(--color-paper-raised)" }}
+              >
+                <Link
+                  href="/pricing"
+                  className="flex items-center gap-2.5 px-4 py-2 text-sm transition-colors hover:bg-[var(--color-accent-tint)]"
+                  style={{ color: "var(--color-ink)" }}
+                >
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: "var(--color-action)" }} />
+                  Plans &amp; Pricing
+                </Link>
+                <Link
+                  href="/pricing/rate-card"
+                  className="flex items-center gap-2.5 px-4 py-2 text-sm transition-colors hover:bg-[var(--color-accent-tint)]"
+                  style={{ color: "var(--color-ink)" }}
+                >
+                  <span className="h-1.5 w-1.5 shrink-0 rounded-full" style={{ backgroundColor: "var(--color-action)" }} />
+                  Complete Price List
+                </Link>
+              </div>
+            </div>
+          </div>
         </nav>
 
         <div className="flex items-center gap-3 shrink-0">
@@ -291,23 +332,57 @@ export function SiteHeader({ categories, searchIndex }: { categories: NavCategor
               </button>
             </div>
             <div className="overflow-y-auto p-3">
-              <Link
-                href="/pricing"
-                onClick={() => setOpen(false)}
-                className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors hover:bg-[var(--color-accent-tint)]"
-                style={{ color: "var(--color-ink)" }}
-              >
-                <span
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
-                  style={{ backgroundColor: "var(--color-accent-tint)", color: "var(--color-action-dark)" }}
+              <div>
+                <button
+                  type="button"
+                  aria-expanded={expanded === "Pricing"}
+                  onClick={() => setExpanded(expanded === "Pricing" ? null : "Pricing")}
+                  className="flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left text-sm font-semibold transition-colors hover:bg-[var(--color-accent-tint)]"
+                  style={{ color: "var(--color-ink)" }}
                 >
-                  <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.75">
-                    <path d="M12 2 3 6.5v5c0 5.2 3.7 9 9 10.5 5.3-1.5 9-5.3 9-10.5v-5L12 2Z" strokeLinejoin="round" />
-                    <path d="M9.5 12h5M12 9.5v5" strokeLinecap="round" />
+                  <span
+                    className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg"
+                    style={{ backgroundColor: "var(--color-accent-tint)", color: "var(--color-action-dark)" }}
+                  >
+                    <svg viewBox="0 0 24 24" className="h-[18px] w-[18px]" fill="none" stroke="currentColor" strokeWidth="1.75">
+                      <path d="M12 2 3 6.5v5c0 5.2 3.7 9 9 10.5 5.3-1.5 9-5.3 9-10.5v-5L12 2Z" strokeLinejoin="round" />
+                      <path d="M9.5 12h5M12 9.5v5" strokeLinecap="round" />
+                    </svg>
+                  </span>
+                  <span className="flex-1">Pricing</span>
+                  <svg
+                    aria-hidden="true"
+                    viewBox="0 0 24 24"
+                    className="h-4 w-4 shrink-0 transition-transform duration-150"
+                    style={{ color: "var(--color-ink-soft)", transform: expanded === "Pricing" ? "rotate(180deg)" : "rotate(0deg)" }}
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
-                </span>
-                Pricing
-              </Link>
+                </button>
+                {expanded === "Pricing" && (
+                  <div className="ml-[3.25rem] mt-0.5 space-y-0.5 border-l pl-3" style={{ borderColor: "var(--color-line)" }}>
+                    <Link
+                      href="/pricing"
+                      onClick={() => setOpen(false)}
+                      className="block rounded-lg px-2.5 py-2 text-sm transition-colors hover:bg-[var(--color-accent-tint)]"
+                      style={{ color: "var(--color-ink-soft)" }}
+                    >
+                      Plans &amp; Pricing
+                    </Link>
+                    <Link
+                      href="/pricing/rate-card"
+                      onClick={() => setOpen(false)}
+                      className="block rounded-lg px-2.5 py-2 text-sm transition-colors hover:bg-[var(--color-accent-tint)]"
+                      style={{ color: "var(--color-ink-soft)" }}
+                    >
+                      Complete Price List
+                    </Link>
+                  </div>
+                )}
+              </div>
 
               <div className="my-2 h-px" style={{ backgroundColor: "var(--color-line)" }} />
 

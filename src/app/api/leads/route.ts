@@ -177,7 +177,10 @@ export async function PATCH(request: Request) {
 
   const { stage, assignedTo, notes } = body as Record<string, unknown>;
   const patch: Record<string, unknown> = {};
+  let previousStage: string | null = null;
   if (typeof stage === "string" && (LEAD_STAGES as readonly string[]).includes(stage)) {
+    const { data: existing } = await supabase.from("leads").select("status").eq("id", body.id).single();
+    previousStage = existing?.status ?? null;
     patch.status = stage;
   }
   if (typeof assignedTo === "string") {
@@ -191,6 +194,17 @@ export async function PATCH(request: Request) {
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+
+  // Real audit trail for the pipeline's activity timeline — only logged
+  // when the stage actually changed (not on every notes/assignment edit).
+  if (typeof stage === "string" && previousStage !== stage) {
+    await supabase.from("lead_status_history").insert({
+      lead_id: body.id,
+      old_status: previousStage,
+      new_status: stage,
+      changed_by: profile.id,
+    });
+  }
 
   return NextResponse.json({ ok: true, lead: toLead(data as LeadRow) });
 }

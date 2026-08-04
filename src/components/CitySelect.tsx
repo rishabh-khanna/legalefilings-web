@@ -34,7 +34,7 @@ export function CitySelect({
       name={name}
       required={required}
       disabled={disabled}
-      className={`${className ?? ""} ${disabled ? "opacity-60" : ""}`}
+      className={className}
       style={style}
       {...controlledProps}
     >

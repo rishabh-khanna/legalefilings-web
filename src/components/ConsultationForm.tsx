@@ -64,17 +64,16 @@ export function ConsultationForm({
   if (status === "success") {
     return (
       <div
-        className={`rounded-lg p-6 text-center ${dark ? "" : "border"}`}
-        style={
-          dark
-            ? { backgroundColor: "var(--color-ink-fixed)" }
-            : { borderColor: "var(--color-line)", backgroundColor: "var(--color-paper)" }
-        }
+        className="rounded-lg border p-6 text-center"
+        style={{
+          borderColor: "var(--color-line)",
+          backgroundColor: dark ? "var(--color-accent-tint)" : "var(--color-paper)",
+        }}
       >
-        <p className={`font-medium ${dark ? "text-white" : ""}`} style={dark ? undefined : { color: "var(--color-ink)" }}>
+        <p className="font-medium" style={{ color: "var(--color-ink)" }}>
           Thanks — we&apos;ve got your details.
         </p>
-        <p className={`text-sm mt-1 ${dark ? "text-white/70" : ""}`} style={dark ? undefined : { color: "var(--color-ink-soft)" }}>
+        <p className="text-sm mt-1" style={{ color: "var(--color-ink-soft)" }}>
           Our team will reach out shortly{serviceTitle ? ` about ${serviceTitle}` : ""}
           {plan ? ` (${plan.name} plan)` : ""}.
         </p>
@@ -82,46 +81,47 @@ export function ConsultationForm({
     );
   }
 
-  const inputClass = dark
-    ? "w-full rounded-lg px-3 py-1.5 text-sm text-white placeholder:text-white/40 outline-none bg-white/10 border border-white/15 focus:border-white/40"
-    : "w-full rounded-lg border px-3 py-1.5 text-sm outline-none focus:border-[var(--color-action)]";
-  const inputStyle = dark ? undefined : { borderColor: "var(--color-line)" };
-  const labelClass = dark ? "block text-sm font-medium text-white/90 mb-1" : "block text-sm font-medium mb-1";
+  // "dark" here now means "the featured/branded card" — a white card with
+  // a bold gradient top bar and a visible shadow, so it clearly reads as
+  // a distinct form panel floating above the page. The previous pass used
+  // the same pale accent tint as the surrounding hero background, so the
+  // card's edge disappeared into the page and it stopped reading as a
+  // form at all; navy before that was the opposite problem (too heavy).
+  const inputClass = "w-full appearance-none rounded-lg px-3 py-2 text-sm text-[var(--color-ink)] placeholder:text-[var(--color-ink-soft)] outline-none bg-[var(--color-paper)] border border-[var(--color-line)] focus:border-[var(--color-action)] focus:bg-white";
+  const inputStyle = undefined;
+  const labelClass = "block text-sm font-medium mb-1";
 
   return (
     <form
+      id="consultation-form"
       onSubmit={handleSubmit}
-      className={`rounded-lg p-5 space-y-3 ${dark ? "border-t-4" : "border"}`}
-      style={dark ? { backgroundColor: "var(--color-ink-fixed)", borderColor: "var(--color-accent)" } : { borderColor: "var(--color-line)" }}
+      className={`rounded-2xl p-6 space-y-3.5 ${dark ? "border-t-[6px] shadow-[0_2px_8px_rgba(0,0,0,0.06),0_24px_48px_rgba(0,0,0,0.10)]" : "border"}`}
+      style={dark ? { backgroundColor: "#ffffff", borderTopColor: "var(--color-accent)" } : { borderColor: "var(--color-line)" }}
     >
       <div className={dark ? "text-center" : undefined}>
         <h3
-          className="font-semibold text-lg"
-          style={{ fontFamily: "var(--font-display)", color: dark ? "#ffffff" : "var(--color-ink)" }}
+          className="font-extrabold text-xl"
+          style={{ fontFamily: "var(--font-display)", color: "var(--color-ink)" }}
         >
           {serviceTitle ? `Get a quote for ${serviceTitle}` : "Consult Our Experts"}
         </h3>
         {plan && (
           <span
             className="mt-1.5 inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium"
-            style={
-              dark
-                ? { backgroundColor: "rgba(255,255,255,0.12)", color: "#ffffff" }
-                : { backgroundColor: "var(--color-action-tint)", color: "var(--color-action-dark)" }
-            }
+            style={{ backgroundColor: "var(--color-accent-tint)", color: "var(--color-action-dark)" }}
           >
             {plan.name} — {plan.price}
           </span>
         )}
       </div>
       <div>
-        <label htmlFor="name" className={labelClass} style={dark ? undefined : { color: "var(--color-ink)" }}>
+        <label htmlFor="name" className={labelClass} style={{ color: "var(--color-ink)" }}>
           Name
         </label>
         <input id="name" name="name" required className={inputClass} style={inputStyle} />
       </div>
       <div>
-        <label htmlFor="email" className={labelClass} style={dark ? undefined : { color: "var(--color-ink)" }}>
+        <label htmlFor="email" className={labelClass} style={{ color: "var(--color-ink)" }}>
           Email
         </label>
         <input
@@ -134,13 +134,13 @@ export function ConsultationForm({
         />
       </div>
       <div>
-        <label htmlFor="phone" className={labelClass} style={dark ? undefined : { color: "var(--color-ink)" }}>
+        <label htmlFor="phone" className={labelClass} style={{ color: "var(--color-ink)" }}>
           Contact Number
         </label>
         <div className="flex">
           <span
-            className={`flex items-center rounded-l-lg border border-r-0 px-3 text-sm ${dark ? "text-white/70 bg-white/10 border-white/15" : ""}`}
-            style={dark ? undefined : { borderColor: "var(--color-line)", color: "var(--color-ink-soft)", backgroundColor: "var(--color-paper)" }}
+            className="flex items-center rounded-l-lg border border-r-0 px-3 text-sm"
+            style={{ borderColor: "var(--color-line)", color: "var(--color-ink-soft)", backgroundColor: "var(--color-paper)" }}
           >
             +91
           </span>
@@ -159,7 +159,7 @@ export function ConsultationForm({
       </div>
       <div className="grid grid-cols-2 gap-3">
         <div>
-          <label htmlFor="state" className={labelClass} style={dark ? undefined : { color: "var(--color-ink)" }}>
+          <label htmlFor="state" className={labelClass} style={{ color: "var(--color-ink)" }}>
             State
           </label>
           <StateSelect
@@ -170,7 +170,7 @@ export function ConsultationForm({
           />
         </div>
         <div>
-          <label htmlFor="city" className={labelClass} style={dark ? undefined : { color: "var(--color-ink)" }}>
+          <label htmlFor="city" className={labelClass} style={{ color: "var(--color-ink)" }}>
             City
           </label>
           <CitySelect key={selectedState} state={selectedState} className={inputClass} style={inputStyle} />
@@ -178,7 +178,7 @@ export function ConsultationForm({
       </div>
 
       {status === "error" && (
-        <p className={`text-sm ${dark ? "text-red-300" : "text-red-600"}`}>{errorMsg}</p>
+        <p className="text-sm text-red-600">{errorMsg}</p>
       )}
 
       <button
@@ -189,7 +189,7 @@ export function ConsultationForm({
       >
         {status === "submitting" ? FORM_COPY.submittingLabel : FORM_COPY.submitLabel}
       </button>
-      <p className={`text-xs text-center ${dark ? "text-white/60" : ""}`} style={dark ? undefined : { color: "var(--color-ink-soft)" }}>
+      <p className="text-xs text-center" style={{ color: "var(--color-ink-soft)" }}>
         {FORM_COPY.privacyNote}
       </p>
     </form>

@@ -12,7 +12,6 @@ export function LoginForm() {
   const router = useRouter();
   const [method, setMethod] = useState<LoginMethod>("email");
   const [showPassword, setShowPassword] = useState(false);
-  const [notice, setNotice] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [emailValue, setEmailValue] = useState("");
@@ -166,16 +165,6 @@ export function LoginForm() {
           {errorMessage}
         </p>
       )}
-      {notice && (
-        <p className="rounded-lg px-4 py-3 text-sm" style={{ backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}>
-          Google sign-in isn&apos;t set up yet.{" "}
-          <Link href="/contact" className="font-medium underline">
-            Contact us
-          </Link>{" "}
-          in the meantime and our team will help directly.
-        </p>
-      )}
-
       <button
         type="submit"
         disabled={submitting}
@@ -183,28 +172,6 @@ export function LoginForm() {
         style={{ backgroundColor: "var(--color-action)" }}
       >
         {submitting ? "Signing in…" : "Sign in"}
-      </button>
-
-      <div className="relative py-2 text-center text-xs" style={{ color: "var(--color-ink-soft)" }}>
-        <span className="relative px-2" style={{ backgroundColor: "var(--color-paper-raised)" }}>
-          Or continue with
-        </span>
-        <div className="absolute inset-x-0 top-1/2 -z-10 border-t" style={{ borderColor: "var(--color-line)" }} />
-      </div>
-
-      <button
-        type="button"
-        onClick={() => setNotice(true)}
-        className="flex w-full items-center justify-center gap-2 rounded-full border py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-paper)]"
-        style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
-      >
-        <svg aria-hidden="true" viewBox="0 0 24 24" className="h-4 w-4">
-          <path fill="#4285F4" d="M23.5 12.27c0-.79-.07-1.54-.2-2.27H12v4.51h6.47a5.6 5.6 0 0 1-2.4 3.66v3h3.87c2.27-2.09 3.56-5.17 3.56-8.9Z" />
-          <path fill="#34A853" d="M12 24c3.24 0 5.95-1.07 7.93-2.9l-3.87-3c-1.08.72-2.45 1.15-4.06 1.15-3.13 0-5.78-2.11-6.73-4.96H1.27v3.09A12 12 0 0 0 12 24Z" />
-          <path fill="#FBBC05" d="M5.27 14.29a7.2 7.2 0 0 1 0-4.58V6.62H1.27a12 12 0 0 0 0 10.76l4-3.09Z" />
-          <path fill="#EA4335" d="M12 4.75c1.76 0 3.35.6 4.6 1.8l3.44-3.44C17.94 1.19 15.24 0 12 0A12 12 0 0 0 1.27 6.62l4 3.09C6.22 6.86 8.87 4.75 12 4.75Z" />
-        </svg>
-        Google
       </button>
 
       <p className="text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>

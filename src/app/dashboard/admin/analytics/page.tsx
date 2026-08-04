@@ -1,6 +1,9 @@
+import { TrendingUp, Users, ShoppingBag, Trophy } from "lucide-react";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { LEAD_STAGE_LABELS, type LeadStage } from "@/lib/leads";
 import { RevenueTrendChart, LeadsFunnelChart, OrdersStatusChart, StaffLeaderboardChart } from "@/components/AnalyticsCharts";
+import { AnimatedCounter } from "@/components/crm/AnimatedCounter";
+import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 
 export default async function AnalyticsPage() {
   const supabase = await createSupabaseServerClient();
@@ -46,14 +49,26 @@ export default async function AnalyticsPage() {
 
   const totalRevenue = (invoices ?? []).filter((i) => i.status !== "cancelled").reduce((sum, i) => sum + Number(i.total), 0);
 
+  const totalWon = (leads ?? []).filter((l) => l.status === "won").length;
+
+  const kpis = [
+    { label: "Total Revenue", value: totalRevenue, prefix: "₹", icon: TrendingUp, tone: "#116a2c" },
+    { label: "Total Leads", value: (leads ?? []).length, icon: Users, tone: "var(--color-action-dark)" },
+    { label: "Total Orders", value: (orders ?? []).length, icon: ShoppingBag, tone: "#1d4fb8" },
+    { label: "Deals Won", value: totalWon, icon: Trophy, tone: "var(--color-action-dark)" },
+  ];
+
   return (
     <div>
-      <h2 className="text-xl font-bold" style={{ color: "var(--color-ink)" }}>Analytics</h2>
-      <p className="mt-1 text-sm" style={{ color: "var(--color-ink-soft)" }}>
-        Total revenue to date: <span className="font-semibold" style={{ color: "var(--color-ink)" }}>₹{totalRevenue.toLocaleString("en-IN")}</span>
-      </p>
+      <DashboardPageHero title="Analytics" subtitle="Company-wide performance, updated in real time from live data.">
+        <div className="relative mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {kpis.map((k) => (
+            <HeroKpi key={k.label} icon={k.icon} label={k.label} value={<AnimatedCounter value={k.value} prefix={k.prefix} />} />
+          ))}
+        </div>
+      </DashboardPageHero>
 
-      <div className="mt-5 grid gap-4 lg:grid-cols-2">
+      <div className="mt-6 grid gap-4 lg:grid-cols-2">
         <RevenueTrendChart data={revenueData} />
         <LeadsFunnelChart data={leadsData} />
         <OrdersStatusChart data={ordersData} />

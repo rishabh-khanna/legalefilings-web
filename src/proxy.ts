@@ -21,7 +21,16 @@ import { createServerClient } from "@supabase/ssr";
 //   customer are open to any staff level — each of those pages further
 //   scopes *what* a non-admin sees (their own team, via reports_to) at
 //   the data-fetch layer, not here.
-const ADMIN_ONLY_SECTIONS: string[] = [];
+// - Payroll, HR letters, reports, and company settings are admin-only —
+//   salary data and legally significant documents, not a rater/leader
+//   day-to-day task.
+const ADMIN_ONLY_SECTIONS: string[] = [
+  "/dashboard/admin/payroll",
+  "/dashboard/admin/hr-letters",
+  "/dashboard/admin/reports",
+  "/dashboard/admin/company-settings",
+  "/dashboard/admin/employees",
+];
 const GROUP_LEADER_UP_SECTIONS = ["/dashboard/admin/analytics"];
 const STAFF_UP_PREFIX = "/dashboard/admin";
 

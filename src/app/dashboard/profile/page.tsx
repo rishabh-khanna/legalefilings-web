@@ -13,6 +13,19 @@ export default function ProfilePage() {
   const [city, setCity] = useState("");
   const [state, setState] = useState("");
   const [dateOfBirth, setDateOfBirth] = useState("");
+  const [isEmployee, setIsEmployee] = useState(false);
+  const [employeeId, setEmployeeId] = useState("");
+  const [department, setDepartment] = useState("");
+  const [designation, setDesignation] = useState("");
+  const [aadhaarNumber, setAadhaarNumber] = useState("");
+  const [panNumber, setPanNumber] = useState("");
+  const [bankAccountNumber, setBankAccountNumber] = useState("");
+  const [bankIfsc, setBankIfsc] = useState("");
+  const [bankName, setBankName] = useState("");
+  const [uanNumber, setUanNumber] = useState("");
+  const [esicNumber, setEsicNumber] = useState("");
+  const [emergencyContactName, setEmergencyContactName] = useState("");
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -36,6 +49,19 @@ export default function ProfilePage() {
         setCity(profile.city ?? "");
         setState(profile.state ?? "");
         setDateOfBirth(profile.date_of_birth ?? "");
+        setIsEmployee(profile.account_type === "staff" || profile.account_type === "admin");
+        setEmployeeId(profile.employee_id ?? "");
+        setDepartment(profile.department ?? "");
+        setDesignation(profile.designation ?? "");
+        setAadhaarNumber(profile.aadhaar_number ?? "");
+        setPanNumber(profile.pan_number ?? "");
+        setBankAccountNumber(profile.bank_account_number ?? "");
+        setBankIfsc(profile.bank_ifsc ?? "");
+        setBankName(profile.bank_name ?? "");
+        setUanNumber(profile.uan_number ?? "");
+        setEsicNumber(profile.esic_number ?? "");
+        setEmergencyContactName(profile.emergency_contact_name ?? "");
+        setEmergencyContactPhone(profile.emergency_contact_phone ?? "");
       }
       setLoading(false);
     }, 0);
@@ -50,10 +76,19 @@ export default function ProfilePage() {
       data: { user },
     } = await supabase.auth.getUser();
     if (user) {
-      await supabase
-        .from("profiles")
-        .update({ full_name: name, phone, company, city, state, date_of_birth: dateOfBirth || null })
-        .eq("id", user.id);
+      const patch: Record<string, unknown> = { full_name: name, phone, company, city, state, date_of_birth: dateOfBirth || null };
+      if (isEmployee) {
+        Object.assign(patch, {
+          aadhaar_number: aadhaarNumber || null,
+          pan_number: panNumber || null,
+          bank_account_number: bankAccountNumber || null,
+          bank_ifsc: bankIfsc || null,
+          bank_name: bankName || null,
+          emergency_contact_name: emergencyContactName || null,
+          emergency_contact_phone: emergencyContactPhone || null,
+        });
+      }
+      await supabase.from("profiles").update(patch).eq("id", user.id);
     }
     setSaving(false);
     setSaved(true);
@@ -82,41 +117,45 @@ export default function ProfilePage() {
 
       <form
         onSubmit={handleSubmit}
-        className="mt-6 max-w-lg space-y-4 rounded-2xl border bg-white p-6 dark:bg-[var(--color-paper-raised)]"
+        className="mt-6 space-y-5 rounded-2xl border bg-white p-6 dark:bg-[var(--color-paper-raised)]"
         style={{ borderColor: "var(--color-line)" }}
       >
-        <div>
-          <label htmlFor="profile-name" className={labelClass} style={{ color: "var(--color-ink)" }}>
-            Full Name
-          </label>
-          <input id="profile-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
-        </div>
-        <div>
-          <label htmlFor="profile-company" className={labelClass} style={{ color: "var(--color-ink)" }}>
-            Company
-          </label>
-          <input id="profile-company" value={company} onChange={(e) => setCompany(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
-        </div>
-        <div>
-          <label htmlFor="profile-email" className={labelClass} style={{ color: "var(--color-ink)" }}>
-            Email
-          </label>
-          <input id="profile-email" type="email" value={email} disabled className={`${inputClass} opacity-60`} style={{ borderColor: "var(--color-line)" }} />
-        </div>
-        <div>
-          <label htmlFor="profile-phone" className={labelClass} style={{ color: "var(--color-ink)" }}>
-            Phone
-          </label>
-          <input id="profile-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
-        </div>
-        <div>
-          <label htmlFor="profile-dob" className={labelClass} style={{ color: "var(--color-ink)" }}>
-            Date of Birth
-          </label>
-          <input id="profile-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
-          <p className="mt-1 text-xs" style={{ color: "var(--color-ink-soft)" }}>We&apos;ll send you a birthday surprise 🎂</p>
-        </div>
-        <div className="grid grid-cols-2 gap-3">
+        {/* Wide grids instead of one field per row — the dashboard content
+            column has plenty of horizontal room, and stacking every field
+            vertically just made this a long scroll for no reason. */}
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div>
+            <label htmlFor="profile-name" className={labelClass} style={{ color: "var(--color-ink)" }}>
+              Full Name
+            </label>
+            <input id="profile-name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+          </div>
+          {!isEmployee && (
+            <div>
+              <label htmlFor="profile-company" className={labelClass} style={{ color: "var(--color-ink)" }}>
+                Company
+              </label>
+              <input id="profile-company" value={company} onChange={(e) => setCompany(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+            </div>
+          )}
+          <div>
+            <label htmlFor="profile-email" className={labelClass} style={{ color: "var(--color-ink)" }}>
+              Email
+            </label>
+            <input id="profile-email" type="email" value={email} disabled className={`${inputClass} opacity-60`} style={{ borderColor: "var(--color-line)" }} />
+          </div>
+          <div>
+            <label htmlFor="profile-phone" className={labelClass} style={{ color: "var(--color-ink)" }}>
+              Phone
+            </label>
+            <input id="profile-phone" value={phone} onChange={(e) => setPhone(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+          </div>
+          <div>
+            <label htmlFor="profile-dob" className={labelClass} style={{ color: "var(--color-ink)" }}>
+              Date of Birth
+            </label>
+            <input id="profile-dob" type="date" value={dateOfBirth} onChange={(e) => setDateOfBirth(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+          </div>
           <div>
             <label htmlFor="profile-state" className={labelClass} style={{ color: "var(--color-ink)" }}>
               State
@@ -146,6 +185,84 @@ export default function ProfilePage() {
             />
           </div>
         </div>
+        <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>We&apos;ll send you a birthday surprise on your Date of Birth 🎂</p>
+
+        {isEmployee && (
+          <>
+            <div className="border-t pt-4" style={{ borderColor: "var(--color-line)" }}>
+              <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Employee Details</p>
+              <p className="mt-1 text-xs" style={{ color: "var(--color-ink-soft)" }}>Set by admin — contact HR to update.</p>
+            </div>
+            <div className="grid gap-4 text-sm sm:grid-cols-3 lg:grid-cols-5">
+              <div>
+                <p className={labelClass} style={{ color: "var(--color-ink-soft)" }}>Employee ID</p>
+                <p style={{ color: "var(--color-ink)" }}>{employeeId || "—"}</p>
+              </div>
+              <div>
+                <p className={labelClass} style={{ color: "var(--color-ink-soft)" }}>Department</p>
+                <p style={{ color: "var(--color-ink)" }}>{department || "—"}</p>
+              </div>
+              <div>
+                <p className={labelClass} style={{ color: "var(--color-ink-soft)" }}>Designation</p>
+                <p style={{ color: "var(--color-ink)" }}>{designation || "—"}</p>
+              </div>
+              <div>
+                <p className={labelClass} style={{ color: "var(--color-ink-soft)" }}>UAN Number</p>
+                <p style={{ color: "var(--color-ink)" }}>{uanNumber || "—"}</p>
+              </div>
+              <div>
+                <p className={labelClass} style={{ color: "var(--color-ink-soft)" }}>ESIC Number</p>
+                <p style={{ color: "var(--color-ink)" }}>{esicNumber || "—"}</p>
+              </div>
+            </div>
+
+            <div className="border-t pt-4" style={{ borderColor: "var(--color-line)" }}>
+              <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Identity Documents</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <label className={labelClass} style={{ color: "var(--color-ink)" }}>Aadhaar Number</label>
+                <input value={aadhaarNumber} onChange={(e) => setAadhaarNumber(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+              </div>
+              <div>
+                <label className={labelClass} style={{ color: "var(--color-ink)" }}>PAN Number</label>
+                <input value={panNumber} onChange={(e) => setPanNumber(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+              </div>
+            </div>
+
+            <div className="border-t pt-4" style={{ borderColor: "var(--color-line)" }}>
+              <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Bank Details</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <label className={labelClass} style={{ color: "var(--color-ink)" }}>Bank Name</label>
+                <input value={bankName} onChange={(e) => setBankName(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+              </div>
+              <div>
+                <label className={labelClass} style={{ color: "var(--color-ink)" }}>Account Number</label>
+                <input value={bankAccountNumber} onChange={(e) => setBankAccountNumber(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+              </div>
+              <div>
+                <label className={labelClass} style={{ color: "var(--color-ink)" }}>IFSC Code</label>
+                <input value={bankIfsc} onChange={(e) => setBankIfsc(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+              </div>
+            </div>
+
+            <div className="border-t pt-4" style={{ borderColor: "var(--color-line)" }}>
+              <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Emergency Contact</p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <label className={labelClass} style={{ color: "var(--color-ink)" }}>Name</label>
+                <input value={emergencyContactName} onChange={(e) => setEmergencyContactName(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+              </div>
+              <div>
+                <label className={labelClass} style={{ color: "var(--color-ink)" }}>Phone</label>
+                <input value={emergencyContactPhone} onChange={(e) => setEmergencyContactPhone(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+              </div>
+            </div>
+          </>
+        )}
 
         {saved && (
           <p className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "#d0f4db", color: "#116a2c" }}>

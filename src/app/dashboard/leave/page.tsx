@@ -1,8 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { CalendarDays, CheckCircle2, Clock, XCircle } from "lucide-react";
 import { useActionMessage } from "@/lib/use-action-message";
 import { ActionMessage } from "@/components/ActionMessage";
+import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 
 type LeaveRequest = {
   id: string;
@@ -74,27 +76,40 @@ export default function LeavePage() {
 
   const inputClass = "w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]";
 
+  const leaveStats = useMemo(() => {
+    const pending = requests.filter((r) => r.status === "pending").length;
+    const approved = requests.filter((r) => r.status === "approved").length;
+    const rejected = requests.filter((r) => r.status === "rejected").length;
+    return { total: requests.length, pending, approved, rejected };
+  }, [requests]);
+
   if (loading) {
     return <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>Loading…</p>;
   }
 
   return (
     <div>
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <h1 className="text-2xl font-extrabold" style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)" }}>
-          Leave
-        </h1>
+      <DashboardPageHero title="Leave" subtitle="Apply for leave and track the status of your requests.">
+        <div className="relative mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
+          <HeroKpi icon={CalendarDays} label="Total" value={leaveStats.total} />
+          <HeroKpi icon={Clock} label="Pending" value={leaveStats.pending} />
+          <HeroKpi icon={CheckCircle2} label="Approved" value={leaveStats.approved} />
+          <HeroKpi icon={XCircle} label="Rejected" value={leaveStats.rejected} />
+        </div>
+      </DashboardPageHero>
+
+      <div className="flex flex-wrap items-center justify-end gap-4">
         <button
           type="button"
           onClick={() => setShowForm((v) => !v)}
           className="rounded-full px-4 py-2 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
-          style={{ backgroundColor: "var(--color-ink-fixed)" }}
+          style={{ backgroundColor: "var(--color-action)" }}
         >
           {showForm ? "Cancel" : "+ Apply for Leave"}
         </button>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-3">
         <ActionMessage message={message} />
       </div>
 

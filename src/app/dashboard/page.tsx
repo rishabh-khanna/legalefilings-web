@@ -1,8 +1,10 @@
 import Link from "next/link";
-import { GlowBadge } from "@/components/CategoryIcons";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
-import { isStaffOrAdmin } from "@/lib/roles";
+import { getReportingChainIds } from "@/lib/reporting-chain";
+import { isStaffOrAdmin, roleLabel } from "@/lib/roles";
+import { AnimatedCounter } from "@/components/crm/AnimatedCounter";
+import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 
 const PersonIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
@@ -24,14 +26,25 @@ const OrderIcon = ({ className }: { className?: string }) => (
 
 export default async function DashboardOverviewPage() {
   const profile = await getCurrentProfile();
-  const supabase = await createSupabaseServerClient();
+  const supabase = getSupabaseAdmin();
   const staff = profile ? isStaffOrAdmin(profile) : false;
+  const isAdminUser = profile?.account_type === "admin";
 
+  // Scoped identically to the pages these stat cards link to
+  // (/dashboard/orders, /dashboard/invoices via /api/invoices) — a rater
+  // should see the same count here as when they click through, not a
+  // company-wide total from a blanket "any staff can read all rows" RLS
+  // policy. Orders scope by assigned_to; invoices scope by created_by —
+  // matching each table's own canonical page.
   let ordersQuery = supabase.from("orders").select("id, service, status, created_at").order("created_at", { ascending: false });
   let invoicesQuery = supabase.from("invoices").select("id, invoice_number, total, status, created_at").order("created_at", { ascending: false });
   if (profile && !staff) {
     ordersQuery = ordersQuery.eq("customer_id", profile.id);
     invoicesQuery = invoicesQuery.eq("customer_id", profile.id);
+  } else if (profile && staff && !isAdminUser) {
+    const chain = await getReportingChainIds(profile.id);
+    ordersQuery = ordersQuery.in("assigned_to", [profile.id, ...chain]);
+    invoicesQuery = invoicesQuery.in("created_by", [profile.id, ...chain]);
   }
 
   const [{ data: orders }, { data: invoices }, leadsCount] = await Promise.all([
@@ -47,6 +60,65 @@ export default async function DashboardOverviewPage() {
   const activeOrders = orderList.filter((o) => !["completed", "cancelled"].includes(o.status)).length;
   const pendingInvoices = invoiceList.filter((i) => i.status !== "paid").length;
 
+  const isAdmin = profile?.account_type === "admin";
+  let hrOverview: { totalEmployees: number; presentToday: number; absentToday: number; birthdaysToday: number; payrollDue: number } | null = null;
+  let recentAttendance: { id: string; staffId: string; name: string; eventType: string; occurredAt: string }[] = [];
+  let recentLeaveRequests: { id: string; name: string; leaveType: string; status: string; startDate: string; endDate: string }[] = [];
+
+  if (isAdmin) {
+    const admin = getSupabaseAdmin();
+    const now = new Date();
+    const todayStart = new Date();
+    todayStart.setHours(0, 0, 0, 0);
+    const month = now.getMonth() + 1;
+    const year = now.getFullYear();
+
+    const [
+      { count: totalEmployees },
+      { data: todaysCheckins },
+      { data: allProfiles },
+      { count: payslipsThisMonth },
+      { data: attendanceRows },
+      { data: leaveRows },
+    ] = await Promise.all([
+      admin.from("profiles").select("id", { count: "exact", head: true }).in("account_type", ["staff", "admin"]),
+      admin.from("attendance_events").select("staff_id").eq("event_type", "check_in").gte("occurred_at", todayStart.toISOString()),
+      admin.from("profiles").select("date_of_birth").in("account_type", ["staff", "admin"]),
+      admin.from("payslips").select("id", { count: "exact", head: true }).eq("month", month).eq("year", year),
+      admin
+        .from("attendance_events")
+        .select("id, staff_id, event_type, occurred_at, profiles!attendance_events_staff_id_fkey(full_name)")
+        .order("occurred_at", { ascending: false })
+        .limit(5),
+      admin
+        .from("leave_requests")
+        .select("id, staff_id, leave_type, status, start_date, end_date, profiles!leave_requests_staff_id_fkey(full_name)")
+        .order("created_at", { ascending: false })
+        .limit(5),
+    ]);
+
+    const presentToday = new Set((todaysCheckins ?? []).map((e) => e.staff_id)).size;
+    const total = totalEmployees ?? 0;
+    const todayMD = new Date().toISOString().slice(5, 10);
+    const birthdaysToday = (allProfiles ?? []).filter((p) => p.date_of_birth && p.date_of_birth.slice(5, 10) === todayMD).length;
+    hrOverview = {
+      totalEmployees: total,
+      presentToday,
+      absentToday: Math.max(0, total - presentToday),
+      birthdaysToday,
+      payrollDue: Math.max(0, total - (payslipsThisMonth ?? 0)),
+    };
+
+    recentAttendance = (attendanceRows ?? []).map((row) => {
+      const r = row as unknown as { id: string; staff_id: string; event_type: string; occurred_at: string; profiles: { full_name: string } | null };
+      return { id: r.id, staffId: r.staff_id, name: r.profiles?.full_name ?? "Unknown", eventType: r.event_type, occurredAt: r.occurred_at };
+    });
+    recentLeaveRequests = (leaveRows ?? []).map((row) => {
+      const r = row as unknown as { id: string; leave_type: string; status: string; start_date: string; end_date: string; profiles: { full_name: string } | null };
+      return { id: r.id, name: r.profiles?.full_name ?? "Unknown", leaveType: r.leave_type, status: r.status, startDate: r.start_date, endDate: r.end_date };
+    });
+  }
+
   const stats = staff
     ? [
         { label: "My Leads", value: leadsCount.count ?? 0, sub: "assigned to you", icon: PersonIcon, href: "/dashboard/crm" },
@@ -60,27 +132,112 @@ export default async function DashboardOverviewPage() {
 
   return (
     <div>
-      <div className={`grid gap-4 ${staff ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
-        {stats.map((stat) => (
-          <Link
-            key={stat.label}
-            href={stat.href}
-            className="rounded-2xl border bg-white p-5 transition-[box-shadow,border-color] hover:shadow-md hover:border-[var(--color-accent)] dark:bg-[var(--color-paper-raised)]"
-            style={{ borderColor: "var(--color-line)" }}
-          >
-            <GlowBadge size={40} icon={<stat.icon className="h-[18px] w-[18px]" />} />
-            <p className="mt-3 text-2xl font-extrabold" style={{ color: "var(--color-ink)" }}>
-              {stat.value}
-            </p>
-            <p className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>
-              {stat.label}
-            </p>
-            <p className="mt-0.5 text-xs" style={{ color: "var(--color-ink-soft)" }}>
-              {stat.sub}
-            </p>
-          </Link>
-        ))}
-      </div>
+      <DashboardPageHero
+        title={profile ? `Welcome back, ${profile.full_name ?? "there"}` : "Overview"}
+        subtitle={profile ? roleLabel(profile) : undefined}
+      >
+        <div className={`relative mt-6 grid grid-cols-2 gap-4 ${staff ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
+          {stats.map((stat) => (
+            <Link key={stat.label} href={stat.href}>
+              <HeroKpi icon={stat.icon} label={stat.label} value={stat.value} />
+            </Link>
+          ))}
+        </div>
+      </DashboardPageHero>
+
+      {isAdmin && hrOverview && (
+        <div className="mt-8">
+          <h2 className="text-lg font-bold" style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)" }}>
+            HR Overview
+          </h2>
+          <div className="mt-3 grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
+            {[
+              { label: "Total Employees", value: hrOverview.totalEmployees, href: "/dashboard/admin/users" },
+              { label: "Present Today", value: hrOverview.presentToday, href: "/dashboard/admin/attendance" },
+              { label: "Absent Today", value: hrOverview.absentToday, href: "/dashboard/admin/attendance" },
+              { label: "Today's Birthdays", value: hrOverview.birthdaysToday, href: "/dashboard/admin/users" },
+              { label: "Payroll Due", value: hrOverview.payrollDue, href: "/dashboard/admin/payroll" },
+            ].map((s) => (
+              <Link
+                key={s.label}
+                href={s.href}
+                className="rounded-2xl border p-4 backdrop-blur-xl transition-[box-shadow,border-color,transform] hover:-translate-y-0.5 hover:shadow-lg hover:border-[var(--color-accent)] dark:bg-[var(--color-paper-raised)]/80"
+                style={{ borderColor: "var(--color-line)", backgroundColor: "rgba(255,255,255,0.78)" }}
+              >
+                <p className="text-2xl font-extrabold" style={{ color: "var(--color-ink)" }}>
+                  <AnimatedCounter value={s.value} />
+                </p>
+                <p className="mt-0.5 text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>
+                  {s.label}
+                </p>
+              </Link>
+            ))}
+          </div>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-2">
+            <div className="rounded-2xl border bg-white p-5 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold" style={{ color: "var(--color-ink)" }}>
+                  Recent Attendance
+                </h3>
+                <Link href="/dashboard/admin/attendance" className="text-sm font-medium" style={{ color: "var(--color-action-dark)" }}>
+                  View all →
+                </Link>
+              </div>
+              <ul className="mt-3 space-y-3">
+                {recentAttendance.map((a) => (
+                  <li key={a.id} className="flex items-center justify-between text-sm">
+                    <p className="font-medium" style={{ color: "var(--color-ink)" }}>
+                      {a.name}
+                    </p>
+                    <span className="text-xs" style={{ color: "var(--color-ink-soft)" }}>
+                      {a.eventType.replace("_", " ")} · {new Date(a.occurredAt).toLocaleString("en-IN")}
+                    </span>
+                  </li>
+                ))}
+                {recentAttendance.length === 0 && (
+                  <li className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
+                    No attendance events yet.
+                  </li>
+                )}
+              </ul>
+            </div>
+
+            <div className="rounded-2xl border bg-white p-5 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
+              <div className="flex items-center justify-between">
+                <h3 className="font-semibold" style={{ color: "var(--color-ink)" }}>
+                  Recent Leave Requests
+                </h3>
+                <Link href="/dashboard/leave" className="text-sm font-medium" style={{ color: "var(--color-action-dark)" }}>
+                  View all →
+                </Link>
+              </div>
+              <ul className="mt-3 space-y-3">
+                {recentLeaveRequests.map((l) => (
+                  <li key={l.id} className="flex items-center justify-between text-sm">
+                    <div>
+                      <p className="font-medium" style={{ color: "var(--color-ink)" }}>
+                        {l.name}
+                      </p>
+                      <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>
+                        {l.leaveType} · {new Date(l.startDate).toLocaleDateString("en-IN")}–{new Date(l.endDate).toLocaleDateString("en-IN")}
+                      </p>
+                    </div>
+                    <span className="text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>
+                      {l.status}
+                    </span>
+                  </li>
+                ))}
+                {recentLeaveRequests.length === 0 && (
+                  <li className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
+                    No leave requests yet.
+                  </li>
+                )}
+              </ul>
+            </div>
+          </div>
+        </div>
+      )}
 
       <div className="mt-8 grid gap-4 lg:grid-cols-2">
         <div className="rounded-2xl border bg-white p-5 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
