@@ -11,7 +11,12 @@
 -- instead, so nothing breaks. Self-read ("individuals read own
 -- profile") and all admin access (via service-role API routes, which
 -- bypass RLS entirely) are unaffected.
-drop policy "staff read all profiles" on profiles;
+-- "if exists" — the live database may not have picked up the original
+-- 20260730204000 migration that created this policy under this exact
+-- name, so a plain `drop policy` errors ("does not exist") instead of
+-- being a no-op. Safe to run either way: if it's not there, there's
+-- nothing to close.
+drop policy if exists "staff read all profiles" on profiles;
 
 -- Employee documents: hierarchy-based, not opt-in — a leader/group_leader
 -- can see documents belonging to anyone in their reporting chain (their
@@ -20,6 +25,7 @@ drop policy "staff read all profiles" on profiles;
 -- covers the self case; admin access goes through the service-role API
 -- routes and bypasses RLS entirely, so no admin-specific policy is
 -- needed here either.
+drop policy if exists "managers read team documents" on employee_documents;
 create policy "managers read team documents" on employee_documents for select using (
   is_in_reporting_chain(staff_id, auth.uid())
 );
