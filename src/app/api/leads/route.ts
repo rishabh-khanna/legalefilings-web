@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { sendLeadAcknowledgementEmail } from "@/lib/email";
 import { getReportingChainIds } from "@/lib/reporting-chain";
+import { canSeeAllOrgs } from "@/lib/organization";
 import { LEAD_STAGES, type Lead, type LeadStage } from "@/lib/leads";
 
 // DB rows are snake_case; the frontend (admin CRM board, consultation form)
@@ -23,6 +24,7 @@ type LeadRow = {
   assigned_to: string | null;
   notes: string;
   created_at: string;
+  converted_to_profile_id: string | null;
 };
 
 function toLead(row: LeadRow): Lead {
@@ -41,6 +43,7 @@ function toLead(row: LeadRow): Lead {
     stage: row.status,
     assignedTo: row.assigned_to ?? "Unassigned",
     notes: row.notes,
+    convertedToProfileId: row.converted_to_profile_id ?? undefined,
   };
 }
 
@@ -74,7 +77,15 @@ export async function GET() {
   const supabase = getSupabaseAdmin();
   let query = supabase.from("leads").select("*").order("created_at", { ascending: false });
 
-  if (profile.account_type !== "admin") {
+  if (!canSeeAllOrgs(profile)) {
+    query = query.eq("organization_id", profile.organization_id);
+  }
+  // canSeeAllOrgs (is_platform_admin) must also skip the
+  // assignee-narrowing below — independent axis from account_type, so a
+  // platform_admin without account_type "admin" would otherwise pass the
+  // org filter above (every org) and then get wrongly narrowed straight
+  // back down to their own name/chain here.
+  if (profile.account_type !== "admin" && !canSeeAllOrgs(profile)) {
     query = query.in("assigned_to", await visibleAssigneeNames(profile));
   }
 
@@ -84,7 +95,14 @@ export async function GET() {
   return NextResponse.json({ leads, count: leads.length });
 }
 
-// POST — the public consultation form; deliberately no auth requirement.
+// POST — two callers share this route:
+//   - Public, unauthenticated (no session): legalefilings.com's own
+//     consultation form — always lands in Legal Efilings' own org (a
+//     tenant org getting its own public-facing lead capture is a
+//     separate, later feature, not something this endpoint decides
+//     between).
+//   - Signed-in staff/admin: manually adding a lead from their own CRM
+//     (see /dashboard/crm) — lands in their own org, pre-assigned to them.
 export async function POST(request: Request) {
   const body = await request.json().catch(() => null);
 
@@ -92,7 +110,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { name, email, phone, city, state, service, plan, planPrice, message } = body as Record<string, unknown>;
+  const { name, email, phone, city, state, service, plan, planPrice, message, company, orgSlug } = body as Record<string, unknown>;
 
   if (!name || !email || !phone) {
     return NextResponse.json(
@@ -102,18 +120,51 @@ export async function POST(request: Request) {
   }
 
   const supabase = getSupabaseAdmin();
+  const profile = await getCurrentProfile();
+
+  let organizationId: string | undefined;
+  let assignedTo: string | null = null;
+  let source: string | undefined;
+  let orgName: string | undefined;
+  if (profile && profile.account_type !== "customer") {
+    organizationId = profile.organization_id;
+    assignedTo = profile.full_name;
+    source = "crm_manual";
+  } else {
+    // A tenant org's own public lead-capture page (/org/[slug]) passes its
+    // slug through so the lead lands in that org instead of Legal
+    // Efilings' — falls back to Legal Efilings for the main site's own
+    // consultation form (no slug) or an invalid/suspended slug, rather
+    // than rejecting the submission outright over a bad or stale link.
+    let org: { id: string; name: string } | null = null;
+    if (typeof orgSlug === "string" && orgSlug) {
+      const { data } = await supabase.from("organizations").select("id, name").eq("slug", orgSlug).eq("status", "active").maybeSingle();
+      org = data;
+    }
+    if (!org) {
+      const { data } = await supabase.from("organizations").select("id, name").eq("slug", "legal-efilings").single();
+      org = data;
+    }
+    organizationId = org?.id;
+    orgName = org?.name;
+  }
+
   const { data, error } = await supabase
     .from("leads")
     .insert({
+      organization_id: organizationId,
       name: String(name),
       email: String(email),
       phone: String(phone),
       city: city ? String(city) : null,
       state: state ? String(state) : null,
+      company: company ? String(company) : null,
       service: service ? String(service) : null,
       plan: plan ? String(plan) : null,
       plan_price: planPrice ? String(planPrice) : null,
       message: message ? String(message) : null,
+      ...(assignedTo ? { assigned_to: assignedTo } : {}),
+      ...(source ? { source } : {}),
     })
     .select()
     .single();
@@ -121,10 +172,16 @@ export async function POST(request: Request) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   const lead = toLead(data as LeadRow);
 
+  // Staff manually adding a lead already knows about it — the
+  // acknowledgment email is for the public consultation-form path only.
+  if (profile) {
+    return NextResponse.json({ ok: true, lead }, { status: 201 });
+  }
+
   // Best-effort: a failed acknowledgment email shouldn't fail the lead
   // submission itself — the lead is already saved by this point.
   try {
-    await sendLeadAcknowledgementEmail(lead);
+    await sendLeadAcknowledgementEmail({ ...lead, orgName });
   } catch (err) {
     console.error("Failed to send lead acknowledgement email:", err);
   }
@@ -151,6 +208,12 @@ export async function PATCH(request: Request) {
 
   const supabase = getSupabaseAdmin();
 
+  const { data: leadForOrgCheck } = await supabase.from("leads").select("organization_id").eq("id", body.id).single();
+  if (!leadForOrgCheck) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
+  if (!canSeeAllOrgs(profile) && leadForOrgCheck.organization_id !== profile.organization_id) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   if (body.claim === true) {
     if (!profile.full_name) return NextResponse.json({ error: "Your profile has no name set" }, { status: 400 });
     const { data, error } = await supabase
@@ -166,7 +229,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: true, lead: toLead(data as LeadRow) });
   }
 
-  if (profile.account_type !== "admin") {
+  if (profile.account_type !== "admin" && !canSeeAllOrgs(profile)) {
     const { data: existing } = await supabase.from("leads").select("assigned_to").eq("id", body.id).single();
     if (!existing) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
     const visibleNames = await visibleAssigneeNames(profile);
@@ -184,6 +247,23 @@ export async function PATCH(request: Request) {
     patch.status = stage;
   }
   if (typeof assignedTo === "string") {
+    // Previously accepted any free-text string with no check that it's
+    // actually a staff member's name — a rater could reassign a lead
+    // they own to an arbitrary name (not a real access grant, since
+    // assigned_to is just a display label, but it could misdirect a
+    // lead to someone who'll never see it, or spoof who's working it).
+    let validNames: string[];
+    if (profile.account_type === "admin" || canSeeAllOrgs(profile)) {
+      let namesQuery = supabase.from("profiles").select("full_name").in("account_type", ["staff", "admin"]);
+      if (!canSeeAllOrgs(profile)) namesQuery = namesQuery.eq("organization_id", profile.organization_id);
+      const { data: staffProfiles } = await namesQuery;
+      validNames = ["Unassigned", ...(staffProfiles ?? []).map((p) => p.full_name).filter((n): n is string => Boolean(n))];
+    } else {
+      validNames = await visibleAssigneeNames(profile);
+    }
+    if (!validNames.includes(assignedTo)) {
+      return NextResponse.json({ error: "Not a valid staff member to assign this lead to" }, { status: 400 });
+    }
     patch.assigned_to = assignedTo;
   }
   if (typeof notes === "string") {

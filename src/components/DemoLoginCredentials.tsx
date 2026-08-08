@@ -3,18 +3,30 @@
 import { useState } from "react";
 
 // Demo-only — for reviewing this build before real customer/staff accounts
-// exist. Gated by NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS so going to real
-// production is a one-line env change, not a code deletion; unset (or set
-// to "false") that var to hide this entirely once real accounts replace
-// the seeded demo ones from scripts/seed-database.mjs.
+// exist. Opt-IN via NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS="true" — fails
+// closed by default (unset, misconfigured, or any other value all hide
+// it) rather than failing open, since this panel hands out the seeded
+// admin account's password to anyone who opens /login. Never set this
+// var to "true" in production once real accounts replace the seeded
+// demo ones from scripts/seed-database.mjs — better yet, delete this
+// component and its usage entirely before go-live.
 const DEMO_PASSWORD = "Demo@12345";
 const ACCOUNTS = [
-  { email: "admin@legalefilings.com", role: "Admin" },
-  { email: "groupleader@legalefilings.com", role: "Staff — Group Leader" },
-  { email: "leader@legalefilings.com", role: "Staff — Leader" },
-  { email: "rater@legalefilings.com", role: "Staff — Rater" },
-  { email: "customer.free@legalefilings.com", role: "Customer — Free" },
-  { email: "customer.paid@legalefilings.com", role: "Customer — Paid" },
+  { email: "admin@legalefilings.com", role: "Admin", group: "Legal Efilings (seed org)" },
+  { email: "groupleader@legalefilings.com", role: "Staff — Group Leader", group: "Legal Efilings (seed org)" },
+  { email: "leader@legalefilings.com", role: "Staff — Leader", group: "Legal Efilings (seed org)" },
+  { email: "rater@legalefilings.com", role: "Staff — Rater", group: "Legal Efilings (seed org)" },
+  { email: "customer.free@legalefilings.com", role: "Customer — Free", group: "Legal Efilings (seed org)" },
+  { email: "customer.paid@legalefilings.com", role: "Customer — Paid", group: "Legal Efilings (seed org)" },
+  { email: "platformadmin.e2e@legalefilings.com", role: "Platform Admin (superuser — all orgs)", group: "Platform" },
+  { email: "alpha.admin.1786114923966@example.com", role: "Admin", group: "Alpha Legal Consultants" },
+  { email: "alpha.staffer.1786114923966@example.com", role: "Staff — Rater", group: "Alpha Legal Consultants" },
+  { email: "alpha-legal-consultants-1786114923966.customer@example.com", role: "Customer — Paid", group: "Alpha Legal Consultants" },
+  { email: "convertible-lead-alpha-legal-consultants-1786114923966@example.com", role: "Customer (from lead conversion)", group: "Alpha Legal Consultants" },
+  { email: "beta.admin.1786114923966@example.com", role: "Admin", group: "Beta Compliance Partners" },
+  { email: "beta.staffer.1786114923966@example.com", role: "Staff — Rater", group: "Beta Compliance Partners" },
+  { email: "beta-compliance-partners-1786114923966.customer@example.com", role: "Customer — Paid", group: "Beta Compliance Partners" },
+  { email: "convertible-lead-beta-compliance-partners-1786114923966@example.com", role: "Customer (from lead conversion)", group: "Beta Compliance Partners" },
 ];
 
 function CopyButton({ value }: { value: string }) {
@@ -37,11 +49,15 @@ function CopyButton({ value }: { value: string }) {
 
 export function DemoLoginCredentials() {
   const [open, setOpen] = useState(false);
-  const [index, setIndex] = useState(0);
 
-  if (process.env.NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS === "false") return null;
+  if (process.env.NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS !== "true") return null;
 
-  const account = ACCOUNTS[index];
+  const groups: { name: string; accounts: typeof ACCOUNTS }[] = [];
+  for (const account of ACCOUNTS) {
+    const existing = groups.find((g) => g.name === account.group);
+    if (existing) existing.accounts.push(account);
+    else groups.push({ name: account.group, accounts: [account] });
+  }
 
   return (
     <div className="mt-4 rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
@@ -67,63 +83,42 @@ export function DemoLoginCredentials() {
       </button>
 
       {open && (
-        <div className="border-t px-4 py-4" style={{ borderColor: "var(--color-line)" }}>
-          <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>
-            Demo accounts for this build — swap the role, sign in, explore. Removed before real launch.
+        <div className="max-h-[70vh] overflow-y-auto border-t px-4 py-4" style={{ borderColor: "var(--color-line)" }}>
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>
+              Every demo account for this build — sign in, explore. Removed before real launch.
+            </p>
+            <CopyButton value={DEMO_PASSWORD} />
+          </div>
+          <p className="mt-1 text-xs" style={{ color: "var(--color-ink-soft)" }}>
+            Password for all of them: <span className="font-mono font-semibold" style={{ color: "var(--color-ink)" }}>{DEMO_PASSWORD}</span>
           </p>
 
-          <div className="mt-3 rounded-xl p-3" style={{ backgroundColor: "var(--color-paper)" }}>
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-soft)" }}>
-                  {account.role}
+          <div className="mt-3 space-y-4">
+            {groups.map((group) => (
+              <div key={group.name}>
+                <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--color-action-dark)" }}>
+                  {group.name}
                 </p>
-                <p className="font-mono text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
-                  {account.email}
-                </p>
+                <div className="mt-1.5 space-y-1.5">
+                  {group.accounts.map((account) => (
+                    <div key={account.email} className="rounded-xl p-3" style={{ backgroundColor: "var(--color-paper)" }}>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                          <p className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-soft)" }}>
+                            {account.role}
+                          </p>
+                          <p className="truncate font-mono text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+                            {account.email}
+                          </p>
+                        </div>
+                        <CopyButton value={account.email} />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
-              <CopyButton value={account.email} />
-            </div>
-            <div className="mt-2 flex items-center justify-between gap-2">
-              <p className="font-mono text-sm" style={{ color: "var(--color-ink-soft)" }}>{DEMO_PASSWORD}</p>
-              <CopyButton value={DEMO_PASSWORD} />
-            </div>
-          </div>
-
-          <div className="mt-3 flex items-center justify-between">
-            <button
-              type="button"
-              onClick={() => setIndex((i) => (i - 1 + ACCOUNTS.length) % ACCOUNTS.length)}
-              aria-label="Previous account"
-              className="flex h-7 w-7 items-center justify-center rounded-full border"
-              style={{ borderColor: "var(--color-line)", color: "var(--color-ink-soft)" }}
-            >
-              ‹
-            </button>
-            <div className="flex gap-1.5">
-              {ACCOUNTS.map((a, i) => (
-                <button
-                  key={a.email}
-                  type="button"
-                  onClick={() => setIndex(i)}
-                  aria-label={`Show ${a.role} credentials`}
-                  className="h-1.5 rounded-full transition-all"
-                  style={{
-                    width: i === index ? "1rem" : "0.375rem",
-                    backgroundColor: i === index ? "var(--color-action)" : "var(--color-line)",
-                  }}
-                />
-              ))}
-            </div>
-            <button
-              type="button"
-              onClick={() => setIndex((i) => (i + 1) % ACCOUNTS.length)}
-              aria-label="Next account"
-              className="flex h-7 w-7 items-center justify-center rounded-full border"
-              style={{ borderColor: "var(--color-line)", color: "var(--color-ink-soft)" }}
-            >
-              ›
-            </button>
+            ))}
           </div>
         </div>
       )}

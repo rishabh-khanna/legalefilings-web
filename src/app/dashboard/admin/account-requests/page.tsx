@@ -5,6 +5,7 @@ import { Clock, CheckCircle2, XCircle } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { STAFF_LEVEL_LABELS, type AccountType, type CustomerTier, type StaffLevel } from "@/lib/roles";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
+import { LoadingBlock } from "@/components/Spinner";
 
 type RequestRow = {
   id: string;
@@ -33,18 +34,14 @@ function describeRequest(r: RequestRow) {
   return level;
 }
 
-const STATUS_STYLE: Record<RequestRow["status"], { bg: string; fg: string }> = {
-  pending: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
-  approved: { bg: "#d0f4db", fg: "#116a2c" },
-  rejected: { bg: "#fde2e2", fg: "#b42318" },
-};
-
+// Reviewed (approved/rejected) history moved to its own page/nav item —
+// see /dashboard/admin/reviewed-account-requests — so this page is only
+// ever the pending review queue.
 export default function AccountRequestsPage() {
   const [requests, setRequests] = useState<RequestRow[] | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
-  const [tempPasswords, setTempPasswords] = useState<Record<string, string>>({});
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
@@ -84,7 +81,6 @@ export default function AccountRequestsPage() {
     });
     const data = await res.json();
     if (res.ok) {
-      setTempPasswords((prev) => ({ ...prev, [id]: data.tempPassword }));
       await load();
     } else {
       setError(data.error ?? "Failed to approve");
@@ -118,14 +114,16 @@ export default function AccountRequestsPage() {
     };
   }, [requests]);
 
+  const pendingRequests = useMemo(() => (requests ?? []).filter((r) => r.status === "pending"), [requests]);
+
   if (requests === null && !error) {
-    return <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>Loading…</p>;
+    return <LoadingBlock />;
   }
 
   return (
     <div>
-      <DashboardPageHero title="Account Requests" subtitle="Self-service staff signups and account requests submitted by your team.">
-        <div className="relative mt-6 grid grid-cols-3 gap-4">
+      <DashboardPageHero title="Account Requests" subtitle="Self-service staff signups and account requests submitted by your team — review and approve the pending ones here.">
+        <div className="relative mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <HeroKpi icon={Clock} label="Pending" value={stats.pending} />
           <HeroKpi icon={CheckCircle2} label="Approved" value={stats.approved} />
           <HeroKpi icon={XCircle} label="Rejected" value={stats.rejected} />
@@ -134,94 +132,97 @@ export default function AccountRequestsPage() {
 
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
-      <div className="mt-5 space-y-3">
-        {(requests ?? []).map((r) => {
-          const style = STATUS_STYLE[r.status];
-          return (
-            <div key={r.id} className="rounded-2xl border bg-white p-4 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold" style={{ color: "var(--color-ink)" }}>{r.full_name}</p>
-                  <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>{r.email} · {r.phone || "no phone"}</p>
-                  <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
-                    Requested: {describeRequest(r)}
-                  </p>
-                  <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>
-                    {r.requested_by ? `Requested by ${r.profiles?.full_name ?? "a staff member"}` : "Self-submitted application"}
-                  </p>
-                  {r.message && <p className="mt-1 text-sm italic" style={{ color: "var(--color-ink-soft)" }}>&ldquo;{r.message}&rdquo;</p>}
-                </div>
-                <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: style.bg, color: style.fg }}>
-                  {r.status}
-                </span>
-              </div>
-
-              {tempPasswords[r.id] && (
-                <p className="mt-3 rounded-lg px-3 py-2 text-xs" style={{ backgroundColor: "#d0f4db", color: "#116a2c" }}>
-                  Account created. Temporary password (share securely, once): <span className="font-mono font-semibold">{tempPasswords[r.id]}</span>
-                </p>
-              )}
-              {r.status === "rejected" && r.review_note && (
-                <p className="mt-3 rounded-lg px-3 py-2 text-xs" style={{ backgroundColor: "#fde2e2", color: "#b42318" }}>
-                  Rejected: {r.review_note}
-                </p>
-              )}
-
-              {r.status === "pending" && isAdmin && (
-                <div className="mt-3 flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => handleApprove(r.id)}
-                    className="rounded-full px-4 py-1.5 text-xs font-semibold text-white"
-                    style={{ backgroundColor: "var(--color-action)" }}
-                  >
-                    Approve
-                  </button>
-                  {rejectingId === r.id ? (
-                    <>
-                      <input
-                        autoFocus
-                        placeholder="Reason for rejection"
-                        value={rejectReason}
-                        onChange={(e) => setRejectReason(e.target.value)}
-                        className="rounded-lg border px-3 py-1.5 text-xs outline-none"
-                        style={{ borderColor: "var(--color-line)" }}
-                      />
-                      <button
-                        type="button"
-                        onClick={() => handleReject(r.id)}
-                        disabled={!rejectReason.trim()}
-                        className="rounded-full border px-4 py-1.5 text-xs font-semibold disabled:opacity-50"
-                        style={{ borderColor: "#b42318", color: "#b42318" }}
-                      >
-                        Confirm Reject
-                      </button>
-                      <button type="button" onClick={() => setRejectingId(null)} className="text-xs" style={{ color: "var(--color-ink-soft)" }}>
-                        Cancel
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setRejectingId(r.id)}
-                      className="rounded-full border px-4 py-1.5 text-xs font-semibold"
-                      style={{ borderColor: "var(--color-line)", color: "var(--color-ink-soft)" }}
-                    >
-                      Reject
-                    </button>
-                  )}
-                </div>
-              )}
-              {r.status === "pending" && !isAdmin && (
-                <p className="mt-3 text-xs" style={{ color: "var(--color-ink-soft)" }}>
-                  Awaiting admin approval.
-                </p>
-              )}
-            </div>
-          );
-        })}
-        {requests?.length === 0 && (
-          <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>No requests yet.</p>
+      <div className="mt-6 overflow-x-auto rounded-2xl border bg-white dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
+        <div className="border-b px-4 py-3" style={{ borderColor: "var(--color-line)" }}>
+          <h2 className="font-semibold" style={{ color: "var(--color-ink)" }}>Pending Account Requests</h2>
+          <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>Awaiting your review — approve to create the account or reject with a reason.</p>
+        </div>
+        {requests === null ? (
+          <p className="px-4 py-6 text-sm" style={{ color: "var(--color-ink-soft)" }}>Loading…</p>
+        ) : pendingRequests.length === 0 ? (
+          <p className="px-4 py-6 text-sm" style={{ color: "var(--color-ink-soft)" }}>No pending requests.</p>
+        ) : (
+          <table className="dt-table w-full min-w-[760px]">
+            <thead>
+              <tr className="text-left">
+                <th>#</th>
+                <th>Name</th>
+                <th>Contact</th>
+                <th>Requested</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pendingRequests.map((r, i) => (
+                <tr key={r.id}>
+                  <td style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
+                  <td>
+                    <p className="font-semibold" style={{ color: "var(--color-ink)" }}>{r.full_name}</p>
+                    {r.message && <p className="mt-0.5 max-w-xs text-xs italic" style={{ color: "var(--color-ink-soft)" }}>&ldquo;{r.message}&rdquo;</p>}
+                  </td>
+                  <td style={{ color: "var(--color-ink-soft)" }}>
+                    {r.email}
+                    <br />
+                    {r.phone || "no phone"}
+                  </td>
+                  <td style={{ color: "var(--color-ink-soft)" }}>
+                    {describeRequest(r)}
+                    <br />
+                    {r.requested_by ? `via ${r.profiles?.full_name ?? "a staff member"}` : "self-submitted"}
+                  </td>
+                  <td>
+                    {isAdmin ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleApprove(r.id)}
+                          className="rounded-full px-4 py-1.5 text-xs font-semibold text-white"
+                          style={{ backgroundColor: "var(--color-action)" }}
+                        >
+                          Approve
+                        </button>
+                        {rejectingId === r.id ? (
+                          <>
+                            <input
+                              autoFocus
+                              placeholder="Reason for rejection"
+                              value={rejectReason}
+                              onChange={(e) => setRejectReason(e.target.value)}
+                              className="w-32 rounded-lg border px-3 py-1.5 text-xs outline-none"
+                              style={{ borderColor: "var(--color-line)" }}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => handleReject(r.id)}
+                              disabled={!rejectReason.trim()}
+                              className="rounded-full border px-4 py-1.5 text-xs font-semibold disabled:opacity-50"
+                              style={{ borderColor: "#b42318", color: "#b42318" }}
+                            >
+                              Confirm
+                            </button>
+                            <button type="button" onClick={() => setRejectingId(null)} className="text-xs" style={{ color: "var(--color-ink-soft)" }}>
+                              Cancel
+                            </button>
+                          </>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setRejectingId(r.id)}
+                            className="rounded-full border px-4 py-1.5 text-xs font-semibold"
+                            style={{ borderColor: "var(--color-line)", color: "var(--color-ink-soft)" }}
+                          >
+                            Reject
+                          </button>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>Awaiting admin approval.</p>
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         )}
       </div>
     </div>

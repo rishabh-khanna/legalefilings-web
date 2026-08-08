@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { getReportingChainIds } from "@/lib/reporting-chain";
+import { canSeeAllOrgs } from "@/lib/organization";
 
 export async function GET() {
   const profile = await getCurrentProfile();
@@ -10,12 +11,17 @@ export async function GET() {
   }
 
   const supabase = getSupabaseAdmin();
+  // organizations(name) only actually matters for a platform_admin, who
+  // sees every org's correction requests pooled together here —
+  // without it, two same-named staff across different orgs (or just any
+  // row) are indistinguishable in the list.
   let query = supabase
     .from("attendance_corrections")
-    .select("*, profiles!attendance_corrections_staff_id_fkey(full_name)")
+    .select("*, profiles!attendance_corrections_staff_id_fkey(full_name), organizations(name)")
     .order("created_at", { ascending: false });
 
-  if (profile.account_type !== "admin") {
+  if (!canSeeAllOrgs(profile)) query = query.eq("organization_id", profile.organization_id);
+  if (profile.account_type !== "admin" && !canSeeAllOrgs(profile)) {
     const chain = await getReportingChainIds(profile.id);
     query = query.in("staff_id", [profile.id, ...chain]);
   }
@@ -41,6 +47,7 @@ export async function POST(request: Request) {
   const { data, error } = await supabase
     .from("attendance_corrections")
     .insert({
+      organization_id: profile.organization_id,
       staff_id: profile.id,
       date,
       requested_check_in: checkIn ?? null,

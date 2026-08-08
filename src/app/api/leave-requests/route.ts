@@ -2,23 +2,89 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { getReportingChainIds } from "@/lib/reporting-chain";
+import { canSeeAllOrgs } from "@/lib/organization";
+import { getLeaveBalance, type LeaveType } from "@/lib/leave-balance";
 
-// A leader/group_leader sees their own request plus their reporting
-// chain's (so they can review their team, not just themselves); admin
-// sees everything; a rater sees only their own.
-export async function GET() {
+function daysBetweenInclusive(startDate: string, endDate: string): number {
+  const start = new Date(`${startDate}T00:00:00Z`);
+  const end = new Date(`${endDate}T00:00:00Z`);
+  return Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
+}
+
+// A staff member submitting several separate requests, each individually
+// within their remaining balance, could previously get all of them
+// approved and end up over the cap — the earlier "hard cap" check only
+// compared against already-*approved* `used` days, not days already
+// tied up in other still-pending requests for the same type. Pending
+// requests count against the cap too, same as approved ones.
+async function sumCommittedDays(
+  supabase: ReturnType<typeof import("@/lib/supabase-admin").getSupabaseAdmin>,
+  staffId: string,
+  leaveTypeId: string,
+  year: number
+): Promise<number> {
+  const { data } = await supabase
+    .from("leave_requests")
+    .select("start_date, end_date")
+    .eq("staff_id", staffId)
+    .eq("leave_type_id", leaveTypeId)
+    .in("status", ["pending", "approved"])
+    .gte("start_date", `${year}-01-01`)
+    .lte("start_date", `${year}-12-31`);
+  return (data ?? []).reduce((sum, r) => sum + daysBetweenInclusive(r.start_date, r.end_date), 0);
+}
+
+// A day already covered by another pending/approved request (of any
+// leave type, paid or unpaid) can't also be requested again — nothing
+// stopped the same calendar day from being double-booked across two
+// separate requests before this check existed.
+async function hasOverlappingRequest(
+  supabase: ReturnType<typeof import("@/lib/supabase-admin").getSupabaseAdmin>,
+  staffId: string,
+  startDate: string,
+  endDate: string
+): Promise<boolean> {
+  const { data } = await supabase
+    .from("leave_requests")
+    .select("id")
+    .eq("staff_id", staffId)
+    .in("status", ["pending", "approved"])
+    .lte("start_date", endDate)
+    .gte("end_date", startDate)
+    .limit(1);
+  return (data ?? []).length > 0;
+}
+
+// Without ?scope=mine: a leader/group_leader sees their own request plus
+// their reporting chain's (so they can review their team, not just
+// themselves); admin sees everything in their own org; a rater sees only
+// their own. This is what the Team Leave Requests admin page wants.
+// With ?scope=mine: always just the caller's own requests, regardless of
+// role — the personal "My Workspace > Leave" page uses this, since an
+// admin/leader applying for their own leave shouldn't see their whole
+// team's requests folded into what reads as their personal history.
+export async function GET(request: Request) {
   const profile = await getCurrentProfile();
   if (!profile || profile.account_type === "customer") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const { searchParams } = new URL(request.url);
+  const mineOnly = searchParams.get("scope") === "mine";
+
   const supabase = getSupabaseAdmin();
+  // organizations(name) only actually matters for a platform_admin, who
+  // sees every org's leave requests pooled together here — without it,
+  // rows from different orgs are indistinguishable in the list.
   let query = supabase
     .from("leave_requests")
-    .select("*, profiles!leave_requests_staff_id_fkey(full_name)")
+    .select("*, profiles!leave_requests_staff_id_fkey(full_name), leave_types(name, code), organizations(name)")
     .order("created_at", { ascending: false });
 
-  if (profile.account_type !== "admin") {
+  if (!canSeeAllOrgs(profile)) query = query.eq("organization_id", profile.organization_id);
+  if (mineOnly) {
+    query = query.eq("staff_id", profile.id);
+  } else if (profile.account_type !== "admin" && !canSeeAllOrgs(profile)) {
     const chain = await getReportingChainIds(profile.id);
     query = query.in("staff_id", [profile.id, ...chain]);
   }
@@ -28,6 +94,15 @@ export async function GET() {
   return NextResponse.json({ requests: data });
 }
 
+// POST /api/leave-requests — either the legacy "leaveType: 'unpaid'"
+// path (no balance involved, always allowed — Unpaid Leave is
+// deliberately uncapped), or "leaveTypeId" pointing at one of the org's
+// configured leave_types. In the latter case the request is hard-capped
+// at the remaining balance — a request that would exceed it is rejected
+// outright rather than auto-splitting the overflow into a separate
+// Unpaid request (an earlier version of this route did that; the user
+// asked for a strict block instead — apply within your balance or use
+// Unpaid Leave, no silent partial-conversion).
 export async function POST(request: Request) {
   const profile = await getCurrentProfile();
   if (!profile || profile.account_type === "customer") {
@@ -35,17 +110,63 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => null);
-  const { leaveType, startDate, endDate, reason } = body ?? {};
-  if (!leaveType || !startDate || !endDate) {
-    return NextResponse.json({ error: "leaveType, startDate, and endDate are required" }, { status: 400 });
+  const { leaveTypeId, startDate, endDate, reason } = body ?? {};
+  if (!startDate || !endDate) {
+    return NextResponse.json({ error: "startDate and endDate are required" }, { status: 400 });
+  }
+  if (daysBetweenInclusive(startDate, endDate) < 1) {
+    return NextResponse.json({ error: "endDate must be on or after startDate" }, { status: 400 });
   }
 
   const supabase = getSupabaseAdmin();
+
+  if (await hasOverlappingRequest(supabase, profile.id, startDate, endDate)) {
+    return NextResponse.json({ error: "This date range overlaps another pending or approved leave request." }, { status: 400 });
+  }
+
+  if (!leaveTypeId) {
+    // Explicit Unpaid — no balance to check.
+    const { data, error } = await supabase
+      .from("leave_requests")
+      .insert({ organization_id: profile.organization_id, staff_id: profile.id, leave_type: "unpaid", start_date: startDate, end_date: endDate, reason: reason ?? null })
+      .select()
+      .single();
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, requests: [data] }, { status: 201 });
+  }
+
+  const { data: leaveType } = await supabase
+    .from("leave_types")
+    .select("*")
+    .eq("id", leaveTypeId)
+    .eq("organization_id", profile.organization_id)
+    .eq("is_active", true)
+    .maybeSingle<LeaveType>();
+  if (!leaveType) return NextResponse.json({ error: "Invalid leaveTypeId" }, { status: 400 });
+
+  // Balance is keyed by the leave's own year, not "today" — an
+  // end-of-December request for leave starting in January needs next
+  // year's balance, not this year's (which is what getLeaveBalance
+  // would default to without this).
+  const requestYear = new Date(`${startDate}T00:00:00Z`).getUTCFullYear();
+  const balance = await getLeaveBalance(supabase, profile.id, leaveType, profile.organization_id, profile.date_of_joining, requestYear);
+  const alreadyCommitted = await sumCommittedDays(supabase, profile.id, leaveType.id, requestYear);
+  const trueAvailable = balance.available - alreadyCommitted;
+  const requestedDays = daysBetweenInclusive(startDate, endDate);
+  if (requestedDays > trueAvailable) {
+    return NextResponse.json(
+      { error: `Only ${Math.max(0, trueAvailable).toFixed(1)} day${trueAvailable === 1 ? "" : "s"} of ${leaveType.name} available — this request needs ${requestedDays}. Reduce the range or apply for Unpaid Leave instead.` },
+      { status: 400 }
+    );
+  }
+
   const { data, error } = await supabase
     .from("leave_requests")
     .insert({
+      organization_id: profile.organization_id,
       staff_id: profile.id,
-      leave_type: leaveType,
+      leave_type: "paid",
+      leave_type_id: leaveType.id,
       start_date: startDate,
       end_date: endDate,
       reason: reason ?? null,
@@ -53,5 +174,5 @@ export async function POST(request: Request) {
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ ok: true, request: data }, { status: 201 });
+  return NextResponse.json({ ok: true, requests: [data] }, { status: 201 });
 }

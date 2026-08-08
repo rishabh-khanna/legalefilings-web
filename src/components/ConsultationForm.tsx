@@ -13,11 +13,17 @@ export function ConsultationForm({
   serviceTitle,
   plan,
   variant = "light",
+  orgSlug,
 }: {
   serviceTitle?: string;
   /** Which pricing tier the user picked before opening this form, if any — carried through to the lead record so it's there for the payment step later. */
   plan?: SelectedPlan;
   variant?: "light" | "dark";
+  /** A tenant org's own public lead-capture page (see /org/[slug]) passes
+   * its slug through so the lead lands in that org instead of Legal
+   * Efilings' own — every other use of this form (the main site) omits
+   * it, which keeps the existing default behavior. */
+  orgSlug?: string;
 }) {
   const [status, setStatus] = useState<Status>("idle");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -40,6 +46,7 @@ export function ConsultationForm({
       service: serviceTitle,
       plan: plan?.name,
       planPrice: plan?.price,
+      orgSlug,
     };
 
     try {

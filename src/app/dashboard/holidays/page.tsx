@@ -1,13 +1,21 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { PartyPopper, Landmark, Building2 } from "lucide-react";
+import { PartyPopper, Landmark, Building2, Plus } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useActionMessage } from "@/lib/use-action-message";
 import { ActionMessage } from "@/components/ActionMessage";
-import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
+import { DashboardPageHero, HeroAction, HeroKpi } from "@/components/crm/DashboardPageHero";
+import { LoadingBlock } from "@/components/Spinner";
 
-type Holiday = { id: string; name: string; date: string; type: "national" | "festival" | "company" };
+type Holiday = {
+  id: string;
+  name: string;
+  date: string;
+  type: "national" | "festival" | "company";
+  organization_id: string;
+  organizations?: { name: string | null } | null;
+};
 
 const TYPE_STYLE: Record<Holiday["type"], { bg: string; fg: string }> = {
   national: { bg: "#fde2e2", fg: "#b42318" },
@@ -68,7 +76,8 @@ export default function HolidaysPage() {
     }
   }
 
-  async function handleDelete(id: string) {
+  async function handleDelete(id: string, name: string) {
+    if (!window.confirm(`Remove the holiday "${name}"? This can't be undone.`)) return;
     const res = await fetch(`/api/holidays/${id}`, { method: "DELETE" });
     if (res.ok) {
       await load();
@@ -87,32 +96,39 @@ export default function HolidaysPage() {
     return { national, festival, company };
   }, [holidays]);
 
+  const [typeFilter, setTypeFilter] = useState<Holiday["type"] | "all">("all");
+  const filteredHolidays = useMemo(() => {
+    return holidays.filter((h) => typeFilter === "all" || h.type === typeFilter);
+  }, [holidays, typeFilter]);
+
   if (loading) {
-    return <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>Loading…</p>;
+    return <LoadingBlock />;
   }
+
+  // Only a platform_admin's request ever returns more than one org's
+  // holidays pooled together — the column is only worth showing once
+  // it's actually ambiguous which org a row belongs to.
+  const spansMultipleOrgs = new Set(holidays.map((h) => h.organization_id)).size > 1;
 
   return (
     <div>
-      <DashboardPageHero title="Holiday Calendar" subtitle="National, festival, and company holidays for the year.">
-        <div className="relative mt-6 grid grid-cols-3 gap-4">
+      <DashboardPageHero
+        title="Holiday Calendar"
+        subtitle="National, festival, and company holidays for the year."
+        action={
+          isAdmin ? (
+            <HeroAction icon={showForm ? undefined : Plus} onClick={() => setShowForm((v) => !v)}>
+              {showForm ? "Cancel" : "Add Holiday"}
+            </HeroAction>
+          ) : undefined
+        }
+      >
+        <div className="relative mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <HeroKpi icon={Landmark} label="National" value={holidayStats.national} />
           <HeroKpi icon={PartyPopper} label="Festival" value={holidayStats.festival} />
           <HeroKpi icon={Building2} label="Company" value={holidayStats.company} />
         </div>
       </DashboardPageHero>
-
-      {isAdmin && (
-        <div className="flex flex-wrap items-center justify-end gap-4">
-          <button
-            type="button"
-            onClick={() => setShowForm((v) => !v)}
-            className="rounded-full px-4 py-2 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
-            style={{ backgroundColor: "var(--color-action)" }}
-          >
-            {showForm ? "Cancel" : "+ Add Holiday"}
-          </button>
-        </div>
-      )}
 
       <div className="mt-3">
         <ActionMessage message={message} />
@@ -133,30 +149,77 @@ export default function HolidaysPage() {
         </form>
       )}
 
-      <div className="mt-5 space-y-2">
-        {holidays.map((h) => {
-          const style = TYPE_STYLE[h.type];
-          return (
-            <div key={h.id} className="flex items-center justify-between gap-3 rounded-xl border bg-white p-4 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-              <div>
-                <p className="font-medium" style={{ color: "var(--color-ink)" }}>{h.name}</p>
-                <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>
-                  {new Date(h.date).toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: style.bg, color: style.fg }}>{h.type}</span>
-                {isAdmin && (
-                  <button type="button" onClick={() => handleDelete(h.id)} className="text-xs font-semibold" style={{ color: "#b42318" }}>
-                    Remove
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-        {holidays.length === 0 && <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>No holidays added yet.</p>}
-      </div>
+      {holidays.length !== 0 && (
+        <div className="mt-4 flex flex-wrap items-center gap-2">
+          <select
+            value={typeFilter}
+            onChange={(e) => setTypeFilter(e.target.value as Holiday["type"] | "all")}
+            className="rounded-lg border px-2.5 py-1.5 text-sm outline-none"
+            style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
+          >
+            <option value="all">All types</option>
+            <option value="national">National</option>
+            <option value="festival">Festival</option>
+            <option value="company">Company</option>
+          </select>
+          {typeFilter !== "all" && (
+            <button
+              type="button"
+              onClick={() => setTypeFilter("all")}
+              className="text-xs font-semibold"
+              style={{ color: "var(--color-action-dark)" }}
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+      )}
+
+      {holidays.length === 0 ? (
+        <p className="mt-5 text-sm" style={{ color: "var(--color-ink-soft)" }}>No holidays added yet.</p>
+      ) : filteredHolidays.length === 0 ? (
+        <p className="mt-5 text-sm" style={{ color: "var(--color-ink-soft)" }}>No holidays match this filter.</p>
+      ) : (
+        <div className="mt-5 overflow-x-auto rounded-2xl border bg-white dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
+          <table className="dt-table w-full min-w-[480px]">
+            <thead>
+              <tr className="text-left">
+                <th>#</th>
+                <th>Name</th>
+                <th>Date</th>
+                <th>Type</th>
+                {spansMultipleOrgs && <th>Organization</th>}
+                {isAdmin && <th></th>}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredHolidays.map((h, i) => {
+                const style = TYPE_STYLE[h.type];
+                return (
+                  <tr key={h.id}>
+                    <td style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
+                    <td className="font-medium" style={{ color: "var(--color-ink)" }}>{h.name}</td>
+                    <td style={{ color: "var(--color-ink-soft)" }}>
+                      {new Date(h.date).toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short", year: "numeric" })}
+                    </td>
+                    <td>
+                      <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: style.bg, color: style.fg }}>{h.type}</span>
+                    </td>
+                    {spansMultipleOrgs && <td style={{ color: "var(--color-ink-soft)" }}>{h.organizations?.name ?? "—"}</td>}
+                    {isAdmin && (
+                      <td>
+                        <button type="button" onClick={() => handleDelete(h.id, h.name)} className="text-xs font-semibold" style={{ color: "#b42318" }}>
+                          Remove
+                        </button>
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

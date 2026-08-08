@@ -23,12 +23,17 @@ type LeadAcknowledgementInput = {
   service?: string;
   plan?: string;
   planPrice?: string;
+  // A tenant org's own public lead-capture page (/org/[slug]) passes its
+  // name through so this doesn't read as Legal Efilings acknowledging a
+  // lead that was actually submitted to someone else's CRM.
+  orgName?: string;
 };
 
 // A self-contained, table-based HTML email (inline styles only, no external
 // CSS/JS) — the layout choices here are deliberate for compatibility with
 // Outlook desktop's old rendering engine, which ignores flexbox/grid.
 function renderAcknowledgementHtml(lead: LeadAcknowledgementInput) {
+  const orgName = lead.orgName ?? SITE_NAME;
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://legalefilings-web.vercel.app";
   const logoUrl = `${siteUrl}/images/logo.png`;
   const ink = "#0f172a";
@@ -92,7 +97,7 @@ function renderAcknowledgementHtml(lead: LeadAcknowledgementInput) {
             <!-- Header -->
             <tr>
               <td style="background:linear-gradient(135deg, ${accent} 0%, #ffe27a 100%);padding:28px 32px;">
-                <img src="${logoUrl}" width="150" alt="${SITE_NAME}" style="display:block;border:0;" />
+                <img src="${logoUrl}" width="150" alt="${orgName}" style="display:block;border:0;" />
               </td>
             </tr>
 
@@ -111,7 +116,7 @@ function renderAcknowledgementHtml(lead: LeadAcknowledgementInput) {
                   </tr>
                 </table>
                 <p style="margin:16px 0 0 0;font:14px/1.6 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${inkSoft};">
-                  Thanks for reaching out to ${SITE_NAME}. We've logged your request and a real compliance expert will be in touch shortly — here's a quick summary of what you shared.
+                  Thanks for reaching out to ${orgName}. We've logged your request and a real compliance expert will be in touch shortly — here's a quick summary of what you shared.
                 </p>
               </td>
             </tr>
@@ -152,7 +157,7 @@ function renderAcknowledgementHtml(lead: LeadAcknowledgementInput) {
             <tr>
               <td style="padding:32px;">
                 <hr style="border:none;border-top:1px solid #e8ecf2;margin:0 0 20px 0;" />
-                <p style="margin:0 0 4px 0;font:600 13px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${ink};">${SITE_NAME}</p>
+                <p style="margin:0 0 4px 0;font:600 13px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${ink};">${orgName}</p>
                 <p style="margin:0;font:12px/1.6 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${inkSoft};">
                   This is an automated acknowledgment — a member of our team will reach out personally. If this wasn't you, you can safely ignore this email.
                 </p>
@@ -172,13 +177,14 @@ function renderAcknowledgementHtml(lead: LeadAcknowledgementInput) {
 
 export async function sendLeadAcknowledgementEmail(lead: LeadAcknowledgementInput) {
   const fromAddress = process.env.EMAIL_FROM_ADDRESS;
-  const fromName = process.env.EMAIL_FROM_NAME ?? SITE_NAME;
+  const orgName = lead.orgName ?? SITE_NAME;
+  const fromName = process.env.EMAIL_FROM_NAME ?? orgName;
   if (!fromAddress) throw new Error("Missing EMAIL_FROM_ADDRESS env var");
 
   await getTransporter().sendMail({
     from: `"${fromName}" <${fromAddress}>`,
     to: lead.email,
-    subject: `We've received your request — ${SITE_NAME}`,
+    subject: `We've received your request — ${orgName}`,
     html: renderAcknowledgementHtml(lead),
   });
 }
@@ -190,9 +196,14 @@ type PaymentRequestInput = {
   plan: string;
   amount: number;
   paymentUrl: string;
+  // The staff member's own org — a tenant's admin/staff buying a plan
+  // for their own customer (see /api/orders/buy-for-customer) shouldn't
+  // send an email that reads as coming from Legal Efilings.
+  orgName?: string;
 };
 
 function renderPaymentRequestHtml(input: PaymentRequestInput) {
+  const orgName = input.orgName ?? SITE_NAME;
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://legalefilings-web.vercel.app";
   const logoUrl = `${siteUrl}/images/logo.png`;
   const ink = "#0f172a";
@@ -209,7 +220,7 @@ function renderPaymentRequestHtml(input: PaymentRequestInput) {
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,0.06),0 24px 48px rgba(15,23,42,0.10);">
             <tr>
               <td style="background:linear-gradient(135deg, ${accent} 0%, #ffe27a 100%);padding:28px 32px;">
-                <img src="${logoUrl}" width="150" alt="${SITE_NAME}" style="display:block;border:0;" />
+                <img src="${logoUrl}" width="150" alt="${orgName}" style="display:block;border:0;" />
               </td>
             </tr>
             <tr>
@@ -246,7 +257,7 @@ function renderPaymentRequestHtml(input: PaymentRequestInput) {
             <tr>
               <td style="padding:0 32px 32px 32px;">
                 <hr style="border:none;border-top:1px solid #e8ecf2;margin:0 0 20px 0;" />
-                <p style="margin:0;font:600 13px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${ink};">${SITE_NAME}</p>
+                <p style="margin:0;font:600 13px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${ink};">${orgName}</p>
                 <p style="margin:4px 0 0 0;font:12px/1.6 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${inkSoft};">Real experts. Real filings. No queues.</p>
               </td>
             </tr>
@@ -260,13 +271,14 @@ function renderPaymentRequestHtml(input: PaymentRequestInput) {
 
 export async function sendPaymentRequestEmail(input: PaymentRequestInput) {
   const fromAddress = process.env.EMAIL_FROM_ADDRESS;
-  const fromName = process.env.EMAIL_FROM_NAME ?? SITE_NAME;
+  const orgName = input.orgName ?? SITE_NAME;
+  const fromName = process.env.EMAIL_FROM_NAME ?? orgName;
   if (!fromAddress) throw new Error("Missing EMAIL_FROM_ADDRESS env var");
 
   await getTransporter().sendMail({
     from: `"${fromName}" <${fromAddress}>`,
     to: input.customerEmail,
-    subject: `Payment request for ${input.service} — ${SITE_NAME}`,
+    subject: `Payment request for ${input.service} — ${orgName}`,
     html: renderPaymentRequestHtml(input),
   });
 }
@@ -279,9 +291,13 @@ type PaymentConfirmationInput = {
   plan: string;
   amount: number;
   paymentId: string;
+  // The invoice's own issuing org — a tenant org's customer paying their
+  // invoice shouldn't get a receipt branded as Legal Efilings.
+  orgName?: string;
 };
 
 function renderPaymentConfirmationHtml(input: PaymentConfirmationInput) {
+  const orgName = input.orgName ?? SITE_NAME;
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://legalefilings-web.vercel.app";
   const logoUrl = `${siteUrl}/images/logo.png`;
   const ink = "#0f172a";
@@ -299,7 +315,7 @@ function renderPaymentConfirmationHtml(input: PaymentConfirmationInput) {
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,0.06),0 24px 48px rgba(15,23,42,0.10);">
             <tr>
               <td style="background:${greenTint};padding:28px 32px;">
-                <img src="${logoUrl}" width="150" alt="${SITE_NAME}" style="display:block;border:0;" />
+                <img src="${logoUrl}" width="150" alt="${orgName}" style="display:block;border:0;" />
               </td>
             </tr>
             <tr>
@@ -331,7 +347,7 @@ function renderPaymentConfirmationHtml(input: PaymentConfirmationInput) {
             <tr>
               <td style="padding:0 32px 32px 32px;">
                 <hr style="border:none;border-top:1px solid #e8ecf2;margin:0 0 20px 0;" />
-                <p style="margin:0;font:600 13px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${ink};">${SITE_NAME}</p>
+                <p style="margin:0;font:600 13px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${ink};">${orgName}</p>
                 <p style="margin:4px 0 0 0;font:12px/1.6 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${inkSoft};">Real experts. Real filings. No queues.</p>
               </td>
             </tr>
@@ -345,14 +361,85 @@ function renderPaymentConfirmationHtml(input: PaymentConfirmationInput) {
 
 export async function sendPaymentConfirmationEmail(input: PaymentConfirmationInput) {
   const fromAddress = process.env.EMAIL_FROM_ADDRESS;
-  const fromName = process.env.EMAIL_FROM_NAME ?? SITE_NAME;
+  const orgName = input.orgName ?? SITE_NAME;
+  const fromName = process.env.EMAIL_FROM_NAME ?? orgName;
   if (!fromAddress) throw new Error("Missing EMAIL_FROM_ADDRESS env var");
 
   await getTransporter().sendMail({
     from: `"${fromName}" <${fromAddress}>`,
     to: input.customerEmail,
-    subject: `Payment received — ${input.invoiceNumber} — ${SITE_NAME}`,
+    subject: `Payment received — ${input.invoiceNumber} — ${orgName}`,
     html: renderPaymentConfirmationHtml(input),
+  });
+}
+
+type OrderCompletedInput = {
+  customerName: string;
+  customerEmail: string;
+  service: string;
+  plan: string;
+  // The org that actually did the filing — same reasoning as every
+  // other customer-facing email here: a tenant org's own customer
+  // shouldn't get a completion notice branded as Legal Efilings.
+  orgName?: string;
+};
+
+function renderOrderCompletedHtml(input: OrderCompletedInput) {
+  const orgName = input.orgName ?? SITE_NAME;
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://legalefilings-web.vercel.app";
+  const logoUrl = `${siteUrl}/images/logo.png`;
+  const ink = "#0f172a";
+  const inkSoft = "#5b6b81";
+  const green = "#116a2c";
+  const greenTint = "#d0f4db";
+  const paper = "#f6f8fb";
+
+  return `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:${paper};">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${paper};padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,0.06),0 24px 48px rgba(15,23,42,0.10);">
+            <tr>
+              <td style="background:${greenTint};padding:28px 32px;">
+                <img src="${logoUrl}" width="150" alt="${orgName}" style="display:block;border:0;" />
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px;">
+                <p style="margin:0;font:700 20px/1.3 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${green};">Your ${input.service} is complete, ${input.customerName.split(" ")[0]}!</p>
+                <p style="margin:14px 0 0 0;font:14px/1.6 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${inkSoft};">
+                  Great news — our team has finished work on your ${input.plan} plan. Sign in to your dashboard to view your order and any documents we've delivered.
+                </p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 32px 32px 32px;">
+                <hr style="border:none;border-top:1px solid #e8ecf2;margin:0 0 20px 0;" />
+                <p style="margin:0;font:600 13px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${ink};">${orgName}</p>
+                <p style="margin:4px 0 0 0;font:12px/1.6 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${inkSoft};">Real experts. Real filings. No queues.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+export async function sendOrderCompletedEmail(input: OrderCompletedInput) {
+  const fromAddress = process.env.EMAIL_FROM_ADDRESS;
+  const orgName = input.orgName ?? SITE_NAME;
+  const fromName = process.env.EMAIL_FROM_NAME ?? orgName;
+  if (!fromAddress) throw new Error("Missing EMAIL_FROM_ADDRESS env var");
+
+  await getTransporter().sendMail({
+    from: `"${fromName}" <${fromAddress}>`,
+    to: input.customerEmail,
+    subject: `Your ${input.service} is complete — ${orgName}`,
+    html: renderOrderCompletedHtml(input),
   });
 }
 
@@ -438,7 +525,12 @@ export async function sendAccountCreatedEmail(input: AccountCreatedInput) {
   });
 }
 
-function renderBirthdayHtml(firstName: string) {
+// orgName: the recipient's own tenant org (falls back to SITE_NAME for
+// Legal Efilings' own staff, and for any org that hasn't set a distinct
+// brand name) — the birthday cron runs across every org's staff at once
+// (see /api/cron/birthdays), so this can't just hardcode Legal Efilings'
+// branding the way the rest of this file's Legal-Efilings-only emails do.
+function renderBirthdayHtml(firstName: string, orgName: string) {
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://legalefilings-web.vercel.app";
   const logoUrl = `${siteUrl}/images/logo.png`;
   const ink = "#0f172a";
@@ -454,7 +546,7 @@ function renderBirthdayHtml(firstName: string) {
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,0.06),0 24px 48px rgba(15,23,42,0.10);">
             <tr>
               <td style="background:linear-gradient(135deg, ${accent} 0%, #ffe27a 100%);padding:28px 32px;">
-                <img src="${logoUrl}" width="150" alt="${SITE_NAME}" style="display:block;border:0;" />
+                <img src="${logoUrl}" width="150" alt="${orgName}" style="display:block;border:0;" />
               </td>
             </tr>
             <tr>
@@ -462,14 +554,14 @@ function renderBirthdayHtml(firstName: string) {
                 <p style="margin:0;font-size:44px;line-height:1;">🎉🎂🎈</p>
                 <p style="margin:20px 0 0 0;font:700 24px/1.3 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${ink};">Happy Birthday, ${firstName}!</p>
                 <p style="margin:14px 0 0 0;font:14px/1.7 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${inkSoft};">
-                  Wishing you a fantastic day filled with good things. Thank you for being part of the ${SITE_NAME} family — here's to another great year ahead!
+                  Wishing you a fantastic day filled with good things. Thank you for being part of the ${orgName} family — here's to another great year ahead!
                 </p>
               </td>
             </tr>
             <tr>
               <td style="padding:0 32px 32px 32px;">
                 <hr style="border:none;border-top:1px solid #e8ecf2;margin:0 0 20px 0;" />
-                <p style="margin:0;font:600 13px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${ink};">${SITE_NAME}</p>
+                <p style="margin:0;font:600 13px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${ink};">${orgName}</p>
                 <p style="margin:4px 0 0 0;font:12px/1.6 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${inkSoft};">Real experts. Real filings. No queues.</p>
               </td>
             </tr>
@@ -481,15 +573,114 @@ function renderBirthdayHtml(firstName: string) {
 </html>`;
 }
 
-export async function sendBirthdayEmail(person: { name: string; email: string }) {
+// Bill Reminder (Smart Automation #5) — plain and short by design, this
+// is a "don't forget" nudge for a recurring expense a few days out, not
+// a branded marketing email; it's the same content regardless of which
+// org's customer it's going to, so it doesn't need the orgName
+// parametrization the other emails in this file got in the multi-tenant
+// pass — a business's own recurring bill reminder is inherently personal
+// to them either way.
+export async function sendBillReminderEmail(input: { email: string; description: string; amount: number; dueDate: string }) {
   const fromAddress = process.env.EMAIL_FROM_ADDRESS;
   const fromName = process.env.EMAIL_FROM_NAME ?? SITE_NAME;
+  if (!fromAddress) throw new Error("Missing EMAIL_FROM_ADDRESS env var");
+
+  const dueDateLabel = new Date(input.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+
+  await getTransporter().sendMail({
+    from: `"${fromName}" <${fromAddress}>`,
+    to: input.email,
+    subject: `Upcoming bill: ${input.description} due ${dueDateLabel}`,
+    html: `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:#f6f8fb;font-family:-apple-system,Segoe UI,Roboto,Arial,sans-serif;">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#f6f8fb;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:480px;background:#ffffff;border-radius:16px;padding:28px;box-shadow:0 1px 2px rgba(15,23,42,0.06),0 24px 48px rgba(15,23,42,0.10);">
+            <tr>
+              <td>
+                <p style="margin:0;font:700 18px/1.3;color:#0f172a;">Upcoming bill reminder</p>
+                <p style="margin:14px 0 0 0;font:14px/1.6;color:#5b6b81;">
+                  <strong>${input.description}</strong> — ₹${input.amount.toLocaleString("en-IN")} is due on <strong>${dueDateLabel}</strong>.
+                </p>
+                <p style="margin:14px 0 0 0;font:13px/1.6;color:#5b6b81;">This will be recorded automatically in your Business Finance books on the due date.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`,
+  });
+}
+
+export async function sendBirthdayEmail(person: { name: string; email: string; orgName?: string }) {
+  const fromAddress = process.env.EMAIL_FROM_ADDRESS;
+  const orgName = person.orgName ?? SITE_NAME;
+  const fromName = process.env.EMAIL_FROM_NAME ?? orgName;
   if (!fromAddress) throw new Error("Missing EMAIL_FROM_ADDRESS env var");
 
   await getTransporter().sendMail({
     from: `"${fromName}" <${fromAddress}>`,
     to: person.email,
-    subject: `🎂 Happy Birthday from ${SITE_NAME}!`,
-    html: renderBirthdayHtml(person.name.split(" ")[0]),
+    subject: `🎂 Happy Birthday from ${orgName}!`,
+    html: renderBirthdayHtml(person.name.split(" ")[0], orgName),
+  });
+}
+
+type InvoiceEmailInput = {
+  customerName: string;
+  customerEmail: string;
+  invoiceNumber: string;
+  amount: number;
+  pdfBuffer: Buffer;
+  // The invoice's own issuing org — a tenant org's invoice shouldn't
+  // arrive branded as Legal Efilings.
+  orgName?: string;
+};
+
+function renderInvoiceEmailHtml(input: InvoiceEmailInput) {
+  const orgName = input.orgName ?? SITE_NAME;
+  const ink = "#0f172a";
+  const inkSoft = "#5b6b81";
+  const paper = "#f6f8fb";
+  return `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:${paper};">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${paper};padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background:#ffffff;border-radius:20px;padding:32px;box-shadow:0 1px 2px rgba(15,23,42,0.06),0 24px 48px rgba(15,23,42,0.10);">
+            <tr>
+              <td>
+                <p style="margin:0;font:700 20px/1.3 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${ink};">Invoice ${input.invoiceNumber}</p>
+                <p style="margin:14px 0 0 0;font:14px/1.6 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${inkSoft};">
+                  Hi ${input.customerName.split(" ")[0]}, please find your invoice for ₹${input.amount.toLocaleString("en-IN")} attached to this email.
+                </p>
+                <p style="margin:16px 0 0 0;font:13px/1.6 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${inkSoft};">${orgName}</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+export async function sendInvoiceEmail(input: InvoiceEmailInput) {
+  const fromAddress = process.env.EMAIL_FROM_ADDRESS;
+  const orgName = input.orgName ?? SITE_NAME;
+  const fromName = process.env.EMAIL_FROM_NAME ?? orgName;
+  if (!fromAddress) throw new Error("Missing EMAIL_FROM_ADDRESS env var");
+
+  await getTransporter().sendMail({
+    from: `"${fromName}" <${fromAddress}>`,
+    to: input.customerEmail,
+    subject: `Invoice ${input.invoiceNumber} — ${orgName}`,
+    html: renderInvoiceEmailHtml(input),
+    attachments: [{ filename: `${input.invoiceNumber}.pdf`, content: input.pdfBuffer }],
   });
 }

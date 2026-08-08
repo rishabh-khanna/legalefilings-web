@@ -3,9 +3,14 @@
 import { useEffect, useState } from "react";
 import { StateSelect } from "@/components/StateSelect";
 import { CitySelect } from "@/components/CitySelect";
+import { RequiredMark } from "@/components/RequiredMark";
 import { STAFF_LEVEL_LABELS } from "@/lib/roles";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { DashboardPageHero } from "@/components/crm/DashboardPageHero";
+import { LoadingBlock } from "@/components/Spinner";
+
+type UnassignedLead = { id: string; name: string; email: string; phone: string; service?: string };
+type StaffOption = { id: string; full_name: string | null; designation: string | null };
 
 export default function CreateUserPage() {
   const [isAdmin, setIsAdmin] = useState(false);
@@ -23,6 +28,10 @@ export default function CreateUserPage() {
   const [message, setMessage] = useState("");
   const [customerTier, setCustomerTier] = useState<"free" | "paid">("free");
   const [staffLevel, setStaffLevel] = useState<"rater" | "leader" | "group_leader">("rater");
+  const [unassignedLeads, setUnassignedLeads] = useState<UnassignedLead[]>([]);
+  const [assignLeadId, setAssignLeadId] = useState("");
+  const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
+  const [reportsTo, setReportsTo] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string; password?: string } | null>(null);
 
@@ -34,7 +43,19 @@ export default function CreateUserPage() {
       } = await supabase.auth.getUser();
       if (user) {
         const { data: profile } = await supabase.from("profiles").select("account_type").eq("id", user.id).single();
-        setIsAdmin(profile?.account_type === "admin");
+        const admin = profile?.account_type === "admin";
+        setIsAdmin(admin);
+        if (admin) {
+          const [leadsRes, employeesRes] = await Promise.all([fetch("/api/leads"), fetch("/api/admin/employees")]);
+          const leadsData = await leadsRes.json();
+          if (leadsRes.ok) {
+            setUnassignedLeads(
+              (leadsData.leads ?? []).filter((l: { assignedTo: string }) => l.assignedTo === "Unassigned")
+            );
+          }
+          const employeesData = await employeesRes.json();
+          if (employeesRes.ok) setStaffOptions(employeesData.employees ?? []);
+        }
       }
       setCheckingRole(false);
     }, 0);
@@ -43,6 +64,10 @@ export default function CreateUserPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (accountType !== "customer" && (!department.trim() || !designation.trim())) {
+      setResult({ ok: false, text: "Department and Designation are required for staff and admin accounts." });
+      return;
+    }
     setSubmitting(true);
     setResult(null);
 
@@ -57,6 +82,7 @@ export default function CreateUserPage() {
         accountType,
         customerTier: accountType === "customer" ? customerTier : undefined,
         staffLevel: accountType === "staff" ? staffLevel : undefined,
+        reportsTo: isAdmin && accountType !== "customer" && reportsTo ? reportsTo : undefined,
         company,
         city,
         state,
@@ -64,14 +90,16 @@ export default function CreateUserPage() {
         department: accountType !== "customer" ? department : undefined,
         designation: accountType !== "customer" ? designation : undefined,
         message: isAdmin ? undefined : message,
+        assignLeadId: isAdmin && accountType === "staff" && assignLeadId ? assignLeadId : undefined,
       }),
     });
     const data = await res.json();
     setSubmitting(false);
     if (res.ok) {
+      const leadNote = assignLeadId ? (data.leadAssigned ? " Lead assigned." : " Lead was already claimed by someone else — left unassigned.") : "";
       setResult(
         isAdmin
-          ? { ok: true, text: "Account created.", password: data.tempPassword }
+          ? { ok: true, text: `Account created.${leadNote}`, password: data.tempPassword }
           : { ok: true, text: "Request submitted — an admin will review it." }
       );
       setFullName("");
@@ -84,6 +112,11 @@ export default function CreateUserPage() {
       setDepartment("");
       setDesignation("");
       setMessage("");
+      setReportsTo("");
+      if (assignLeadId) {
+        setUnassignedLeads((prev) => prev.filter((l) => l.id !== assignLeadId));
+      }
+      setAssignLeadId("");
     } else {
       setResult({ ok: false, text: data.error ?? "Failed to submit." });
     }
@@ -93,7 +126,7 @@ export default function CreateUserPage() {
   const labelClass = "block text-sm font-medium mb-1";
 
   if (checkingRole) {
-    return <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>Loading…</p>;
+    return <LoadingBlock />;
   }
 
   return (
@@ -141,13 +174,26 @@ export default function CreateUserPage() {
           {accountType !== "customer" && (
             <>
               <div>
-                <label className={labelClass} style={{ color: "var(--color-ink)" }}>Department</label>
-                <input value={department} onChange={(e) => setDepartment(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+                <label className={labelClass} style={{ color: "var(--color-ink)" }}>Department<RequiredMark /></label>
+                <input required value={department} onChange={(e) => setDepartment(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
               </div>
               <div>
-                <label className={labelClass} style={{ color: "var(--color-ink)" }}>Designation</label>
-                <input value={designation} onChange={(e) => setDesignation(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+                <label className={labelClass} style={{ color: "var(--color-ink)" }}>Designation<RequiredMark /></label>
+                <input required value={designation} onChange={(e) => setDesignation(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
               </div>
+              {isAdmin && (
+                <div>
+                  <label className={labelClass} style={{ color: "var(--color-ink)" }}>Reports To</label>
+                  <select value={reportsTo} onChange={(e) => setReportsTo(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }}>
+                    <option value="">No manager set</option>
+                    {staffOptions.map((s) => (
+                      <option key={s.id} value={s.id}>
+                        {s.full_name ?? "Unnamed"}{s.designation ? ` · ${s.designation}` : ""}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
             </>
           )}
 
@@ -184,6 +230,26 @@ export default function CreateUserPage() {
             <CitySelect state={state} value={city} onChange={(e) => setCity(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
           </div>
         </div>
+
+        {isAdmin && accountType === "staff" && (
+          <div>
+            <label className={labelClass} style={{ color: "var(--color-ink)" }}>Assign a Lead (optional)</label>
+            <select value={assignLeadId} onChange={(e) => setAssignLeadId(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }}>
+              <option value="">No lead — leave in the unassigned pool</option>
+              {unassignedLeads.map((lead) => (
+                <option key={lead.id} value={lead.id}>
+                  {lead.name} · {lead.phone}{lead.service ? ` · ${lead.service}` : ""}
+                </option>
+              ))}
+            </select>
+            <p className="mt-1 text-xs" style={{ color: "var(--color-ink-soft)" }}>
+              {unassignedLeads.length === 0
+                ? "No unassigned leads right now — you can hand one out later from Team Leads CRM."
+                : "Hands this lead to the new staff member right away instead of leaving it in the shared pool. Leave blank and assign it later from Team Leads CRM."}
+            </p>
+          </div>
+        )}
+
         {!isAdmin && (
           <div>
             <label className={labelClass} style={{ color: "var(--color-ink)" }}>Note for admin (optional)</label>

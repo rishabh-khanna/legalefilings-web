@@ -1,28 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { FileText, IndianRupee, Users } from "lucide-react";
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ArrowRight, FileText, IndianRupee, Users } from "lucide-react";
 import { useActionMessage } from "@/lib/use-action-message";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 
 type StaffOption = { id: string; name: string };
 type SalaryStructure = { basic: number; hra: number; special_allowance: number; bonus: number; incentives: number; effective_from: string } | null;
-type PayslipRow = {
-  id: string;
-  month: number;
-  year: number;
-  gross_salary: number;
-  net_salary: number;
-  generated_at: string;
-  profiles?: { full_name: string | null } | null;
-};
 
 function currentMonth() {
   const d = new Date();
   return { month: d.getMonth() + 1, year: d.getFullYear() };
 }
 
+// Salary structures + monthly generation only — the full payslip
+// register (with its own filters/pagination) lives on its own page now
+// (/dashboard/admin/payslips) instead of being stacked underneath this
+// form. The two were on one page originally, which meant setting up a
+// salary structure and then just glancing at the payslip list meant
+// scrolling past a form you weren't using.
 export default function PayrollPage() {
   const { message, showSuccess, showError } = useActionMessage();
   const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
@@ -39,16 +37,22 @@ export default function PayrollPage() {
   const [genYear, setGenYear] = useState(currentMonth().year);
   const [generating, setGenerating] = useState(false);
 
-  const [payslips, setPayslips] = useState<PayslipRow[]>([]);
+  const [payslipCount, setPayslipCount] = useState(0);
+  const [payrollTotal, setPayrollTotal] = useState(0);
 
   useEffect(() => {
     const kickoff = setTimeout(async () => {
       const res = await fetch("/api/team-members");
       const data = await res.json();
-      const opts = ((data.members ?? []) as { id: string; full_name: string | null }[]).map((p) => ({ id: p.id, name: p.full_name ?? "Unnamed" }));
+      const members = (data.members ?? []) as { id: string; full_name: string | null; organizationName?: string | null }[];
+      const orgCount = new Set(members.map((p) => p.organizationName)).size;
+      const opts = members.map((p) => ({
+        id: p.id,
+        name: orgCount > 1 && p.organizationName ? `${p.full_name ?? "Unnamed"} — ${p.organizationName}` : (p.full_name ?? "Unnamed"),
+      }));
       setStaffOptions(opts);
       if (opts[0]) setStaffId(opts[0].id);
-      await loadPayslips();
+      await loadPayslipSummary();
     }, 0);
     return () => clearTimeout(kickoff);
   }, []);
@@ -67,14 +71,20 @@ export default function PayrollPage() {
       });
   }, [staffId]);
 
-  async function loadPayslips() {
+  async function loadPayslipSummary() {
     const res = await fetch("/api/payroll/payslips");
     const data = await res.json();
-    setPayslips(data.payslips ?? []);
+    const payslips = (data.payslips ?? []) as { net_salary: number }[];
+    setPayslipCount(payslips.length);
+    setPayrollTotal(payslips.reduce((sum, p) => sum + Number(p.net_salary), 0));
   }
 
   async function handleSaveStructure(e: React.FormEvent) {
     e.preventDefault();
+    if (!(Number(basic) > 0)) {
+      showError("Basic salary must be greater than 0.");
+      return;
+    }
     setSavingStructure(true);
     const res = await fetch("/api/payroll/salary-structure", {
       method: "POST",
@@ -108,7 +118,7 @@ export default function PayrollPage() {
     setGenerating(false);
     if (res.ok) {
       showSuccess(data.generated > 0 ? `Generated ${data.generated} payslip(s).` : (data.message ?? "No new payslips to generate."));
-      await loadPayslips();
+      await loadPayslipSummary();
     } else {
       showError(data?.error ?? "Failed to generate payroll.");
     }
@@ -117,17 +127,24 @@ export default function PayrollPage() {
   const inputClass = "w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]";
   const labelClass = "block text-xs font-medium mb-1";
 
-  const payrollTotal = useMemo(() => payslips.reduce((sum, p) => sum + Number(p.net_salary), 0), [payslips]);
-
   return (
     <div>
       <DashboardPageHero
         title="Payroll"
         subtitle="Set salary structures and generate monthly payslips. PF/ESI/Professional Tax use simplified standard rates — review before relying on them for statutory filing."
+        action={
+          <Link
+            href="/dashboard/admin/payslips"
+            className="inline-flex items-center gap-1.5 rounded-full border bg-white/70 px-4 py-2 text-sm font-semibold backdrop-blur-xl transition-colors hover:bg-white"
+            style={{ borderColor: "var(--color-accent)", color: "var(--color-ink)" }}
+          >
+            View All Payslips <ArrowRight className="h-4 w-4" />
+          </Link>
+        }
       >
-        <div className="relative mt-6 grid grid-cols-3 gap-4">
+        <div className="relative mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <HeroKpi icon={Users} label="Employees" value={staffOptions.length} />
-          <HeroKpi icon={FileText} label="Payslips" value={payslips.length} />
+          <HeroKpi icon={FileText} label="Payslips" value={payslipCount} />
           <HeroKpi icon={IndianRupee} label="Total Paid" value={`₹${payrollTotal.toLocaleString("en-IN")}`} />
         </div>
       </DashboardPageHero>
@@ -136,7 +153,7 @@ export default function PayrollPage() {
         <ActionMessage message={message} />
       </div>
 
-      <div className="mt-5 grid gap-6 lg:grid-cols-2">
+      <div className="mt-5 grid items-start gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border bg-white p-5 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
           <h3 className="font-semibold" style={{ color: "var(--color-ink)" }}>Salary Structure</h3>
           <div className="mt-3">
@@ -155,7 +172,7 @@ export default function PayrollPage() {
           <form onSubmit={handleSaveStructure} className="mt-3 grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass} style={{ color: "var(--color-ink-soft)" }}>Basic (₹)</label>
-              <input required type="number" min="0" value={basic} onChange={(e) => setBasic(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+              <input required type="number" min="1" value={basic} onChange={(e) => setBasic(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
             </div>
             <div>
               <label className={labelClass} style={{ color: "var(--color-ink-soft)" }}>HRA (₹)</label>
@@ -213,41 +230,6 @@ export default function PayrollPage() {
             </button>
           </div>
         </div>
-      </div>
-
-      <h3 className="mt-8 font-semibold" style={{ color: "var(--color-ink)" }}>Payslips</h3>
-      <div className="mt-3 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
-        <table className="w-full min-w-[520px] text-left text-sm">
-          <thead>
-            <tr style={{ backgroundColor: "var(--color-muted-tint)" }}>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Employee</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Period</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Net Salary</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
-            {payslips.map((p) => (
-              <tr key={p.id}>
-                <td className="px-4 py-3 font-medium" style={{ color: "var(--color-ink)" }}>{p.profiles?.full_name ?? "—"}</td>
-                <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>
-                  {new Date(p.year, p.month - 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}
-                </td>
-                <td className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>₹{Number(p.net_salary).toLocaleString("en-IN")}</td>
-                <td className="px-4 py-3">
-                  <a href={`/api/payroll/payslips/${p.id}/download`} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>
-                    Download PDF
-                  </a>
-                </td>
-              </tr>
-            ))}
-            {payslips.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>No payslips generated yet.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
       </div>
     </div>
   );

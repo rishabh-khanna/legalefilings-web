@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Users, Sparkles, Clock, Trophy, AlertCircle, IndianRupee, MessageCircle } from "lucide-react";
+import { Users, Sparkles, Clock, Trophy, AlertCircle, IndianRupee, MessageCircle, Check, X } from "lucide-react";
 import { LEAD_STAGES, LEAD_STAGE_LABELS, type Lead, type LeadStage } from "@/lib/leads";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { SITE_NAME } from "@/config/site";
@@ -11,6 +11,13 @@ import { AnimatedCounter } from "@/components/crm/AnimatedCounter";
 import { TrendBadge } from "@/components/crm/TrendBadge";
 import { SkeletonKpiCard, SkeletonRow } from "@/components/crm/Skeleton";
 import { LeadDetailDrawer } from "@/components/crm/LeadDetailDrawer";
+import { PageHelpButton } from "@/components/dashboard/PageHelpButton";
+import { Spinner } from "@/components/Spinner";
+import { usePagination } from "@/lib/use-pagination";
+import { TablePagination } from "@/components/TablePagination";
+import { useDateRangeFilter } from "@/lib/use-date-range-filter";
+import { DateRangeFilter } from "@/components/DateRangeFilter";
+import { ExportButton } from "@/components/ExportButton";
 
 function leadWhatsAppMessage(lead: Lead) {
   const firstName = lead.name.split(" ")[0];
@@ -62,6 +69,14 @@ export default function AdminDashboard() {
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<LeadStage | null>(null);
   const [activeLead, setActiveLead] = useState<Lead | null>(null);
+  // Notes are explicit-save (a ✓/✕ pair appears once the draft differs
+  // from what's saved) rather than autosave-on-blur — clicking anywhere
+  // else in the row used to silently commit the note with no visible
+  // confirmation beyond a toast that's easy to miss in a long table.
+  // noteDrafts holds the in-progress (uncommitted) text per lead id;
+  // absent from the map means "showing the saved value."
+  const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const [noteStatus, setNoteStatus] = useState<Record<string, "saving" | "saved" | "error">>({});
   const [now, setNow] = useState<number | null>(null);
   const toast = useToast();
 
@@ -75,6 +90,14 @@ export default function AdminDashboard() {
       setNow(Date.now());
       const res = await fetch("/api/team-members");
       const data = await res.json();
+      // Kept as plain names, not disambiguated with org (unlike the
+      // payroll/attendance staff pickers) — assignedTo is a plain-text
+      // name column on leads, not a profile id, so embedding an org
+      // suffix into the option's value here would break matching
+      // against the real full_name the API validates against. Leads
+      // are already strictly org-scoped, so two different orgs' staff
+      // sharing a display name is a cosmetic quirk in this one
+      // cross-org (platform_admin-only) picker, not a functional bug.
       const names = ((data.members ?? []) as { full_name: string | null }[]).map((p) => p.full_name).filter((n): n is string => Boolean(n));
       setStaffNames(["Unassigned", ...names]);
     }, 0);
@@ -88,6 +111,28 @@ export default function AdminDashboard() {
     if (viewer === "Everyone") return sorted;
     return sorted.filter((l) => l.assignedTo === viewer);
   }, [leads, viewer]);
+
+  const dateFilter = useDateRangeFilter(visibleLeads, (l) => l.createdAt);
+  const dateFilteredLeads = dateFilter.filtered;
+
+  const [stageFilter, setStageFilter] = useState<LeadStage | "all">("all");
+  const [search, setSearch] = useState("");
+  const filteredLeads = useMemo(() => {
+    return dateFilteredLeads.filter((l) => {
+      if (stageFilter !== "all" && l.stage !== stageFilter) return false;
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        const hay = `${l.name} ${l.email} ${l.phone} ${l.service ?? ""} ${l.plan ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [dateFilteredLeads, stageFilter, search]);
+
+  // Pagination only makes sense for the flat table view — the board
+  // view is a drag-and-drop kanban grouped by stage, where "page 2"
+  // has no sensible meaning.
+  const { page, setPage, pageSize, setPageSize, pageItems: pagedLeads, totalPages, total, start, end } = usePagination(filteredLeads);
 
   const stats = useMemo(() => {
     const all = leads ?? [];
@@ -122,9 +167,10 @@ export default function AdminDashboard() {
     }).catch(() => null);
     if (!res || !res.ok) {
       toast("error", "Failed to save change.");
-      return;
+      return false;
     }
     toast("success", successText);
+    return true;
   }
 
   async function reload() {
@@ -184,11 +230,14 @@ export default function AdminDashboard() {
 
         <div className="relative flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h2 className="text-2xl font-extrabold" style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)" }}>
-              Pipeline
-            </h2>
+            <div className="flex items-center gap-1.5">
+              <h2 className="text-2xl font-extrabold" style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)" }}>
+                Pipeline
+              </h2>
+              <PageHelpButton />
+            </div>
             <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
-              {leads === null ? "Loading…" : `${visibleLeads.length} lead${visibleLeads.length === 1 ? "" : "s"}`}
+              {leads === null ? <Spinner size={12} /> : `${filteredLeads.length} lead${filteredLeads.length === 1 ? "" : "s"}`}
             </p>
           </div>
           <div className="flex items-center gap-3 text-sm">
@@ -222,6 +271,58 @@ export default function AdminDashboard() {
                 </option>
               ))}
             </select>
+          </div>
+        </div>
+
+        <div className="relative mt-4 flex flex-wrap items-center gap-2">
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search name, email, phone, service…"
+            className="w-full max-w-xs rounded-lg border bg-white/70 px-3 py-1.5 text-sm outline-none backdrop-blur focus:border-[var(--color-action)]"
+            style={{ borderColor: "var(--color-line)" }}
+          />
+          <select
+            value={stageFilter}
+            onChange={(e) => setStageFilter(e.target.value as LeadStage | "all")}
+            className="rounded-lg border bg-white/70 px-2.5 py-1.5 text-sm outline-none backdrop-blur"
+            style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
+          >
+            <option value="all">All stages</option>
+            {LEAD_STAGES.map((s) => (
+              <option key={s} value={s}>
+                {LEAD_STAGE_LABELS[s]}
+              </option>
+            ))}
+          </select>
+          <DateRangeFilter
+            from={dateFilter.from}
+            to={dateFilter.to}
+            onFromChange={dateFilter.setFrom}
+            onToChange={dateFilter.setTo}
+            onClear={dateFilter.clear}
+            active={dateFilter.active}
+          />
+          {(search.trim() || stageFilter !== "all") && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch("");
+                setStageFilter("all");
+              }}
+              className="text-xs font-semibold"
+              style={{ color: "var(--color-action-dark)" }}
+            >
+              Clear filters
+            </button>
+          )}
+          <div className="ml-auto">
+            <ExportButton
+              filename="leads"
+              headers={["Lead", "Email", "Phone", "Service", "Plan", "Stage", "Assigned To", "Received"]}
+              rows={filteredLeads.map((l) => [l.name, l.email, l.phone, l.service ?? "", l.plan ?? "", LEAD_STAGE_LABELS[l.stage], l.assignedTo, l.createdAt])}
+            />
           </div>
         </div>
 
@@ -264,7 +365,7 @@ export default function AdminDashboard() {
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-5">
           {LEAD_STAGES.map((stage) => {
             const stageStyle = STAGE_STYLES[stage];
-            const stageLeads = visibleLeads.filter((l) => l.stage === stage);
+            const stageLeads = filteredLeads.filter((l) => l.stage === stage);
             const isDragOver = dragOverStage === stage;
             return (
               <div
@@ -404,18 +505,30 @@ export default function AdminDashboard() {
           })}
         </div>
       ) : (
+        <>
+          <TablePagination
+            page={page}
+            totalPages={totalPages}
+            pageSize={pageSize}
+            onPageChange={setPage}
+            onPageSizeChange={setPageSize}
+            start={start}
+            end={end}
+            total={total}
+            itemLabel="leads"
+          />
         <div className="overflow-x-auto rounded-2xl border bg-white dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-          <table className="w-full text-sm">
+          <table className="dt-table w-full min-w-[860px] table-fixed text-sm">
             <thead>
               <tr className="sticky top-0 z-10 text-left text-xs uppercase tracking-wide" style={{ backgroundColor: "var(--color-paper)", color: "var(--color-ink-soft)" }}>
-                <th className="px-4 py-2.5">Lead</th>
-                <th className="px-4 py-2.5">Service</th>
-                <th className="px-4 py-2.5">Plan</th>
-                <th className="px-4 py-2.5">Stage</th>
-                <th className="px-4 py-2.5">Assigned to</th>
-                <th className="px-4 py-2.5">Notes</th>
-                <th className="px-4 py-2.5">Received</th>
-                <th className="px-4 py-2.5"></th>
+                <th className="w-[4%] px-3 py-2.5">#</th>
+                <th className="w-[18%] px-3 py-2.5">Lead</th>
+                <th className="w-[14%] px-3 py-2.5">Service / Plan</th>
+                <th className="w-[11%] px-3 py-2.5">Stage</th>
+                <th className="w-[12%] px-3 py-2.5">Assigned to</th>
+                <th className="w-[21%] px-3 py-2.5">Notes</th>
+                <th className="w-[8%] px-3 py-2.5">Received</th>
+                <th className="w-[12%] px-3 py-2.5"></th>
               </tr>
             </thead>
             <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
@@ -427,7 +540,7 @@ export default function AdminDashboard() {
                     </td>
                   </tr>
                 ))}
-              {visibleLeads.map((lead) => {
+              {pagedLeads.map((lead, i) => {
                 const avatar = avatarStyle(lead.name);
                 const stageStyle = STAGE_STYLES[lead.stage];
                 return (
@@ -436,43 +549,42 @@ export default function AdminDashboard() {
                     onClick={() => setActiveLead(lead)}
                     className="cursor-pointer align-top transition-colors hover:bg-[var(--color-paper)]"
                   >
-                    <td className="px-4 py-3">
-                      <div className="flex items-start gap-2.5">
+                    <td className="overflow-hidden px-3 py-3" style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
+                    <td className="overflow-hidden px-3 py-3">
+                      <div className="flex items-start gap-2">
                         <span
-                          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold"
+                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold"
                           style={{ backgroundColor: avatar.bg, color: avatar.text }}
                           aria-hidden="true"
                         >
                           {initials(lead.name)}
                         </span>
-                        <div>
-                          <div className="font-medium" style={{ color: "var(--color-ink)" }}>{lead.name}</div>
-                          <div style={{ color: "var(--color-ink-soft)" }}>{lead.email}</div>
-                          <div style={{ color: "var(--color-ink-soft)" }}>{lead.phone}</div>
+                        <div className="min-w-0">
+                          <div className="truncate font-medium" style={{ color: "var(--color-ink)" }}>{lead.name}</div>
+                          <div className="truncate" style={{ color: "var(--color-ink-soft)" }}>{lead.email}</div>
+                          <div className="truncate" style={{ color: "var(--color-ink-soft)" }}>{lead.phone}</div>
                           {(lead.city || lead.state) && (
-                            <div className="text-xs" style={{ color: "var(--color-ink-soft)", opacity: 0.8 }}>
+                            <div className="truncate text-xs" style={{ color: "var(--color-ink-soft)", opacity: 0.8 }}>
                               {[lead.city, lead.state].filter(Boolean).join(", ")}
                             </div>
                           )}
                         </div>
                       </div>
                     </td>
-                    <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{lead.service ?? "—"}</td>
-                    <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>
-                      {lead.plan ? (
-                        <>
+                    <td className="overflow-hidden px-3 py-3" style={{ color: "var(--color-ink-soft)" }}>
+                      <p className="truncate">{lead.service ?? "—"}</p>
+                      {lead.plan && (
+                        <p className="truncate text-xs" style={{ opacity: 0.8 }}>
                           {lead.plan}
-                          {lead.planPrice && <div className="text-xs" style={{ opacity: 0.8 }}>{lead.planPrice}</div>}
-                        </>
-                      ) : (
-                        "—"
+                          {lead.planPrice && ` · ${lead.planPrice}`}
+                        </p>
                       )}
                     </td>
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
                       <select
                         value={lead.stage}
                         onChange={(e) => updateLead(lead.id, { stage: e.target.value as LeadStage }, "Stage updated.")}
-                        className="rounded-full px-2.5 py-1 text-xs font-semibold outline-none"
+                        className="w-full max-w-[110px] truncate rounded-full px-2 py-1 text-xs font-semibold outline-none"
                         style={{ backgroundColor: stageStyle.bg, color: stageStyle.text, border: "none" }}
                       >
                         {LEAD_STAGES.map((s) => (
@@ -482,7 +594,7 @@ export default function AdminDashboard() {
                         ))}
                       </select>
                     </td>
-                    <td className="px-4 py-3" onClick={(e) => e.stopPropagation()}>
+                    <td className="overflow-hidden px-3 py-3" onClick={(e) => e.stopPropagation()}>
                       {lead.assignedTo === "Unassigned" ? (
                         <button
                           type="button"
@@ -496,7 +608,7 @@ export default function AdminDashboard() {
                         <select
                           value={lead.assignedTo}
                           onChange={(e) => updateLead(lead.id, { assignedTo: e.target.value }, "Reassigned.")}
-                          className="rounded-lg border px-2 py-1 text-xs outline-none"
+                          className="w-full max-w-full rounded-lg border px-2 py-1 text-xs outline-none"
                           style={{ borderColor: "var(--color-line)" }}
                         >
                           {staffNames.map((s) => (
@@ -507,25 +619,88 @@ export default function AdminDashboard() {
                         </select>
                       )}
                     </td>
-                    <td className="px-4 py-3 min-w-[180px]" onClick={(e) => e.stopPropagation()}>
-                      <textarea
-                        defaultValue={lead.notes}
-                        onBlur={(e) => updateLead(lead.id, { notes: e.target.value }, "Note saved.")}
-                        placeholder="Add a note…"
-                        rows={2}
-                        className="w-full rounded-lg border px-2 py-1 text-xs outline-none focus:border-[var(--color-action)]"
-                        style={{ borderColor: "var(--color-line)" }}
-                      />
+                    <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
+                      {(() => {
+                        const draft = noteDrafts[lead.id] ?? lead.notes ?? "";
+                        const dirty = draft !== (lead.notes ?? "");
+                        const status = noteStatus[lead.id];
+                        return (
+                          <>
+                            <textarea
+                              value={draft}
+                              onChange={(e) => setNoteDrafts((d) => ({ ...d, [lead.id]: e.target.value }))}
+                              placeholder="Add a note…"
+                              rows={2}
+                              className="w-full rounded-lg border px-2 py-1 text-xs outline-none focus:border-[var(--color-action)]"
+                              style={{ borderColor: "var(--color-line)" }}
+                            />
+                            <div className="mt-1 flex items-center gap-2">
+                              {dirty && (
+                                <>
+                                  <button
+                                    type="button"
+                                    disabled={status === "saving"}
+                                    onClick={async () => {
+                                      setNoteStatus((s) => ({ ...s, [lead.id]: "saving" }));
+                                      const ok = await updateLead(lead.id, { notes: draft }, "Note saved.");
+                                      setNoteStatus((s) => ({ ...s, [lead.id]: ok ? "saved" : "error" }));
+                                      if (ok) {
+                                        setNoteDrafts((d) => {
+                                          const next = { ...d };
+                                          delete next[lead.id];
+                                          return next;
+                                        });
+                                      }
+                                    }}
+                                    aria-label="Save note"
+                                    title="Save note"
+                                    className="flex h-6 w-6 items-center justify-center rounded-full text-white disabled:opacity-60"
+                                    style={{ backgroundColor: "#116a2c" }}
+                                  >
+                                    <Check className="h-3.5 w-3.5" />
+                                  </button>
+                                  <button
+                                    type="button"
+                                    disabled={status === "saving"}
+                                    onClick={() =>
+                                      setNoteDrafts((d) => {
+                                        const next = { ...d };
+                                        delete next[lead.id];
+                                        return next;
+                                      })
+                                    }
+                                    aria-label="Discard changes"
+                                    title="Discard changes"
+                                    className="flex h-6 w-6 items-center justify-center rounded-full border disabled:opacity-60"
+                                    style={{ borderColor: "var(--color-line)", color: "var(--color-ink-soft)" }}
+                                  >
+                                    <X className="h-3.5 w-3.5" />
+                                  </button>
+                                </>
+                              )}
+                              {status === "saving" && (
+                                <span className="text-[10px]" style={{ color: "var(--color-ink-soft)" }}>Saving…</span>
+                              )}
+                              {!dirty && status === "saved" && (
+                                <span className="text-[10px] font-medium" style={{ color: "#116a2c" }}>Saved ✓</span>
+                              )}
+                              {status === "error" && (
+                                <span className="text-[10px] font-medium" style={{ color: "#b42318" }}>Failed to save — try again</span>
+                              )}
+                            </div>
+                          </>
+                        );
+                      })()}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap" style={{ color: "var(--color-ink-soft)" }}>
+                    <td className="overflow-hidden px-3 py-3 whitespace-nowrap" style={{ color: "var(--color-ink-soft)" }}>
                       {new Date(lead.createdAt).toLocaleDateString()}
                     </td>
-                    <td className="px-4 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                    <td className="overflow-hidden px-3 py-3" onClick={(e) => e.stopPropagation()}>
                       <a
                         href={buildWhatsAppLink(lead.phone, leadWhatsAppMessage(lead))}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold transition-transform hover:scale-[1.02]"
+                        className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold transition-transform hover:scale-[1.02]"
                         style={{ backgroundColor: "#dcfce3", color: "#116a2c" }}
                       >
                         WhatsApp
@@ -534,7 +709,7 @@ export default function AdminDashboard() {
                   </tr>
                 );
               })}
-              {leads !== null && visibleLeads.length === 0 && (
+              {leads !== null && filteredLeads.length === 0 && (
                 <tr>
                   <td colSpan={8} className="px-4 py-10 text-center" style={{ color: "var(--color-ink-soft)" }}>
                     No leads {viewer !== "Everyone" ? `assigned to ${viewer}` : "yet"}.
@@ -544,12 +719,29 @@ export default function AdminDashboard() {
             </tbody>
           </table>
         </div>
+        </>
       )}
 
       <LeadDetailDrawer
         lead={activeLead}
         onClose={() => setActiveLead(null)}
         onSaveNotes={(id, notes) => updateLead(id, { notes }, "Note saved.")}
+        onConverted={async (id, customerId) => {
+          // Closing the drawer here used to hide LeadDetailDrawer's own
+          // "Converted to a customer + order" confirmation state before
+          // it could ever render — the user only ever saw the toast, and
+          // that success card in the drawer was dead code. Patch local
+          // state directly (not via updateLead/PATCH — the convert route
+          // already wrote stage/convertedToProfileId server-side; a
+          // second PATCH here would be redundant and convertedToProfileId
+          // isn't even a writable PATCH field) so the drawer stays open
+          // and shows the confirmation.
+          const patch = { stage: "won" as const, convertedToProfileId: customerId };
+          setLeads((prev) => (prev ? prev.map((l) => (l.id === id ? { ...l, ...patch } : l)) : prev));
+          setActiveLead((prev) => (prev && prev.id === id ? { ...prev, ...patch } : prev));
+          toast("success", "Converted — customer account and order created.");
+          await reload();
+        }}
       />
     </div>
   );

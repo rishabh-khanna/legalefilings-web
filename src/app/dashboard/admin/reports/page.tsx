@@ -9,6 +9,7 @@ const REPORTS = [
   { type: "leave", label: "Leave Report", description: "Every leave request and its status.", filterable: false },
   { type: "employees", label: "Employee List", description: "Every staff/admin account with core details.", filterable: false },
   { type: "department", label: "Department-wise Report", description: "Employees grouped by department.", filterable: false },
+  { type: "invoice-ageing", label: "Invoice Ageing Report", description: "Every unpaid/overdue invoice with balance outstanding and days overdue (1-30 / 30-60 / 60-90 / 90+).", filterable: false },
 ];
 
 export default function ReportsPage() {

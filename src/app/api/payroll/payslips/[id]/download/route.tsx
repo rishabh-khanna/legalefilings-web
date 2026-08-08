@@ -4,6 +4,8 @@ import { Document, Page, Text, View, StyleSheet } from "@react-pdf/renderer";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { SITE_NAME } from "@/config/site";
+import { canSeeAllOrgs } from "@/lib/organization";
+import { hasToolAccess } from "@/lib/tool-grants";
 
 const styles = StyleSheet.create({
   page: { padding: 40, fontSize: 10, color: "#0f172a" },
@@ -24,8 +26,14 @@ const styles = StyleSheet.create({
   netValue: { fontSize: 14, fontWeight: 700, color: "#0f172a" },
 });
 
+// "Rs. " rather than "₹" — @react-pdf/renderer's default font (Helvetica,
+// one of the fixed PDF Standard 14 fonts from the 1980s) has no glyph for
+// ₹ (Unicode U+20B9, only added in 2010) since no custom font is
+// registered here. Without this, every amount on the PDF would render
+// with a missing-glyph box instead of a currency symbol — the on-screen
+// app is unaffected, since browsers/Inter render ₹ correctly.
 function money(n: number) {
-  return `₹${Number(n).toLocaleString("en-IN")}`;
+  return `Rs. ${Number(n).toLocaleString("en-IN")}`;
 }
 
 function PayslipPdf({
@@ -118,7 +126,10 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     .single();
 
   if (error || !payslip) return NextResponse.json({ error: "Payslip not found" }, { status: 404 });
-  if (profile.account_type !== "admin" && payslip.staff_id !== profile.id) {
+  if (payslip.staff_id !== profile.id && !(await hasToolAccess(profile, "payslips"))) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+  if (!canSeeAllOrgs(profile) && payslip.organization_id !== profile.organization_id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -146,6 +157,9 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
         { label: "ESI", amount: payslip.esi_deduction },
         { label: "Professional Tax", amount: payslip.professional_tax },
         { label: "TDS", amount: payslip.tds },
+        ...(Number(payslip.lop_days) > 0
+          ? [{ label: `Loss of Pay (${Number(payslip.lop_days)} day${Number(payslip.lop_days) === 1 ? "" : "s"})`, amount: payslip.lop_deduction }]
+          : []),
       ]}
       grossSalary={payslip.gross_salary}
       netSalary={payslip.net_salary}

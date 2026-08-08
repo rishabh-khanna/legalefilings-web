@@ -1,18 +1,26 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
+import { canSeeAllOrgs } from "@/lib/organization";
+import { hasToolAccess } from "@/lib/tool-grants";
 
 // GET /api/payroll/salary-structure?staffId=... — admin only. Returns the
 // most recent salary structure for a staff member, if any.
 export async function GET(request: Request) {
   const profile = await getCurrentProfile();
-  if (!profile || profile.account_type !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!profile || !(await hasToolAccess(profile, "payroll"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { searchParams } = new URL(request.url);
   const staffId = searchParams.get("staffId");
   if (!staffId) return NextResponse.json({ error: "staffId is required" }, { status: 400 });
 
   const supabase = getSupabaseAdmin();
+  if (!canSeeAllOrgs(profile)) {
+    const { data: target } = await supabase.from("profiles").select("organization_id").eq("id", staffId).single();
+    if (!target || target.organization_id !== profile.organization_id) {
+      return NextResponse.json({ error: "Staff not found" }, { status: 404 });
+    }
+  }
   const { data, error } = await supabase
     .from("salary_structures")
     .select("*")
@@ -31,18 +39,24 @@ export async function GET(request: Request) {
 // were generated, rather than silently changing history.
 export async function POST(request: Request) {
   const profile = await getCurrentProfile();
-  if (!profile || profile.account_type !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!profile || !(await hasToolAccess(profile, "payroll"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json().catch(() => null);
   const { staffId, basic, hra, specialAllowance, bonus, incentives, effectiveFrom } = body ?? {};
-  if (!staffId || typeof basic !== "number") {
-    return NextResponse.json({ error: "staffId and basic are required" }, { status: 400 });
+  if (!staffId || typeof basic !== "number" || !(basic > 0)) {
+    return NextResponse.json({ error: "staffId and a basic salary greater than 0 are required" }, { status: 400 });
   }
 
   const supabase = getSupabaseAdmin();
+  const { data: targetStaff } = await supabase.from("profiles").select("organization_id").eq("id", staffId).single();
+  if (!targetStaff || (!canSeeAllOrgs(profile) && targetStaff.organization_id !== profile.organization_id)) {
+    return NextResponse.json({ error: "Staff not found" }, { status: 404 });
+  }
+
   const { data, error } = await supabase
     .from("salary_structures")
     .insert({
+      organization_id: targetStaff.organization_id,
       staff_id: staffId,
       basic,
       hra: hra ?? 0,

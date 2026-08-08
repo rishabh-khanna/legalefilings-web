@@ -89,6 +89,17 @@ export function EntityFinderModal() {
         <div className="px-4 py-8 sm:px-8">
           <EntityFinderCard compact />
         </div>
+
+        <div className="flex justify-center border-t px-4 py-4 sm:px-8" style={{ borderColor: "var(--color-line)" }}>
+          <button
+            type="button"
+            onClick={() => setOpen(false)}
+            className="rounded-full border px-5 py-2 text-sm font-semibold"
+            style={{ borderColor: "var(--color-line)", color: "var(--color-ink-soft)" }}
+          >
+            Close
+          </button>
+        </div>
       </div>
     </div>
   );

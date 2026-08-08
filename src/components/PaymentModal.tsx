@@ -189,14 +189,24 @@ export function PaymentModal() {
 
           {status === "error" && errorMsg && <p className="text-sm text-red-600">{errorMsg}</p>}
 
-          <button
-            type="submit"
-            disabled={status === "submitting"}
-            className="w-full rounded-full text-white text-sm font-semibold py-2.5 transition-transform hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
-            style={{ backgroundColor: "var(--color-action)" }}
-          >
-            {status === "submitting" ? "Opening secure checkout…" : "Continue to Payment"}
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setOpen(false)}
+              className="rounded-full border px-4 py-2.5 text-sm font-semibold"
+              style={{ borderColor: "var(--color-line)", color: "var(--color-ink-soft)" }}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={status === "submitting"}
+              className="flex-1 rounded-full text-white text-sm font-semibold py-2.5 transition-transform hover:scale-[1.02] disabled:opacity-60 disabled:hover:scale-100"
+              style={{ backgroundColor: "var(--color-action)" }}
+            >
+              {status === "submitting" ? "Opening secure checkout…" : "Continue to Payment"}
+            </button>
+          </div>
         </form>
       </div>
     </div>

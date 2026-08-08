@@ -1,9 +1,9 @@
 import Link from "next/link";
 import { RefundIllustration } from "@/components/RefundIllustration";
 
-// Referenced from doola.com's own pricing-page banner: a hand-drawn
-// illustration, a bold promise, and one line of explanation on a soft
-// tinted panel — including their choice of a blue panel specifically,
+// Referenced from doola.com's own pricing-page banner: an icon, a bold
+// promise, and one line of explanation on a soft tinted panel —
+// including their choice of a blue panel specifically,
 // which reads calmer/more "trust" than our usual brand yellow and suits a
 // guarantee callout well as a deliberate one-off accent. Copy reflects our
 // actual refund-policy terms (refund after internal review if we're at
@@ -14,10 +14,10 @@ import { RefundIllustration } from "@/components/RefundIllustration";
 export function MoneyBackBanner() {
   return (
     <div
-      className="mx-auto flex max-w-5xl flex-col items-center gap-6 rounded-2xl p-7 text-center sm:flex-row sm:text-left"
+      className="flex flex-col items-center gap-6 rounded-2xl p-7 text-center sm:flex-row sm:text-left"
       style={{ backgroundColor: "var(--color-banner-tint)" }}
     >
-      <RefundIllustration className="h-28 w-36 shrink-0" />
+      <RefundIllustration className="h-24 w-24" />
       <div>
         <h3 className="text-lg font-extrabold" style={{ color: "var(--color-banner-dark)", fontFamily: "var(--font-display)" }}>
           Backed by Our Refund Policy.

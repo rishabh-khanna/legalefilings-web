@@ -12,6 +12,7 @@ export function generateTempPassword() {
 }
 
 export type CreateUserInput = {
+  organizationId: string;
   email: string;
   fullName: string;
   phone?: string;
@@ -25,6 +26,11 @@ export type CreateUserInput = {
   dateOfBirth?: string;
   department?: string;
   designation?: string;
+  gstin?: string;
+  panNumber?: string;
+  stateCode?: string;
+  billingAddress?: string;
+  shippingAddress?: string;
 };
 
 // EMP-YYYYMM-XXXX — human-readable and roughly chronological, not a
@@ -58,6 +64,7 @@ export async function createUserWithProfile(input: CreateUserInput) {
 
   const { error: profileError } = await supabase.from("profiles").insert({
     id: authUser.user.id,
+    organization_id: input.organizationId,
     full_name: input.fullName,
     phone: input.phone ?? null,
     account_type: input.accountType,
@@ -68,6 +75,11 @@ export async function createUserWithProfile(input: CreateUserInput) {
     city: input.city ?? null,
     state: input.state ?? null,
     date_of_birth: input.dateOfBirth ?? null,
+    gstin: input.gstin ?? null,
+    pan_number: input.panNumber ?? null,
+    state_code: input.stateCode ?? null,
+    billing_address: input.billingAddress ?? null,
+    shipping_address: input.shippingAddress ?? null,
     crm_status: input.accountType === "customer" ? "active" : "lead",
     employee_id: input.accountType !== "customer" ? generateEmployeeId() : null,
     department: input.accountType !== "customer" ? (input.department ?? null) : null,

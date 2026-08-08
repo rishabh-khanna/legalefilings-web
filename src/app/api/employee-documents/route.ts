@@ -3,6 +3,8 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { isStaffOrAdmin } from "@/lib/roles";
 import { canManageStaff } from "@/lib/reporting-chain";
+import { canSeeAllOrgs } from "@/lib/organization";
+import { validateUpload, DOCUMENT_UPLOAD_RULE } from "@/lib/upload-validation";
 
 const BUCKET = "employee-documents";
 
@@ -49,9 +51,19 @@ export async function POST(request: Request) {
   if (!(file instanceof File) || typeof documentType !== "string") {
     return NextResponse.json({ error: "file and documentType are required" }, { status: 400 });
   }
+  const fileError = validateUpload(file, DOCUMENT_UPLOAD_RULE);
+  if (fileError) return NextResponse.json({ error: fileError }, { status: 400 });
   const staffId = profile.account_type === "admin" && typeof requestedStaffId === "string" && requestedStaffId ? requestedStaffId : profile.id;
 
   const supabase = getSupabaseAdmin();
+  let staffOrgId = profile.organization_id;
+  if (staffId !== profile.id) {
+    const { data: targetStaff } = await supabase.from("profiles").select("organization_id").eq("id", staffId).single();
+    if (!targetStaff || (!canSeeAllOrgs(profile) && targetStaff.organization_id !== profile.organization_id)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    staffOrgId = targetStaff.organization_id;
+  }
   const path = `${staffId}/${Date.now()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
   const arrayBuffer = await file.arrayBuffer();
 
@@ -63,6 +75,7 @@ export async function POST(request: Request) {
   const { data, error } = await supabase
     .from("employee_documents")
     .insert({
+      organization_id: staffOrgId,
       staff_id: staffId,
       document_type: documentType,
       file_path: path,

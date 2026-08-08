@@ -20,7 +20,8 @@ const DESTINATIONS: Destination[] = [
   { label: "Reports", href: "/dashboard/admin/reports", icon: BarChart3, keywords: "export csv" },
   { label: "Analytics", href: "/dashboard/admin/analytics", icon: BarChart3 },
   { label: "Account Requests", href: "/dashboard/admin/account-requests", icon: UserPlus },
-  { label: "Company Settings", href: "/dashboard/admin/company-settings", icon: Settings, keywords: "logo signature" },
+  { label: "Reviewed Account Requests", href: "/dashboard/admin/reviewed-account-requests", icon: UserPlus, keywords: "approved rejected account history" },
+  { label: "Business Settings", href: "/dashboard/admin/business-settings", icon: Settings, keywords: "logo signature company settings" },
   { label: "Buy Plan for Customer", href: "/dashboard/admin/buy-for-customer", icon: Building2 },
 ];
 

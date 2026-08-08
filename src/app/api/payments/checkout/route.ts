@@ -3,6 +3,10 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { createRazorpayOrder } from "@/lib/razorpay";
 import { generateTempPassword } from "@/lib/admin-actions";
 import { sendAccountCreatedEmail } from "@/lib/email";
+import { createOrderInvoice } from "@/lib/order-invoice";
+import { resolveTrustedPrice } from "@/lib/trusted-pricing";
+import { logEmailFailure } from "@/lib/email-failures";
+import { isRateLimited, getClientIp } from "@/lib/rate-limit";
 
 // POST /api/payments/checkout — a customer buying a service directly from
 // a pricing card (no admin/staff involved). Gets-or-creates the customer's
@@ -11,10 +15,23 @@ import { sendAccountCreatedEmail } from "@/lib/email";
 // no admin.getUserByEmail in the JS client), then creates the usual
 // order + invoice + line item, and starts a Razorpay order for it.
 export async function POST(request: Request) {
+  if (isRateLimited(`checkout:${getClientIp(request)}`, 8, 10 * 60 * 1000)) {
+    return NextResponse.json({ error: "Too many attempts — please wait a few minutes and try again." }, { status: 429 });
+  }
+
   const body = await request.json().catch(() => null);
-  const { fullName, email, phone, service, plan, price, taxRate } = body ?? {};
-  if (!fullName || !email || !phone || !service || !plan || typeof price !== "number" || price <= 0) {
-    return NextResponse.json({ error: "fullName, email, phone, service, plan, and a positive price are required" }, { status: 400 });
+  const { fullName, email, phone, service, plan } = body ?? {};
+  if (!fullName || !email || !phone || !service || !plan) {
+    return NextResponse.json({ error: "fullName, email, phone, service, and plan are required" }, { status: 400 });
+  }
+
+  // The client's own price is never trusted here — it's a display
+  // artifact parsed from the pricing card, and a POST can claim any
+  // number it likes. Re-derive the real price server-side from the
+  // exact same pricing-card content the customer actually saw.
+  const price = resolveTrustedPrice(String(service), String(plan));
+  if (price === null || price <= 0) {
+    return NextResponse.json({ error: "Could not find pricing for that service/plan" }, { status: 400 });
   }
 
   const supabase = getSupabaseAdmin();
@@ -28,7 +45,16 @@ export async function POST(request: Request) {
   }
   const customerId = linkData.user.id;
 
-  const { data: existingProfile } = await supabase.from("profiles").select("id").eq("id", customerId).maybeSingle();
+  const { data: existingProfile } = await supabase.from("profiles").select("id, organization_id").eq("id", customerId).maybeSingle();
+
+  // Public, unauthenticated checkout — always Legal Efilings' own
+  // storefront (this is legalefilings.com's own pricing-card checkout;
+  // a tenant org getting its own public checkout is a separate, later
+  // feature). A returning customer keeps whatever org they already
+  // belong to rather than being reassigned.
+  const { data: legalEfilingsOrg } = await supabase.from("organizations").select("id").eq("slug", "legal-efilings").single();
+  const organizationId = existingProfile?.organization_id ?? legalEfilingsOrg?.id;
+  if (!organizationId) return NextResponse.json({ error: "Could not resolve organization" }, { status: 500 });
 
   let newAccountPassword: string | null = null;
   if (!existingProfile) {
@@ -41,6 +67,7 @@ export async function POST(request: Request) {
 
     const { error: profileError } = await supabase.from("profiles").insert({
       id: customerId,
+      organization_id: organizationId,
       full_name: String(fullName),
       phone: String(phone),
       account_type: "customer",
@@ -50,47 +77,62 @@ export async function POST(request: Request) {
     if (profileError) return NextResponse.json({ error: profileError.message }, { status: 500 });
   }
 
-  const { data: order, error: orderError } = await supabase
+  // Idempotency: a customer who dismisses the Razorpay popup (closed it,
+  // changed their mind about the browser tab, flaky network) and then
+  // clicks "Continue to Payment" again used to get a brand-new order +
+  // invoice every single time — nothing here ever reused the one
+  // already sitting unpaid from the previous attempt. Reuse that
+  // existing order+invoice instead of creating another one, so retrying
+  // checkout never produces duplicate "ghost" orders in Order History.
+  let orderId: string;
+  let invoice: Awaited<ReturnType<typeof createOrderInvoice>>;
+  const { data: reusableOrder } = await supabase
     .from("orders")
-    .insert({ customer_id: customerId, service: String(service), plan: String(plan), plan_price: price, status: "new" })
-    .select()
-    .single();
-  if (orderError) return NextResponse.json({ error: orderError.message }, { status: 500 });
+    .select("id")
+    .eq("customer_id", customerId)
+    .eq("service", String(service))
+    .eq("plan", String(plan))
+    .eq("status", "new")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const { data: reusableInvoice } = reusableOrder
+    ? await supabase.from("invoices").select("*").eq("order_id", reusableOrder.id).in("status", ["draft", "sent"]).order("created_at", { ascending: false }).limit(1).maybeSingle()
+    : { data: null };
 
-  const subtotal = price;
-  const taxAmount = Math.round(subtotal * ((typeof taxRate === "number" ? taxRate : 18) / 100));
-  const total = subtotal + taxAmount;
-  const invoiceNumber = `INV-${Date.now().toString().slice(-8)}`;
+  if (reusableOrder && reusableInvoice) {
+    orderId = reusableOrder.id;
+    invoice = reusableInvoice;
+  } else {
+    const { data: order, error: orderError } = await supabase
+      .from("orders")
+      .insert({ organization_id: organizationId, customer_id: customerId, service: String(service), plan: String(plan), plan_price: price, status: "new" })
+      .select()
+      .single();
+    if (orderError) return NextResponse.json({ error: orderError.message }, { status: 500 });
+    orderId = order.id;
 
-  const { data: invoice, error: invoiceError } = await supabase
-    .from("invoices")
-    .insert({
-      invoice_number: invoiceNumber,
-      order_id: order.id,
-      customer_id: customerId,
-      subtotal,
-      tax_amount: taxAmount,
-      total,
-      status: "sent",
-      issued_at: new Date().toISOString(),
-    })
-    .select()
-    .single();
-  if (invoiceError) return NextResponse.json({ error: invoiceError.message }, { status: 500 });
-
-  await supabase.from("invoice_line_items").insert({
-    invoice_id: invoice.id,
-    description: `${service} — ${plan}`,
-    quantity: 1,
-    unit_price: price,
-    amount: price,
-  });
-  await supabase.from("invoice_events").insert({ invoice_id: invoice.id, event_type: "created", detail: "Direct checkout" });
+    // taxRatePercent is deliberately never taken from the client here —
+    // same reasoning as the price fix above: a public POST could claim
+    // any rate (including 0) to shrink the GST portion of the total.
+    // The one legitimate caller (PaymentModal.tsx) never sends a custom
+    // rate anyway, so this always defaults to createOrderInvoice's
+    // standard 18%.
+    invoice = await createOrderInvoice({
+      organizationId,
+      orderId,
+      customerId,
+      service: String(service),
+      plan: String(plan),
+      price,
+    });
+    await supabase.from("invoice_events").insert({ invoice_id: invoice.id, event_type: "created", detail: "Direct checkout" });
+  }
 
   try {
     const rzpOrder = await createRazorpayOrder({
-      amountInRupees: total,
-      receipt: invoiceNumber,
+      amountInRupees: Number(invoice.total),
+      receipt: invoice.invoice_number,
       notes: { invoiceId: invoice.id },
     });
     await supabase.from("invoices").update({ razorpay_order_id: rzpOrder.id }).eq("id", invoice.id);
@@ -100,6 +142,17 @@ export async function POST(request: Request) {
         await sendAccountCreatedEmail({ customerName: String(fullName), customerEmail: String(email), tempPassword: newAccountPassword });
       } catch (err) {
         console.error("Failed to send account-created email:", err);
+        // Deliberately not logging the temp password itself — storing a
+        // plaintext credential in a log table just to make a resend
+        // possible would be a worse security tradeoff than the customer
+        // needing a "forgot password" reset instead.
+        await logEmailFailure(supabase, {
+          emailType: "account_created",
+          recipientEmail: String(email),
+          relatedEntity: `profile:${customerId}`,
+          errorMessage: err instanceof Error ? err.message : String(err),
+          organizationId,
+        });
       }
     }
 
@@ -109,7 +162,7 @@ export async function POST(request: Request) {
       amount: rzpOrder.amount,
       currency: rzpOrder.currency,
       keyId: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
-      invoiceNumber,
+      invoiceNumber: invoice.invoice_number,
     });
   } catch (err) {
     return NextResponse.json({ error: err instanceof Error ? err.message : "Failed to start payment" }, { status: 500 });

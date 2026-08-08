@@ -38,6 +38,7 @@ export async function POST(request: Request) {
   }
 
   const payload = {
+    organization_id: profile.organization_id,
     full_name: String(fullName),
     email: String(email),
     phone: phone ? String(phone) : null,

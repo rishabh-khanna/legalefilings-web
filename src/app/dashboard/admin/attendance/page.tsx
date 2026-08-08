@@ -1,11 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Users, CalendarCheck, ClipboardList } from "lucide-react";
 import { formatHoursMinutes } from "@/lib/format-duration";
 import { useActionMessage } from "@/lib/use-action-message";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
+import { usePagination } from "@/lib/use-pagination";
+import { TablePagination } from "@/components/TablePagination";
+import { useDateRangeFilter } from "@/lib/use-date-range-filter";
+import { DateRangeFilter } from "@/components/DateRangeFilter";
+import { ExportButton } from "@/components/ExportButton";
 
 type StaffOption = { id: string; name: string };
 type AttendanceEvent = { event_type: "check_in" | "check_out"; occurred_at: string; location: string | null };
@@ -16,7 +21,9 @@ type CorrectionRow = {
   requested_check_out: string | null;
   reason: string;
   status: "pending" | "approved" | "rejected";
+  organization_id: string;
   profiles?: { full_name: string | null } | null;
+  organizations?: { name: string | null } | null;
 };
 
 function currentMonth() {
@@ -58,7 +65,12 @@ export default function AdminAttendancePage() {
     const kickoff = setTimeout(async () => {
       const res = await fetch("/api/team-members");
       const data = await res.json();
-      const opts = ((data.members ?? []) as { id: string; full_name: string | null }[]).map((p) => ({ id: p.id, name: p.full_name ?? "Unnamed" }));
+      const members = (data.members ?? []) as { id: string; full_name: string | null; organizationName?: string | null }[];
+      const orgCount = new Set(members.map((p) => p.organizationName)).size;
+      const opts = members.map((p) => ({
+        id: p.id,
+        name: orgCount > 1 && p.organizationName ? `${p.full_name ?? "Unnamed"} — ${p.organizationName}` : (p.full_name ?? "Unnamed"),
+      }));
       setStaffOptions(opts);
       if (opts[0]) setStaffId(opts[0].id);
     }, 0);
@@ -105,13 +117,20 @@ export default function AdminAttendancePage() {
   }
 
   const pendingCorrections = corrections.filter((c) => c.status === "pending");
+  // Only a platform_admin's request ever returns more than one org's
+  // correction requests pooled together — the org tag is only worth
+  // showing once it's actually ambiguous which org a row belongs to.
+  const correctionsSpanMultipleOrgs = new Set(corrections.map((c) => c.organization_id)).size > 1;
+  const groupedDays = useMemo(() => groupByDay(events), [events]);
+  const dateFilter = useDateRangeFilter(groupedDays, ([day]) => day);
+  const { page, setPage, pageSize, setPageSize, pageItems: pagedDays, totalPages, total, start, end } = usePagination(dateFilter.filtered);
 
   return (
     <div>
       <DashboardPageHero title="Team Attendance" subtitle="Review check-ins and manage correction requests across your team.">
-        <div className="relative mt-6 grid grid-cols-3 gap-4">
+        <div className="relative mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <HeroKpi icon={Users} label="Team Members" value={staffOptions.length} />
-          <HeroKpi icon={CalendarCheck} label="Days Logged" value={groupByDay(events).length} />
+          <HeroKpi icon={CalendarCheck} label="Days Logged" value={groupedDays.length} />
           <HeroKpi icon={ClipboardList} label="Pending Corrections" value={pendingCorrections.length} />
         </div>
       </DashboardPageHero>
@@ -144,10 +163,45 @@ export default function AdminAttendancePage() {
         )}
       </div>
 
-      <div className="mt-5 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
-        <table className="w-full min-w-[420px] text-left text-sm">
+      <DateRangeFilter
+        from={dateFilter.from}
+        to={dateFilter.to}
+        onFromChange={dateFilter.setFrom}
+        onToChange={dateFilter.setTo}
+        onClear={dateFilter.clear}
+        active={dateFilter.active}
+      />
+
+      <div className="mt-3 flex justify-end">
+        <ExportButton
+          filename="attendance"
+          headers={["Date", "Check In", "Check Out", "Hours"]}
+          rows={dateFilter.filtered.map(([day, entry]) => [
+            day,
+            entry.checkIn ? new Date(entry.checkIn).toLocaleTimeString("en-IN") : "",
+            entry.checkOut ? new Date(entry.checkOut).toLocaleTimeString("en-IN") : "",
+            entry.checkIn && entry.checkOut ? formatHoursMinutes(new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime()) : "",
+          ])}
+        />
+      </div>
+
+      <TablePagination
+        page={page}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+        start={start}
+        end={end}
+        total={total}
+        itemLabel="days"
+      />
+
+      <div className="mt-3 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
+        <table className="dt-table w-full min-w-[420px] text-left text-sm">
           <thead>
             <tr style={{ backgroundColor: "var(--color-muted-tint)" }}>
+              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>#</th>
               <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Date</th>
               <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Check In</th>
               <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Check Out</th>
@@ -155,7 +209,7 @@ export default function AdminAttendancePage() {
             </tr>
           </thead>
           <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
-            {groupByDay(events).map(([day, entry]) => {
+            {pagedDays.map(([day, entry], i) => {
               const hours = entry.checkIn && entry.checkOut
                 ? formatHoursMinutes(new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime())
                 : "—";
@@ -163,6 +217,7 @@ export default function AdminAttendancePage() {
               const outLink = mapLink(entry.checkOutLoc ?? null);
               return (
                 <tr key={day}>
+                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
                   <td className="px-4 py-3 font-medium" style={{ color: "var(--color-ink)" }}>{day}</td>
                   <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>
                     {entry.checkIn ? new Date(entry.checkIn).toLocaleTimeString("en-IN") : "—"}
@@ -177,22 +232,27 @@ export default function AdminAttendancePage() {
               );
             })}
             {events.length === 0 && (
-              <tr><td colSpan={4} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>No attendance for this month.</td></tr>
+              <tr><td colSpan={5} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>No attendance for this month.</td></tr>
             )}
           </tbody>
         </table>
       </div>
 
       <h3 className="mt-8 text-lg font-semibold" style={{ color: "var(--color-ink)" }}>Correction Requests</h3>
-      <div className="mt-3 space-y-3">
+      <div className="mt-3 space-y-2">
         {pendingCorrections.map((c) => (
-          <div key={c.id} className="rounded-2xl border bg-white p-4 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-            <p className="font-semibold" style={{ color: "var(--color-ink)" }}>{c.profiles?.full_name ?? "Staff"} — {c.date}</p>
-            <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
-              Requested: {c.requested_check_in ?? "—"} → {c.requested_check_out ?? "—"}
-            </p>
-            <p className="mt-1 text-sm italic" style={{ color: "var(--color-ink-soft)" }}>&ldquo;{c.reason}&rdquo;</p>
-            <div className="mt-3 flex gap-2">
+          <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-white px-4 py-2.5 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
+            <div className="min-w-0">
+              <p className="text-sm" style={{ color: "var(--color-ink)" }}>
+                <span className="font-semibold">{c.profiles?.full_name ?? "Staff"}</span>
+                {correctionsSpanMultipleOrgs && (
+                  <span className="ml-1.5 text-xs" style={{ color: "var(--color-ink-soft)" }}>({c.organizations?.name ?? "Unknown organization"})</span>
+                )}
+                {" "}— {c.date} · {c.requested_check_in ?? "—"} → {c.requested_check_out ?? "—"}
+              </p>
+              <p className="text-xs italic" style={{ color: "var(--color-ink-soft)" }}>&ldquo;{c.reason}&rdquo;</p>
+            </div>
+            <div className="flex shrink-0 gap-2">
               <button type="button" onClick={() => decideCorrection(c.id, "approve")} className="rounded-full px-4 py-1.5 text-xs font-semibold text-white" style={{ backgroundColor: "var(--color-action)" }}>
                 Approve
               </button>

@@ -30,4 +30,6 @@ export type Lead = {
   stage: LeadStage;
   assignedTo: string;
   notes: string;
+  /** Set once this lead has actually been turned into a customer account + order (see /api/leads/[id]/convert) — undefined means not yet converted. */
+  convertedToProfileId?: string;
 };

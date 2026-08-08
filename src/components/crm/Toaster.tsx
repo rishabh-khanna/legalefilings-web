@@ -35,7 +35,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   return (
     <ToastContext.Provider value={{ toast }}>
       {children}
-      <div className="pointer-events-none fixed bottom-4 right-4 z-[100] flex flex-col gap-2 sm:bottom-6 sm:right-6">
+      {/* z-[110] — must stay above every modal in the app, including
+          DetailPickerModal's z-[100] (itself already raised above
+          ordinary modals since it can be nested inside one) — a toast
+          firing while any picker/modal is open still needs to be seen,
+          not rendered behind it. */}
+      <div className="pointer-events-none fixed bottom-4 right-4 z-[110] flex flex-col gap-2 sm:bottom-6 sm:right-6">
         <AnimatePresence>
           {toasts.map((t) => {
             const Icon = ICONS[t.kind];

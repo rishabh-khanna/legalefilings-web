@@ -5,6 +5,8 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { SITE_NAME } from "@/config/site";
 import { formatHoursMinutes } from "@/lib/format-duration";
+import { canSeeAllOrgs } from "@/lib/organization";
+import { hasToolAccess } from "@/lib/tool-grants";
 
 const styles = StyleSheet.create({
   page: { padding: 40, fontSize: 10, color: "#0f172a" },
@@ -90,7 +92,7 @@ function AttendanceReportPdf({
 // PDF export: one row per day with check-in, check-out, and total hours.
 export async function GET(request: Request) {
   const profile = await getCurrentProfile();
-  if (!profile || profile.account_type !== "admin") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!profile || !(await hasToolAccess(profile, "reports"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { searchParams } = new URL(request.url);
   const staffId = searchParams.get("staffId");
@@ -98,7 +100,10 @@ export async function GET(request: Request) {
   if (!staffId || !month) return NextResponse.json({ error: "staffId and month are required" }, { status: 400 });
 
   const supabase = getSupabaseAdmin();
-  const { data: staffProfile } = await supabase.from("profiles").select("full_name").eq("id", staffId).single();
+  const { data: staffProfile } = await supabase.from("profiles").select("full_name, organization_id").eq("id", staffId).single();
+  if (!staffProfile || (!canSeeAllOrgs(profile) && staffProfile.organization_id !== profile.organization_id)) {
+    return NextResponse.json({ error: "Staff not found" }, { status: 404 });
+  }
 
   const [y, m] = month.split("-").map(Number);
   const start = `${month}-01`;

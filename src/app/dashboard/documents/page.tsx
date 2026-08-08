@@ -6,6 +6,12 @@ import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useActionMessage } from "@/lib/use-action-message";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
+import { LoadingBlock } from "@/components/Spinner";
+import { usePagination } from "@/lib/use-pagination";
+import { TablePagination } from "@/components/TablePagination";
+import { useDateRangeFilter } from "@/lib/use-date-range-filter";
+import { DateRangeFilter } from "@/components/DateRangeFilter";
+import { ExportButton } from "@/components/ExportButton";
 
 type Document = { id: string; document_type: string; file_name: string; uploaded_at: string };
 type StaffOption = { id: string; name: string };
@@ -49,7 +55,12 @@ export default function DocumentsPage() {
         // a rater with no reports just sees their own documents.
         const res = await fetch("/api/team-members");
         const data = await res.json();
-        const opts = ((data.members ?? []) as { id: string; full_name: string | null }[]).map((p) => ({ id: p.id, name: p.full_name ?? "Unnamed" }));
+        const members = (data.members ?? []) as { id: string; full_name: string | null; organizationName?: string | null }[];
+        const orgCount = new Set(members.map((p) => p.organizationName)).size;
+        const opts = members.map((p) => ({
+          id: p.id,
+          name: orgCount > 1 && p.organizationName ? `${p.full_name ?? "Unnamed"} — ${p.organizationName}` : (p.full_name ?? "Unnamed"),
+        }));
         setStaffOptions(opts);
 
         if (admin && opts[0]) {
@@ -90,8 +101,11 @@ export default function DocumentsPage() {
     }
   }
 
+  const dateFilter = useDateRangeFilter(documents, (d) => d.uploaded_at);
+  const { page, setPage, pageSize, setPageSize, pageItems: pagedDocuments, totalPages, total, start, end } = usePagination(dateFilter.filtered);
+
   if (loading) {
-    return <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>Loading…</p>;
+    return <LoadingBlock />;
   }
 
   const inputClass = "w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]";
@@ -144,7 +158,12 @@ export default function DocumentsPage() {
         </div>
         <div>
           <label className="mb-1 block text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>File</label>
-          <input required type="file" onChange={(e) => setFile(e.target.files?.[0] ?? null)} className="text-sm" />
+          <input
+            required
+            type="file"
+            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+            className="text-sm file:mr-3 file:cursor-pointer file:rounded-lg file:border file:border-[var(--color-line)] file:bg-white file:px-3 file:py-1.5 file:text-sm file:font-medium file:text-[var(--color-ink)] file:transition-colors hover:file:bg-[var(--color-accent-tint)]"
+          />
         </div>
         <button type="submit" disabled={uploading || !file} className="rounded-full px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-60" style={{ backgroundColor: "var(--color-action)" }}>
           {uploading ? "Uploading…" : "Upload"}
@@ -152,10 +171,40 @@ export default function DocumentsPage() {
       </form>
       )}
 
-      <div className="mt-5 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
-        <table className="w-full min-w-[420px] text-left text-sm">
+      <DateRangeFilter
+        from={dateFilter.from}
+        to={dateFilter.to}
+        onFromChange={dateFilter.setFrom}
+        onToChange={dateFilter.setTo}
+        onClear={dateFilter.clear}
+        active={dateFilter.active}
+      />
+
+      <div className="mt-3 flex justify-end">
+        <ExportButton
+          filename="documents"
+          headers={["Type", "File", "Uploaded"]}
+          rows={dateFilter.filtered.map((d) => [d.document_type, d.file_name, new Date(d.uploaded_at).toLocaleDateString("en-IN")])}
+        />
+      </div>
+
+      <TablePagination
+        page={page}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+        start={start}
+        end={end}
+        total={total}
+        itemLabel="documents"
+      />
+
+      <div className="mt-3 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
+        <table className="dt-table w-full min-w-[420px] text-left text-sm">
           <thead>
             <tr style={{ backgroundColor: "var(--color-muted-tint)" }}>
+              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>#</th>
               <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Type</th>
               <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>File</th>
               <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Uploaded</th>
@@ -163,8 +212,9 @@ export default function DocumentsPage() {
             </tr>
           </thead>
           <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
-            {documents.map((d) => (
+            {pagedDocuments.map((d, i) => (
               <tr key={d.id}>
+                <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
                 <td className="px-4 py-3 font-medium" style={{ color: "var(--color-ink)" }}>{d.document_type}</td>
                 <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{d.file_name}</td>
                 <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{new Date(d.uploaded_at).toLocaleDateString("en-IN")}</td>
@@ -177,7 +227,7 @@ export default function DocumentsPage() {
             ))}
             {documents.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>No documents uploaded yet.</td>
+                <td colSpan={5} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>No documents uploaded yet.</td>
               </tr>
             )}
           </tbody>

@@ -6,6 +6,7 @@ import { getCurrentProfile } from "@/lib/current-profile";
 import { isStaffOrAdmin } from "@/lib/roles";
 import { getLetterTemplate } from "@/content/hr-letter-templates";
 import { SITE_NAME } from "@/config/site";
+import { canSeeAllOrgs } from "@/lib/organization";
 
 const styles = StyleSheet.create({
   page: { padding: 48, fontSize: 11, color: "#0f172a", lineHeight: 1.5 },
@@ -49,14 +50,22 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: `Missing required field(s): ${missing.map((f) => f.label).join(", ")}` }, { status: 400 });
   }
 
+  const supabase = getSupabaseAdmin();
+  if (staffId && !canSeeAllOrgs(profile)) {
+    const { data: target } = await supabase.from("profiles").select("organization_id").eq("id", staffId).single();
+    if (!target || target.organization_id !== profile.organization_id) {
+      return NextResponse.json({ error: "Staff not found" }, { status: 404 });
+    }
+  }
+
   const today = new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
   const paragraphs = template.body(fields, SITE_NAME, today).filter(Boolean);
   const subject = template.subject(fields);
 
   const buffer = await renderToBuffer(<LetterPdf subject={subject} paragraphs={paragraphs} />);
 
-  const supabase = getSupabaseAdmin();
   await supabase.from("generated_letters").insert({
+    organization_id: profile.organization_id,
     template_slug: template.slug,
     staff_id: staffId ?? null,
     employee_name: fields.employeeName,

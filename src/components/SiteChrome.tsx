@@ -4,6 +4,7 @@ import { usePathname } from "next/navigation";
 import { SiteHeader, type NavCategoryData } from "@/components/SiteHeader";
 import { FloatingContact } from "@/components/FloatingContact";
 import { AiAssistant } from "@/components/AiAssistant";
+import { DashboardHelpAssistant } from "@/components/dashboard/DashboardHelpAssistant";
 import type { SearchEntry } from "@/lib/content";
 
 // doola.com's real sign-in/signup pages are standalone — no offer banner,
@@ -14,13 +15,20 @@ import type { SearchEntry } from "@/lib/content";
 // This client boundary lets the root layout stay a server component while
 // still being able to check the current route and skip the site chrome
 // for pages that shouldn't have it.
-//
-// /dashboard deliberately does NOT get this treatment (even though it's a
-// logged-in area) — a client who's signed in should still be able to
-// browse services, see pricing, and buy another plan without leaving the
-// dashboard section, so it keeps the full public header/nav/footer around
-// it rather than being walled off in its own silo.
 const BARE_ROUTES = ["/login"];
+
+// /dashboard used to deliberately keep the full public header/promo
+// banner/mega-nav/footer around it, on the theory that a signed-in
+// client should be able to browse services or buy another plan without
+// leaving the dashboard section. In practice a countdown-timer offer
+// banner and "Claim My Offer" CTA sitting above a staff member's lead
+// list (or a customer's invoice) reads as noise, not a feature — and
+// it's the one part of the page whose height actually varies, which is
+// what made the dashboard feel inconsistent page to page. The CRM now
+// gets its own clean shell: no header/promo/nav/footer, but the
+// floating support contact stays (a real, low-noise way to reach a
+// human, unlike the marketing chrome around it).
+const DASHBOARD_PREFIX = "/dashboard";
 
 export function SiteChrome({
   navCategories,
@@ -35,9 +43,20 @@ export function SiteChrome({
 }) {
   const pathname = usePathname();
   const bare = BARE_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+  const isDashboard = pathname === DASHBOARD_PREFIX || pathname.startsWith(`${DASHBOARD_PREFIX}/`);
 
   if (bare) {
     return <main className="flex-1">{children}</main>;
+  }
+
+  if (isDashboard) {
+    return (
+      <>
+        <main key="main" className="flex-1">{children}</main>
+        <FloatingContact key="floating" />
+        <DashboardHelpAssistant key="help" />
+      </>
+    );
   }
 
   return (

@@ -1,11 +1,18 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Clock3, CalendarCheck, Hourglass } from "lucide-react";
 import { formatHoursMinutes } from "@/lib/format-duration";
 import { useActionMessage } from "@/lib/use-action-message";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
+import { LoadingBlock } from "@/components/Spinner";
+import { toISTDateString } from "@/lib/ist-date";
+import { usePagination } from "@/lib/use-pagination";
+import { TablePagination } from "@/components/TablePagination";
+import { useDateRangeFilter } from "@/lib/use-date-range-filter";
+import { DateRangeFilter } from "@/components/DateRangeFilter";
+import { ExportButton } from "@/components/ExportButton";
 
 type AttendanceEvent = {
   id: string;
@@ -95,8 +102,13 @@ export default function AttendancePage() {
     return () => clearTimeout(kickoff);
   }, []);
 
-  const today = new Date().toISOString().slice(0, 10);
-  const todaysEvents = events.filter((e) => e.occurred_at.slice(0, 10) === today);
+  // IST calendar day, not UTC — matches the server-side clock-in/out
+  // guard (src/app/api/attendance/route.ts), which is IST-aware for the
+  // same reason: plain UTC slicing puts the day boundary at 5:30 AM IST
+  // instead of midnight, so an event correctly recorded under the new
+  // IST day would otherwise silently fail to show up under "today" here.
+  const today = toISTDateString(new Date());
+  const todaysEvents = events.filter((e) => toISTDateString(new Date(e.occurred_at)) === today);
   const lastEvent = todaysEvents[todaysEvents.length - 1];
   const clockedIn = lastEvent?.event_type === "check_in";
 
@@ -150,8 +162,12 @@ export default function AttendancePage() {
 
   const inputClass = "w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]";
 
+  const groupedDays = useMemo(() => groupByDay(events), [events]);
+  const dateFilter = useDateRangeFilter(groupedDays, ([day]) => day);
+  const { page, setPage, pageSize, setPageSize, pageItems: pagedDays, totalPages, total, start, end } = usePagination(dateFilter.filtered);
+
   if (loading) {
-    return <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>Loading…</p>;
+    return <LoadingBlock />;
   }
 
   const elapsedMs = clockedIn && lastEvent ? now - new Date(lastEvent.occurred_at).getTime() : 0;
@@ -161,9 +177,9 @@ export default function AttendancePage() {
   return (
     <div>
       <DashboardPageHero title="Attendance" subtitle="Clock in, track your hours, and request corrections.">
-        <div className="relative mt-6 grid grid-cols-3 gap-4">
+        <div className="relative mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <HeroKpi icon={Clock3} label="Today" value={clockedIn ? "Clocked In" : "Not Clocked In"} />
-          <HeroKpi icon={CalendarCheck} label="Days Logged" value={groupByDay(events).length} />
+          <HeroKpi icon={CalendarCheck} label="Days Logged" value={groupedDays.length} />
           <HeroKpi icon={Hourglass} label="Pending Corrections" value={pendingCorrections} />
         </div>
       </DashboardPageHero>
@@ -242,10 +258,45 @@ export default function AttendancePage() {
         </div>
       )}
 
-      <div className="mt-4 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
-        <table className="w-full min-w-[520px] text-left text-sm">
+      <DateRangeFilter
+        from={dateFilter.from}
+        to={dateFilter.to}
+        onFromChange={dateFilter.setFrom}
+        onToChange={dateFilter.setTo}
+        onClear={dateFilter.clear}
+        active={dateFilter.active}
+      />
+
+      <div className="mt-3 flex justify-end">
+        <ExportButton
+          filename="attendance"
+          headers={["Date", "Check In", "Check Out", "Hours"]}
+          rows={dateFilter.filtered.map(([day, entry]) => [
+            day,
+            entry.checkIn ? new Date(entry.checkIn).toLocaleTimeString("en-IN") : "",
+            entry.checkOut ? new Date(entry.checkOut).toLocaleTimeString("en-IN") : "",
+            entry.checkIn && entry.checkOut ? formatHoursMinutes(new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime()) : "",
+          ])}
+        />
+      </div>
+
+      <TablePagination
+        page={page}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+        start={start}
+        end={end}
+        total={total}
+        itemLabel="days"
+      />
+
+      <div className="mt-3 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
+        <table className="dt-table w-full min-w-[520px] text-left text-sm">
           <thead>
             <tr style={{ backgroundColor: "var(--color-muted-tint)" }}>
+              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>#</th>
               <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Date</th>
               <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Check In</th>
               <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Check Out</th>
@@ -253,7 +304,7 @@ export default function AttendancePage() {
             </tr>
           </thead>
           <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
-            {groupByDay(events).map(([day, entry]) => {
+            {pagedDays.map(([day, entry], i) => {
               const hours = entry.checkIn && entry.checkOut
                 ? formatHoursMinutes(new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime())
                 : "—";
@@ -261,6 +312,7 @@ export default function AttendancePage() {
               const outLink = mapLink(entry.checkOutLoc ?? null);
               return (
                 <tr key={day}>
+                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
                   <td className="px-4 py-3 font-medium" style={{ color: "var(--color-ink)" }}>{day}</td>
                   <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>
                     {entry.checkIn ? new Date(entry.checkIn).toLocaleTimeString("en-IN") : "—"}
@@ -284,7 +336,7 @@ export default function AttendancePage() {
             })}
             {events.length === 0 && (
               <tr>
-                <td colSpan={4} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>No attendance recorded yet.</td>
+                <td colSpan={5} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>No attendance recorded yet.</td>
               </tr>
             )}
           </tbody>

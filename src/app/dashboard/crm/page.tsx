@@ -11,6 +11,10 @@ import { SITE_NAME } from "@/config/site";
 import { useActionMessage } from "@/lib/use-action-message";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
+import { LoadingBlock } from "@/components/Spinner";
+import { usePagination } from "@/lib/use-pagination";
+import { TablePagination } from "@/components/TablePagination";
+import { ExportButton } from "@/components/ExportButton";
 
 type LeadRow = {
   id: string;
@@ -35,6 +39,7 @@ export default function CrmPage() {
   const [leads, setLeads] = useState<LeadRow[]>([]);
   const [staffName, setStaffName] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<LeadStage | "all">("all");
   const [selectedState, setSelectedState] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -66,24 +71,30 @@ export default function CrmPage() {
     setSubmitting(true);
     const form = e.currentTarget;
     const data = new FormData(form);
-    const supabase = createSupabaseBrowserClient();
-    const { error } = await supabase.from("leads").insert({
-      name: String(data.get("name") ?? ""),
-      company: String(data.get("company") ?? "") || null,
-      email: String(data.get("email") ?? ""),
-      phone: String(data.get("phone") ?? ""),
-      city: String(data.get("city") ?? "") || null,
-      state: String(data.get("state") ?? "") || null,
-      status: "new",
-      assigned_to: staffName,
-      source: "crm_manual",
+    // Goes through /api/leads (not a direct Supabase insert) so the
+    // server can attach the caller's own organization_id — the browser
+    // session doesn't know that, and leads.organization_id is NOT NULL.
+    const res = await fetch("/api/leads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: String(data.get("name") ?? ""),
+        company: String(data.get("company") ?? "") || undefined,
+        email: String(data.get("email") ?? ""),
+        phone: String(data.get("phone") ?? ""),
+        city: String(data.get("city") ?? "") || undefined,
+        state: String(data.get("state") ?? "") || undefined,
+      }),
     });
     setSubmitting(false);
-    if (error) {
+    if (!res.ok) {
       showError("Failed to save lead — please try again.");
       return;
     }
-    if (staffName) await reload(supabase, staffName);
+    if (staffName) {
+      const supabase = createSupabaseBrowserClient();
+      await reload(supabase, staffName);
+    }
     form.reset();
     setSelectedState("");
     setShowForm(false);
@@ -97,12 +108,22 @@ export default function CrmPage() {
     return { total: leads.length, won, inProgress, fresh };
   }, [leads]);
 
+  const [search, setSearch] = useState("");
+  const filteredLeads = useMemo(() => {
+    return leads.filter((l) => {
+      if (statusFilter !== "all" && l.status !== statusFilter) return false;
+      if (search.trim()) {
+        const q = search.trim().toLowerCase();
+        const hay = `${l.name} ${l.email} ${l.phone} ${l.company ?? ""}`.toLowerCase();
+        if (!hay.includes(q)) return false;
+      }
+      return true;
+    });
+  }, [leads, statusFilter, search]);
+  const { page, setPage, pageSize, setPageSize, pageItems: pagedLeads, totalPages, total, start, end } = usePagination(filteredLeads);
+
   if (loading) {
-    return (
-      <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
-        Loading…
-      </p>
-    );
+    return <LoadingBlock />;
   }
 
   return (
@@ -116,15 +137,56 @@ export default function CrmPage() {
         </div>
       </DashboardPageHero>
 
-      <div className="flex flex-wrap items-center justify-end gap-4">
-        <button
-          type="button"
-          onClick={() => setShowForm((v) => !v)}
-          className="rounded-full px-4 py-2 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
-          style={{ backgroundColor: "var(--color-action)" }}
-        >
-          {showForm ? "Cancel" : "+ Add Lead"}
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search name, email, phone, company…"
+            className="w-full max-w-xs rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]"
+            style={{ borderColor: "var(--color-line)" }}
+          />
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value as LeadStage | "all")}
+            className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]"
+            style={{ borderColor: "var(--color-line)" }}
+          >
+            <option value="all">All statuses</option>
+            {Object.entries(LEAD_STAGE_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+          {(search.trim() || statusFilter !== "all") && (
+            <button
+              type="button"
+              onClick={() => {
+                setSearch("");
+                setStatusFilter("all");
+              }}
+              className="text-xs font-semibold"
+              style={{ color: "var(--color-action-dark)" }}
+            >
+              Clear filters
+            </button>
+          )}
+        </div>
+        <div className="flex items-center gap-3">
+          <ExportButton
+            filename="crm-leads"
+            headers={["Name", "Company", "Contact", "Location", "Status"]}
+            rows={filteredLeads.map((l) => [l.name, l.company || "", `${l.email} ${l.phone}`, [l.city, l.state].filter(Boolean).join(", "), LEAD_STAGE_LABELS[l.status]])}
+          />
+          <button
+            type="button"
+            onClick={() => setShowForm((v) => !v)}
+            className="rounded-full px-4 py-2 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
+            style={{ backgroundColor: "var(--color-action)" }}
+          >
+            {showForm ? "Cancel" : "+ Add Lead"}
+          </button>
+        </div>
       </div>
 
       <div className="mt-3">
@@ -166,10 +228,23 @@ export default function CrmPage() {
         </form>
       )}
 
-      <div className="mt-5 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
-        <table className="w-full min-w-[560px] text-left text-sm">
+      <TablePagination
+        page={page}
+        totalPages={totalPages}
+        pageSize={pageSize}
+        onPageChange={setPage}
+        onPageSizeChange={setPageSize}
+        start={start}
+        end={end}
+        total={total}
+        itemLabel="leads"
+      />
+
+      <div className="mt-3 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
+        <table className="dt-table w-full min-w-[560px] text-left text-sm">
           <thead>
             <tr style={{ backgroundColor: "var(--color-muted-tint)" }}>
+              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>#</th>
               <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Name</th>
               <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Company</th>
               <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Contact</th>
@@ -179,10 +254,11 @@ export default function CrmPage() {
             </tr>
           </thead>
           <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
-            {leads.map((l) => {
+            {pagedLeads.map((l, i) => {
               const style = STATUS_STYLE[l.status];
               return (
                 <tr key={l.id} className="align-top" style={{ borderColor: "var(--color-line)" }}>
+                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
                   <td className="px-4 py-3 font-medium" style={{ color: "var(--color-ink)" }}>{l.name}</td>
                   <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{l.company || "—"}</td>
                   <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>
@@ -211,10 +287,10 @@ export default function CrmPage() {
                 </tr>
               );
             })}
-            {leads.length === 0 && (
+            {filteredLeads.length === 0 && (
               <tr>
-                <td colSpan={6} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>
-                  No leads assigned to you yet.
+                <td colSpan={7} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>
+                  {leads.length === 0 ? "No leads assigned to you yet." : "No leads match this filter."}
                 </td>
               </tr>
             )}

@@ -2,9 +2,12 @@ import Link from "next/link";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { getReportingChainIds } from "@/lib/reporting-chain";
-import { isStaffOrAdmin, roleLabel } from "@/lib/roles";
+import { isStaffOrAdmin } from "@/lib/roles";
+import { canSeeAllOrgs } from "@/lib/organization";
 import { AnimatedCounter } from "@/components/crm/AnimatedCounter";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
+import { GettingStartedChecklist } from "@/components/crm/GettingStartedChecklist";
+import { getMissingBusinessSettingsFields } from "@/lib/business-settings-completeness";
 
 const PersonIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
@@ -38,21 +41,32 @@ export default async function DashboardOverviewPage() {
   // matching each table's own canonical page.
   let ordersQuery = supabase.from("orders").select("id, service, status, created_at").order("created_at", { ascending: false });
   let invoicesQuery = supabase.from("invoices").select("id, invoice_number, total, status, created_at").order("created_at", { ascending: false });
+  let leadsQuery = supabase.from("leads").select("id", { count: "exact", head: true }).eq("assigned_to", profile?.full_name ?? "");
   if (profile && !staff) {
     ordersQuery = ordersQuery.eq("customer_id", profile.id);
     invoicesQuery = invoicesQuery.eq("customer_id", profile.id);
-  } else if (profile && staff && !isAdminUser) {
-    const chain = await getReportingChainIds(profile.id);
-    ordersQuery = ordersQuery.in("assigned_to", [profile.id, ...chain]);
-    invoicesQuery = invoicesQuery.in("created_by", [profile.id, ...chain]);
+  } else if (profile && staff) {
+    if (!canSeeAllOrgs(profile)) {
+      ordersQuery = ordersQuery.eq("organization_id", profile.organization_id);
+      invoicesQuery = invoicesQuery.eq("organization_id", profile.organization_id);
+      leadsQuery = leadsQuery.eq("organization_id", profile.organization_id);
+    }
+    // canSeeAllOrgs (is_platform_admin) must also skip the reporting-chain
+    // narrowing below — independent axis from account_type, so a
+    // platform_admin without account_type "admin" would otherwise pass
+    // the org filter above (every org) and then get wrongly narrowed
+    // straight back down to their own chain here.
+    if (!isAdminUser && !canSeeAllOrgs(profile)) {
+      const chain = await getReportingChainIds(profile.id);
+      ordersQuery = ordersQuery.in("assigned_to", [profile.id, ...chain]);
+      invoicesQuery = invoicesQuery.in("created_by", [profile.id, ...chain]);
+    }
   }
 
   const [{ data: orders }, { data: invoices }, leadsCount] = await Promise.all([
     ordersQuery,
     invoicesQuery,
-    staff && profile
-      ? supabase.from("leads").select("id", { count: "exact", head: true }).eq("assigned_to", profile.full_name ?? "")
-      : Promise.resolve({ count: 0 }),
+    staff && profile ? leadsQuery : Promise.resolve({ count: 0 }),
   ]);
 
   const orderList = orders ?? [];
@@ -64,6 +78,7 @@ export default async function DashboardOverviewPage() {
   let hrOverview: { totalEmployees: number; presentToday: number; absentToday: number; birthdaysToday: number; payrollDue: number } | null = null;
   let recentAttendance: { id: string; staffId: string; name: string; eventType: string; occurredAt: string }[] = [];
   let recentLeaveRequests: { id: string; name: string; leaveType: string; status: string; startDate: string; endDate: string }[] = [];
+  let gettingStarted: { businessSettingsDone: boolean; hasTeamMembers: boolean; hasDepartments: boolean } | null = null;
 
   if (isAdmin) {
     const admin = getSupabaseAdmin();
@@ -73,6 +88,43 @@ export default async function DashboardOverviewPage() {
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
 
+    // profile is guaranteed here (isAdmin implies it), and platform_admin
+    // gets literally every org's HR data on their own overview — the
+    // rest of an org's own admin only ever sees their own org's.
+    const orgScope = canSeeAllOrgs(profile!) ? null : profile!.organization_id;
+
+    let totalEmployeesQuery = admin.from("profiles").select("id", { count: "exact", head: true }).in("account_type", ["staff", "admin"]);
+    let checkinsQuery = admin.from("attendance_events").select("staff_id").eq("event_type", "check_in").gte("occurred_at", todayStart.toISOString());
+    let birthdaysQuery = admin.from("profiles").select("date_of_birth").in("account_type", ["staff", "admin"]);
+    let payslipsQuery = admin.from("payslips").select("id", { count: "exact", head: true }).eq("month", month).eq("year", year);
+    let attendanceRowsQuery = admin
+      .from("attendance_events")
+      .select("id, staff_id, event_type, occurred_at, profiles!attendance_events_staff_id_fkey(full_name)")
+      .order("occurred_at", { ascending: false })
+      .limit(5);
+    let leaveRowsQuery = admin
+      .from("leave_requests")
+      .select("id, staff_id, leave_type, status, start_date, end_date, profiles!leave_requests_staff_id_fkey(full_name)")
+      .order("created_at", { ascending: false })
+      .limit(5);
+    // "Getting started" checklist signals — always scoped to the
+    // viewing admin's own org (not company-wide, even for a
+    // platform_admin browsing a different org's overview).
+    const companySettingsQuery = admin
+      .from("company_settings")
+      .select("address, gst_number, pan_number, state, bank_name, bank_account_number, bank_ifsc, upi_id")
+      .eq("organization_id", profile!.organization_id)
+      .maybeSingle();
+    const departmentsCountQuery = admin.from("departments").select("id", { count: "exact", head: true }).eq("organization_id", profile!.organization_id);
+    if (orgScope) {
+      totalEmployeesQuery = totalEmployeesQuery.eq("organization_id", orgScope);
+      checkinsQuery = checkinsQuery.eq("organization_id", orgScope);
+      birthdaysQuery = birthdaysQuery.eq("organization_id", orgScope);
+      payslipsQuery = payslipsQuery.eq("organization_id", orgScope);
+      attendanceRowsQuery = attendanceRowsQuery.eq("organization_id", orgScope);
+      leaveRowsQuery = leaveRowsQuery.eq("organization_id", orgScope);
+    }
+
     const [
       { count: totalEmployees },
       { data: todaysCheckins },
@@ -80,22 +132,23 @@ export default async function DashboardOverviewPage() {
       { count: payslipsThisMonth },
       { data: attendanceRows },
       { data: leaveRows },
+      { data: companySettingsRow },
+      { count: departmentsCount },
     ] = await Promise.all([
-      admin.from("profiles").select("id", { count: "exact", head: true }).in("account_type", ["staff", "admin"]),
-      admin.from("attendance_events").select("staff_id").eq("event_type", "check_in").gte("occurred_at", todayStart.toISOString()),
-      admin.from("profiles").select("date_of_birth").in("account_type", ["staff", "admin"]),
-      admin.from("payslips").select("id", { count: "exact", head: true }).eq("month", month).eq("year", year),
-      admin
-        .from("attendance_events")
-        .select("id, staff_id, event_type, occurred_at, profiles!attendance_events_staff_id_fkey(full_name)")
-        .order("occurred_at", { ascending: false })
-        .limit(5),
-      admin
-        .from("leave_requests")
-        .select("id, staff_id, leave_type, status, start_date, end_date, profiles!leave_requests_staff_id_fkey(full_name)")
-        .order("created_at", { ascending: false })
-        .limit(5),
+      totalEmployeesQuery,
+      checkinsQuery,
+      birthdaysQuery,
+      payslipsQuery,
+      attendanceRowsQuery,
+      leaveRowsQuery,
+      companySettingsQuery,
+      departmentsCountQuery,
     ]);
+    gettingStarted = {
+      businessSettingsDone: getMissingBusinessSettingsFields(companySettingsRow).length === 0,
+      hasTeamMembers: (totalEmployees ?? 0) > 1,
+      hasDepartments: (departmentsCount ?? 0) > 0,
+    };
 
     const presentToday = new Set((todaysCheckins ?? []).map((e) => e.staff_id)).size;
     const total = totalEmployees ?? 0;
@@ -133,8 +186,8 @@ export default async function DashboardOverviewPage() {
   return (
     <div>
       <DashboardPageHero
-        title={profile ? `Welcome back, ${profile.full_name ?? "there"}` : "Overview"}
-        subtitle={profile ? roleLabel(profile) : undefined}
+        title="Overview"
+        subtitle={staff ? "Your work at a glance." : "Your account at a glance."}
       >
         <div className={`relative mt-6 grid grid-cols-2 gap-4 ${staff ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
           {stats.map((stat) => (
@@ -144,6 +197,12 @@ export default async function DashboardOverviewPage() {
           ))}
         </div>
       </DashboardPageHero>
+
+      {isAdmin && gettingStarted && profile && (
+        <div className="mt-6">
+          <GettingStartedChecklist organizationId={profile.organization_id} {...gettingStarted} />
+        </div>
+      )}
 
       {isAdmin && hrOverview && (
         <div className="mt-8">
@@ -306,6 +365,22 @@ export default async function DashboardOverviewPage() {
           </ul>
         </div>
       </div>
+
+      {profile && !staff && (
+        <Link
+          href="/dashboard/crm-access"
+          className="mt-8 flex items-center justify-between gap-3 rounded-2xl border bg-white p-5 transition-colors hover:bg-[var(--color-accent-tint)] dark:bg-[var(--color-paper-raised)]"
+          style={{ borderColor: "var(--color-line)" }}
+        >
+          <div>
+            <h2 className="font-semibold" style={{ color: "var(--color-ink)" }}>Want your own CRM?</h2>
+            <p className="mt-1 text-sm" style={{ color: "var(--color-ink-soft)" }}>
+              Every plan comes with a free year of your own CRM workspace — your own admin login, your own team, your own leads and invoicing.
+            </p>
+          </div>
+          <span className="shrink-0 text-sm font-medium" style={{ color: "var(--color-action-dark)" }}>Request CRM Access →</span>
+        </Link>
+      )}
     </div>
   );
 }

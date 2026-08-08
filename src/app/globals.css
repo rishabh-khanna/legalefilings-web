@@ -153,6 +153,47 @@ h1, h2, h3 {
   }
 }
 
+/* Shared compact table style — every dashboard data table opts in via
+   `dt-table` on the <table> element instead of each page hand-tuning its
+   own cell padding/font-size. Selector specificity (.dt-table th/td, one
+   class + one element) beats the plain utility classes (px-4 py-3 etc.)
+   already on those cells, so this overrides them without needing
+   !important or touching every inline className. */
+.dt-table {
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.dt-table thead tr {
+  background: linear-gradient(180deg, var(--color-paper-raised) 0%, var(--color-paper) 100%);
+}
+.dt-table th {
+  padding: 0.65rem 0.75rem;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-ink-soft);
+  border-bottom: 2px solid var(--color-accent);
+}
+.dt-table td {
+  padding: 0.625rem 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.4;
+  border-bottom: 1px solid var(--color-line);
+}
+.dt-table tbody tr {
+  transition: background-color 0.12s ease-out;
+}
+.dt-table tbody tr:nth-child(even) {
+  background-color: var(--color-paper);
+}
+.dt-table tbody tr:hover {
+  background-color: var(--color-muted-tint) !important;
+}
+.dt-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
 @keyframes sidebar-in {
   from {
     transform: translateX(-100%);
@@ -163,6 +204,25 @@ h1, h2, h3 {
 }
 @media (prefers-reduced-motion: reduce) {
   .animate-sidebar-in {
+    animation: none !important;
+  }
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-toast-in {
+  animation: toast-in 0.2s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-toast-in {
     animation: none !important;
   }
 }

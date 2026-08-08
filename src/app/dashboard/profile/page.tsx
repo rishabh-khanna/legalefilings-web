@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { StateSelect } from "@/components/StateSelect";
 import { CitySelect } from "@/components/CitySelect";
+import { LoadingBlock } from "@/components/Spinner";
+import { DashboardPageHero } from "@/components/crm/DashboardPageHero";
 
 export default function ProfilePage() {
   const [name, setName] = useState("");
@@ -99,25 +101,16 @@ export default function ProfilePage() {
   const labelClass = "block text-sm font-medium mb-1";
 
   if (loading) {
-    return (
-      <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
-        Loading…
-      </p>
-    );
+    return <LoadingBlock />;
   }
 
   return (
     <div>
-      <h1 className="text-2xl font-extrabold" style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)" }}>
-        Edit Profile
-      </h1>
-      <p className="mt-1 text-sm" style={{ color: "var(--color-ink-soft)" }}>
-        Keep your account details up to date.
-      </p>
+      <DashboardPageHero title="Edit Profile" subtitle="Keep your account details up to date." />
 
       <form
         onSubmit={handleSubmit}
-        className="mt-6 space-y-5 rounded-2xl border bg-white p-6 dark:bg-[var(--color-paper-raised)]"
+        className="space-y-5 rounded-2xl border bg-white p-6 dark:bg-[var(--color-paper-raised)]"
         style={{ borderColor: "var(--color-line)" }}
       >
         {/* Wide grids instead of one field per row — the dashboard content

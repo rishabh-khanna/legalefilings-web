@@ -47,6 +47,54 @@ export async function createRazorpayOrder(input: { amountInRupees: number; recei
   return res.json();
 }
 
+export type RazorpayPayment = {
+  id: string;
+  order_id: string;
+  amount: number; // paise
+  status: string;
+};
+
+// Used by /api/payments/verify to find out how much was actually
+// captured, straight from Razorpay rather than trusting anything the
+// client sends or assuming it equals the invoice's full total — the
+// same reasoning the webhook route already gets for free from its
+// signed payload (payment.amount).
+export async function getRazorpayPayment(paymentId: string): Promise<RazorpayPayment> {
+  const { keyId, keySecret } = getCredentials();
+  const res = await fetch(`${RAZORPAY_API_BASE}/payments/${paymentId}`, {
+    headers: { Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}` },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Fetching Razorpay payment failed (${res.status}): ${body}`);
+  }
+  return res.json();
+}
+
+// Used by /api/payments/create-order to check whether the invoice's
+// PREVIOUS Razorpay order already got paid before starting a brand-new
+// one — closes the window where a customer pays, closes the tab before
+// /api/payments/verify's fetch lands, and the webhook hasn't caught up
+// yet either: reopening /pay/[id] and clicking "Pay Now" again used to
+// just start a second real charge, since balanceDue was computed only
+// from invoice_payments rows already recorded (none yet, in that
+// window). Razorpay itself is the source of truth for whether the
+// earlier order was actually paid, independent of whether our own
+// verify/webhook has recorded it yet.
+export async function listCapturedPaymentsForOrder(orderId: string): Promise<RazorpayPayment[]> {
+  const { keyId, keySecret } = getCredentials();
+  const res = await fetch(`${RAZORPAY_API_BASE}/orders/${orderId}/payments`, {
+    headers: { Authorization: `Basic ${Buffer.from(`${keyId}:${keySecret}`).toString("base64")}` },
+  });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "");
+    throw new Error(`Fetching Razorpay order payments failed (${res.status}): ${body}`);
+  }
+  const data = await res.json();
+  const items = (data.items ?? []) as RazorpayPayment[];
+  return items.filter((p) => p.status === "captured");
+}
+
 // Checkout success handler on the client hands back order id + payment id +
 // signature — this confirms the payment actually belongs to the order we
 // created and wasn't forged client-side (the signature is HMAC'd with the

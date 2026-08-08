@@ -27,7 +27,19 @@ export function PayNowButton({
         body: JSON.stringify({ invoiceId }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Failed to start payment");
+      if (!res.ok) {
+        // The invoice's real status just changed underneath this page
+        // (already paid/cancelled, or create-order just caught up a
+        // payment that hadn't been recorded yet) — reload instead of
+        // just showing an error, so the customer sees the actual
+        // current status rather than a confusing error message sitting
+        // on top of a stale "Awaiting Payment" screen.
+        if (data.shouldReload) {
+          window.location.reload();
+          return;
+        }
+        throw new Error(data.error ?? "Failed to start payment");
+      }
 
       if (!window.Razorpay) throw new Error("Payment gateway failed to load");
       const razorpay = new window.Razorpay({

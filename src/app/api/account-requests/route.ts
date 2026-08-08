@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { isStaffOrAdmin } from "@/lib/roles";
+import { canSeeAllOrgs } from "@/lib/organization";
 
 // GET /api/account-requests
 //   - ?email=... (public): status check for the person who submitted it —
@@ -25,12 +26,14 @@ export async function GET(request: Request) {
   }
 
   const profile = await getCurrentProfile();
-  if (!isStaffOrAdmin(profile)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!profile || !isStaffOrAdmin(profile)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const { data, error } = await supabase
+  let query = supabase
     .from("account_requests")
     .select("*, profiles!account_requests_requested_by_fkey(full_name)")
     .order("created_at", { ascending: false });
+  if (!canSeeAllOrgs(profile)) query = query.eq("organization_id", profile.organization_id);
+  const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ requests: data });
 }
@@ -64,7 +67,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "This email already has an approved account — try logging in." }, { status: 409 });
   }
 
+  // Public, unauthenticated form — always Legal Efilings' own staff
+  // signup queue (a tenant org's own staff-request flow is a separate,
+  // later feature, not something this endpoint decides between).
+  const { data: legalEfilingsOrg } = await supabase.from("organizations").select("id").eq("slug", "legal-efilings").single();
+
   const payload = {
+    organization_id: legalEfilingsOrg?.id,
     full_name: String(fullName),
     email: String(email),
     phone: phone ? String(phone) : null,

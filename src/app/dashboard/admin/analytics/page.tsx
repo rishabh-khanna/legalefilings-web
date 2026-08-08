@@ -1,18 +1,26 @@
 import { TrendingUp, Users, ShoppingBag, Trophy } from "lucide-react";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
+import { getCurrentProfile } from "@/lib/current-profile";
+import { canSeeAllOrgs } from "@/lib/organization";
 import { LEAD_STAGE_LABELS, type LeadStage } from "@/lib/leads";
 import { RevenueTrendChart, LeadsFunnelChart, OrdersStatusChart, StaffLeaderboardChart } from "@/components/AnalyticsCharts";
 import { AnimatedCounter } from "@/components/crm/AnimatedCounter";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 
 export default async function AnalyticsPage() {
-  const supabase = await createSupabaseServerClient();
+  const profile = await getCurrentProfile();
+  const supabase = getSupabaseAdmin();
 
-  const [{ data: invoices }, { data: leads }, { data: orders }] = await Promise.all([
-    supabase.from("invoices").select("total, status, created_at"),
-    supabase.from("leads").select("status, assigned_to"),
-    supabase.from("orders").select("status"),
-  ]);
+  let invoicesQuery = supabase.from("invoices").select("total, status, created_at");
+  let leadsQuery = supabase.from("leads").select("status, assigned_to");
+  let ordersQuery = supabase.from("orders").select("status");
+  if (profile && !canSeeAllOrgs(profile)) {
+    invoicesQuery = invoicesQuery.eq("organization_id", profile.organization_id);
+    leadsQuery = leadsQuery.eq("organization_id", profile.organization_id);
+    ordersQuery = ordersQuery.eq("organization_id", profile.organization_id);
+  }
+
+  const [{ data: invoices }, { data: leads }, { data: orders }] = await Promise.all([invoicesQuery, leadsQuery, ordersQuery]);
 
   const revenueByMonth = new Map<string, number>();
   for (const inv of invoices ?? []) {

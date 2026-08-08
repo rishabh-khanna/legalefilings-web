@@ -1,0 +1,19 @@
+-- ═══════════════════════════════════════════════════════════════════════
+-- EMPLOYEE DEACTIVATION (instead of a delete that silently fails)
+-- ═══════════════════════════════════════════════════════════════════════
+-- attendance_events, leave_requests, payslips, salary_structures,
+-- employee_documents, generated_letters, and attendance_corrections all
+-- reference profiles(id) with the Postgres default (no ON DELETE
+-- clause = NO ACTION) — correctly so, since payroll/attendance history
+-- is exactly the kind of record a business needs to retain for
+-- compliance even after someone leaves. The bug was that
+-- DELETE /api/admin/employees/[id] had no other path: it always tried a
+-- hard delete, which throws a raw foreign-key violation for literally
+-- any employee who's ever clocked in, taken leave, or had a payslip
+-- generated — i.e. almost every real employee within days of joining.
+-- This adds the missing "offboard without destroying their history"
+-- option — the API now deactivates (blocks login, flips this flag)
+-- instead of hard-deleting whenever any historical record exists, and
+-- only still hard-deletes an employee with zero history (e.g. one
+-- created by mistake).
+alter table profiles add column is_active boolean not null default true;

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { createUserWithProfile } from "@/lib/admin-actions";
+import { canSeeAllOrgs } from "@/lib/organization";
 
 // PATCH /api/account-requests/[id] — approve or reject. Admin-only (staff
 // can request accounts but not approve each other). Approving creates the
@@ -22,6 +23,9 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const supabase = getSupabaseAdmin();
   const { data: reqRow, error: fetchError } = await supabase.from("account_requests").select("*").eq("id", id).single();
   if (fetchError || !reqRow) return NextResponse.json({ error: "Request not found" }, { status: 404 });
+  if (!canSeeAllOrgs(profile) && reqRow.organization_id !== profile.organization_id) {
+    return NextResponse.json({ error: "Request not found" }, { status: 404 });
+  }
   if (reqRow.status !== "pending") {
     return NextResponse.json({ error: "Only pending requests can be reviewed" }, { status: 409 });
   }
@@ -46,6 +50,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   try {
     const accountType = reqRow.requested_account_type ?? "staff";
     const result = await createUserWithProfile({
+      organizationId: reqRow.organization_id,
       email: reqRow.email,
       fullName: reqRow.full_name,
       phone: reqRow.phone ?? undefined,

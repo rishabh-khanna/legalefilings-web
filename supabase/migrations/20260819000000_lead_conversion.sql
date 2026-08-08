@@ -1,0 +1,13 @@
+-- ═══════════════════════════════════════════════════════════════════════
+-- LEAD → ORDER CONVERSION TRACEABILITY
+-- ═══════════════════════════════════════════════════════════════════════
+-- leads.converted_to_profile_id has existed since the very first schema
+-- migration but nothing in the app has ever written or read it — marking
+-- a lead "Won" only ever changed its own status column. There was no
+-- actual action anywhere that turned a lead into a real customer account
+-- and order; staff had to manually re-key everything a second time with
+-- no link back to the lead that generated it. This adds the one missing
+-- piece needed for the other side of that link — which specific order a
+-- lead turned into (a converted customer may have several orders over
+-- time; this points at the one this exact lead closed).
+alter table orders add column lead_id uuid references leads (id);

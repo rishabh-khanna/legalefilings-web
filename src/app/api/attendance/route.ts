@@ -22,31 +22,30 @@ export async function POST(request: Request) {
 
   const supabase = getSupabaseAdmin();
 
-  // Guard against double clock-ins/outs — look at today's most recent event.
-  const startOfDay = new Date();
-  startOfDay.setHours(0, 0, 0, 0);
-  const { data: last } = await supabase
-    .from("attendance_events")
-    .select("event_type")
-    .eq("staff_id", profile.id)
-    .gte("occurred_at", startOfDay.toISOString())
-    .order("occurred_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+  // The "already clocked in / not clocked in" guard used to be a plain
+  // SELECT-then-INSERT here — a race between two near-simultaneous
+  // requests (double-click, two tabs) could let both through before
+  // either wrote. record_attendance_event does the same check and the
+  // insert as one atomic database transaction (advisory-locked per
+  // staff member), so a losing concurrent request fails cleanly instead
+  // of both succeeding.
+  // No .single() here — record_attendance_event returns a plain
+  // attendance_events row (not SETOF), which PostgREST already hands
+  // back as a single JSON object for RPC calls; .single() is for
+  // unwrapping the array a table .select() normally returns and isn't
+  // the right tool for an RPC that's already scalar.
+  const { data, error } = await supabase.rpc("record_attendance_event", {
+    p_staff_id: profile.id,
+    p_organization_id: profile.organization_id,
+    p_event_type: eventType,
+    p_location: location,
+  });
 
-  if (eventType === "check_in" && last?.event_type === "check_in") {
-    return NextResponse.json({ error: "Already clocked in" }, { status: 409 });
+  if (error) {
+    if (error.message?.includes("already_clocked_in")) return NextResponse.json({ error: "Already clocked in" }, { status: 409 });
+    if (error.message?.includes("not_clocked_in")) return NextResponse.json({ error: "Not clocked in" }, { status: 409 });
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  if (eventType === "check_out" && (!last || last.event_type === "check_out")) {
-    return NextResponse.json({ error: "Not clocked in" }, { status: 409 });
-  }
-
-  const { data, error } = await supabase
-    .from("attendance_events")
-    .insert({ staff_id: profile.id, event_type: eventType, location })
-    .select()
-    .single();
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ok: true, event: data }, { status: 201 });
 }
 
