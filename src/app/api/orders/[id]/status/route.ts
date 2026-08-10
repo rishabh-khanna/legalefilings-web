@@ -4,6 +4,7 @@ import { getCurrentProfile } from "@/lib/current-profile";
 import { loadOrderForAccess } from "@/lib/organization";
 import { sendOrderCompletedEmail } from "@/lib/email";
 import { logEmailFailure } from "@/lib/email-failures";
+import { ORDER_STATUS_LABEL, isValidOrderTransition, isTerminalOrderStatus, type OrderStatus } from "@/lib/order-status";
 
 const VALID_STATUSES = ["new", "assigned", "in_progress", "under_review", "completed", "cancelled"];
 
@@ -31,8 +32,18 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   }
   const note = typeof body?.note === "string" ? body.note.trim() || null : null;
 
-  const oldStatus = order.status as string;
+  const oldStatus = order.status as OrderStatus;
   if (status === oldStatus) return NextResponse.json({ ok: true, order });
+  if (!isValidOrderTransition(oldStatus, status as OrderStatus)) {
+    return NextResponse.json(
+      {
+        error: isTerminalOrderStatus(oldStatus)
+          ? `This order is already ${ORDER_STATUS_LABEL[oldStatus].toLowerCase()} — reopening it isn't possible, create a new order instead.`
+          : `Can't move an order from ${ORDER_STATUS_LABEL[oldStatus]} to that status.`,
+      },
+      { status: 400 }
+    );
+  }
 
   const { data, error } = await supabase.from("orders").update({ status }).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

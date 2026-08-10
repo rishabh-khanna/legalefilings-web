@@ -13,7 +13,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   if (!profile || !(await hasToolAccess(profile, "email_failures"))) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const supabase = getSupabaseAdmin();
-  let query = supabase.from("email_failures").update({ resolved: true }).eq("id", id);
+  let query = supabase.from("email_failures").update({ resolved: true, resolved_by: profile.id }).eq("id", id);
   if (!canSeeAllOrgs(profile)) query = query.eq("organization_id", profile.organization_id);
   const { data, error } = await query.select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

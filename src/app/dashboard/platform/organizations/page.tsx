@@ -4,11 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { DashboardPageHero } from "@/components/crm/DashboardPageHero";
 import { Spinner } from "@/components/Spinner";
 import { RequiredMark } from "@/components/RequiredMark";
-import { usePagination } from "@/lib/use-pagination";
-import { TablePagination } from "@/components/TablePagination";
-import { useDateRangeFilter } from "@/lib/use-date-range-filter";
-import { DateRangeFilter } from "@/components/DateRangeFilter";
-import { ExportButton } from "@/components/ExportButton";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
 
 type Organization = {
   id: string;
@@ -98,8 +94,54 @@ export default function PlatformOrganizationsPage() {
   const inputClass = "w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]";
   const labelClass = "block text-sm font-medium mb-1";
 
-  const dateFilter = useDateRangeFilter(orgs ?? [], (o) => o.created_at);
-  const { page, setPage, pageSize, setPageSize, pageItems: pagedOrgs, totalPages, total, start, end } = usePagination(dateFilter.filtered);
+  const orgColumns: DataTableColumn<Organization>[] = [
+    {
+      key: "organization",
+      header: "Organization",
+      render: (org) => (
+        <>
+          <p className="font-medium" style={{ color: "var(--color-ink)" }}>{org.name}</p>
+          {org.plan_tier === "internal" ? (
+            <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>{org.slug}</p>
+          ) : (
+            <a href={`/org/${org.slug}`} target="_blank" rel="noopener noreferrer" className="text-xs font-medium" style={{ color: "var(--color-action-dark)" }}>
+              /org/{org.slug} — their public lead page →
+            </a>
+          )}
+        </>
+      ),
+      exportValue: (org) => org.name,
+      sortValue: (org) => org.name,
+    },
+    { key: "plan", header: "Plan", className: "w-[16%] whitespace-nowrap", render: (org) => PLAN_TIER_LABELS[org.plan_tier], exportValue: (org) => PLAN_TIER_LABELS[org.plan_tier], sortValue: (org) => PLAN_TIER_LABELS[org.plan_tier] },
+    { key: "members", header: "Members", className: "w-[8%] whitespace-nowrap", render: (org) => org.memberCount, exportValue: (org) => org.memberCount, sortValue: (org) => org.memberCount },
+    {
+      key: "status",
+      header: "Status",
+      className: "w-[10%] whitespace-nowrap",
+      render: (org) => (
+        <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={org.status === "active" ? { backgroundColor: "#d0f4db", color: "#116a2c" } : { backgroundColor: "#fde2e2", color: "#b42318" }}>
+          {org.status}
+        </span>
+      ),
+      exportValue: (org) => org.status,
+      sortValue: (org) => org.status,
+    },
+    {
+      key: "accessExpires",
+      header: "Access Expires",
+      className: "w-[14%] whitespace-nowrap",
+      render: (org) =>
+        org.access_expires_at
+          ? new Date(org.access_expires_at) < new Date()
+            ? <span style={{ color: "#b42318" }}>Expired {new Date(org.access_expires_at).toLocaleDateString("en-IN")}</span>
+            : new Date(org.access_expires_at).toLocaleDateString("en-IN")
+          : "No expiry",
+      exportValue: (org) => (org.access_expires_at ? new Date(org.access_expires_at).toLocaleDateString("en-IN") : "No expiry"),
+      sortValue: (org) => org.access_expires_at,
+    },
+    { key: "created", header: "Created", className: "w-[10%] whitespace-nowrap", render: (org) => new Date(org.created_at).toLocaleDateString("en-IN"), exportValue: (org) => new Date(org.created_at).toLocaleDateString("en-IN"), sortValue: (org) => org.created_at },
+  ];
 
   return (
     <div>
@@ -169,14 +211,24 @@ export default function PlatformOrganizationsPage() {
             </div>
           )}
 
-          <button
-            type="submit"
-            disabled={submitting}
-            className="rounded-full px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-            style={{ backgroundColor: "var(--color-action)" }}
-          >
-            {submitting ? "Creating…" : "Create Organization"}
-          </button>
+          <div className="flex gap-2">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="rounded-full px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+              style={{ backgroundColor: "var(--color-action)" }}
+            >
+              {submitting ? "Creating…" : "Create Organization"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors hover:bg-[var(--color-accent-tint)]"
+              style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
+            >
+              Cancel
+            </button>
+          </div>
         </form>
       )}
 
@@ -186,108 +238,23 @@ export default function PlatformOrganizationsPage() {
           <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>Every tenant workspace on the platform, active or suspended.</p>
         </div>
 
-        <div className="flex flex-wrap items-end justify-between gap-3 border-b p-4" style={{ borderColor: "var(--color-line)" }}>
-          <DateRangeFilter
-            from={dateFilter.from}
-            to={dateFilter.to}
-            onFromChange={dateFilter.setFrom}
-            onToChange={dateFilter.setTo}
-            onClear={dateFilter.clear}
-            active={dateFilter.active}
-          />
-          <div>
-            <label className="mb-1 block text-xs font-medium invisible" aria-hidden="true">Export</label>
-            <ExportButton
-              filename="organizations"
-              headers={["Organization", "Plan", "Members", "Status", "Access Expires", "Created"]}
-              rows={dateFilter.filtered.map((org) => [
-                org.name,
-                PLAN_TIER_LABELS[org.plan_tier],
-                org.memberCount,
-                org.status,
-                org.access_expires_at ? new Date(org.access_expires_at).toLocaleDateString("en-IN") : "No expiry",
-                new Date(org.created_at).toLocaleDateString("en-IN"),
-              ])}
+        {orgs === null ? (
+          <div className="flex justify-center px-4 py-6"><Spinner label="Loading…" /></div>
+        ) : (
+          <div className="px-4 pb-4">
+            <DataTable
+              columns={orgColumns}
+              rows={orgs}
+              getRowKey={(org) => org.id}
+              itemLabel="organizations"
+              emptyMessage="No organizations yet."
+              dateFilter={{ getDate: (org) => org.created_at }}
+              exportFilename="organizations"
+              minWidth={640}
+              fixedLayout
             />
           </div>
-        </div>
-
-        <div className="border-b px-4 py-2.5" style={{ borderColor: "var(--color-line)" }}>
-          <TablePagination
-            page={page}
-            totalPages={totalPages}
-            pageSize={pageSize}
-            onPageChange={setPage}
-            onPageSizeChange={setPageSize}
-            start={start}
-            end={end}
-            total={total}
-            itemLabel="organizations"
-          />
-        </div>
-
-        <div className="overflow-x-auto">
-        <table className="dt-table w-full min-w-[640px] text-sm">
-          <thead>
-            <tr className="border-b text-left" style={{ borderColor: "var(--color-line)" }}>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>#</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Organization</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Plan</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Members</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Status</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Access Expires</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            {orgs === null ? (
-              <tr><td colSpan={7} className="px-4 py-6 text-center"><Spinner label="Loading…" /></td></tr>
-            ) : orgs.length === 0 ? (
-              <tr><td colSpan={7} className="px-4 py-6 text-center" style={{ color: "var(--color-ink-soft)" }}>No organizations yet.</td></tr>
-            ) : (
-              pagedOrgs.map((org, i) => (
-                <tr key={org.id} className="border-b last:border-0" style={{ borderColor: "var(--color-line)" }}>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                  <td className="px-4 py-3">
-                    <p className="font-medium" style={{ color: "var(--color-ink)" }}>{org.name}</p>
-                    {org.plan_tier === "internal" ? (
-                      <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>{org.slug}</p>
-                    ) : (
-                      <a
-                        href={`/org/${org.slug}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs font-medium"
-                        style={{ color: "var(--color-action-dark)" }}
-                      >
-                        /org/{org.slug} — their public lead page →
-                      </a>
-                    )}
-                  </td>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{PLAN_TIER_LABELS[org.plan_tier]}</td>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{org.memberCount}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className="rounded-full px-2.5 py-1 text-xs font-semibold"
-                      style={org.status === "active" ? { backgroundColor: "#d0f4db", color: "#116a2c" } : { backgroundColor: "#fde2e2", color: "#b42318" }}
-                    >
-                      {org.status}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>
-                    {org.access_expires_at
-                      ? new Date(org.access_expires_at) < new Date()
-                        ? <span style={{ color: "#b42318" }}>Expired {new Date(org.access_expires_at).toLocaleDateString("en-IN")}</span>
-                        : new Date(org.access_expires_at).toLocaleDateString("en-IN")
-                      : "No expiry"}
-                  </td>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{new Date(org.created_at).toLocaleDateString("en-IN")}</td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
-        </div>
+        )}
       </div>
     </div>
   );

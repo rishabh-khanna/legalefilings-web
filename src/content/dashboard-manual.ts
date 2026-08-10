@@ -126,7 +126,7 @@ export const DASHBOARD_MANUAL: ManualEntry[] = [
     title: "Team Leave Requests",
     summary: "Approve or reject leave requests from your reporting chain.",
     details:
-      "Team Leave Requests is where a manager (leader/group_leader/admin) reviews and approves or rejects leave requests from the people who report to them, directly or through their chain. This is different from the plain \"Leave\" page, which only ever shows your own requests.",
+      "Team Leave Requests is where a manager (leader/group_leader/admin) reviews and approves or rejects leave requests from the people who report to them, directly or through their chain. An already-approved request can also be cancelled here while the leave hasn't started yet, which returns those days to the employee's balance. This is different from the plain \"Leave\" page, which only ever shows your own requests.",
     access:
       "Visible only to leader/group_leader/admin (or a staff member whose configured department role is marked manager-level) — a plain rater doesn't get this page at all. You only see requests from people in your own reporting chain, except admin, who sees every request in the org.",
     keywords: ["approve", "reject", "manager", "team leave"],
@@ -143,11 +143,11 @@ export const DASHBOARD_MANUAL: ManualEntry[] = [
   {
     path: "/dashboard/leave",
     title: "Leave",
-    summary: "Apply for leave and track your balance and request status.",
+    summary: "Apply for leave, cancel a request, and track your balance and status.",
     details:
-      "Apply for leave here and track your own requests — pending, approved, or rejected, with the reviewer's note if rejected. This only ever shows your own leave, even if you're a manager; to approve your team's leave, use Team Leave Requests instead. Each org-defined leave type (see Leave Types) shows your current balance — carried forward from last year, accrued so far this year (credited monthly, automatically), and used. If a request would use more days than you have available, the extra days are automatically filed as Unpaid Leave instead of being blocked outright. \"Unpaid Leave\" itself has no balance or cap — it's always available.",
+      "Apply for leave here and track your own requests — pending, approved, cancelled, or rejected, with the reviewer's note if rejected. You can withdraw a request that's still pending, or cancel one that's already approved as long as the leave hasn't started yet — cancelling an approved request puts those days straight back into your balance. Once leave has started it can no longer be cancelled, since you were actually absent for it. This only ever shows your own leave, even if you're a manager; to approve your team's leave, use Team Leave Requests instead. Each org-defined leave type (see Leave Types) shows your current balance — carried forward from last year, accrued so far this year (credited monthly, automatically), and used. If a request would use more days than you have available, the extra days are automatically filed as Unpaid Leave instead of being blocked outright. \"Unpaid Leave\" itself has no balance or cap — it's always available.",
     access: "Every staff member (any level) — but always shows only your own requests and balance, never anyone else's, regardless of role.",
-    keywords: ["apply", "vacation", "sick leave", "my leave", "balance", "carry forward"],
+    keywords: ["apply", "vacation", "sick leave", "my leave", "balance", "carry forward", "cancel leave", "withdraw", "cancel request"],
   },
   {
     path: "/dashboard/admin/attendance",
@@ -164,9 +164,18 @@ export const DASHBOARD_MANUAL: ManualEntry[] = [
     title: "Attendance",
     summary: "Clock in/out and track your own hours.",
     details:
-      "Clock in and out here, see your own attendance history and hours worked per day, and submit a correction request if a check-in or check-out was missed or recorded wrong.",
+      "Clock in and out here, and see your own attendance log (hours worked per day). Correction requests live on their own page, linked from here.",
     access: "Every staff member (any level) — always your own attendance only. Not shown to customers at all.",
     keywords: ["clock in", "clock out", "check in", "hours"],
+  },
+  {
+    path: "/dashboard/attendance/corrections",
+    title: "Attendance Correction Requests",
+    summary: "Your own attendance correction requests and their status.",
+    details:
+      "Submit a correction request if a check-in or check-out was missed or recorded wrong, and see the status (pending/approved/rejected) of every request you've made. Always your own requests only — the team-wide review queue is a separate admin page.",
+    access: "Every staff member (any level) — always your own requests only.",
+    keywords: ["correction", "fix attendance", "missed check in"],
   },
   {
     path: "/dashboard/payslips",
@@ -250,6 +259,15 @@ export const DASHBOARD_MANUAL: ManualEntry[] = [
     keywords: ["role ladder", "team structure", "hierarchy"],
   },
   {
+    path: "/dashboard/admin/activity",
+    title: "Activity Log",
+    summary: "Who changed what, across invoices, orders, leads, and Business Finance.",
+    details:
+      "One timeline over every audit trail the system records — invoice events, order status changes, lead pipeline moves, and Business Finance entries — with the person who made each change and when. Filter by area, search by person or item, and export to CSV. Useful when a customer disputes something or you need to reconstruct what happened.",
+    access: "Admin only — scoped to your own organization (or every org, for a platform_admin).",
+    keywords: ["audit", "history", "who changed", "activity", "trail", "log"],
+  },
+  {
     path: "/dashboard/admin/tool-access",
     title: "Delegated Access",
     summary: "Grant one staff member access to one admin-only tool.",
@@ -277,11 +295,11 @@ export const DASHBOARD_MANUAL: ManualEntry[] = [
   },
   {
     path: "/dashboard/admin/reports",
-    title: "Reports",
+    title: "Data Exports",
     summary: "Company-wide HR/ops exports as CSV.",
     details: "Company-wide operational exports (like the full employee master) as CSV, for admin.",
     access: "Admin only — export is scoped to the admin's own org (or every org, for a platform_admin).",
-    keywords: ["csv export", "hr export"],
+    keywords: ["data export", "csv export", "hr export"],
   },
   {
     path: "/dashboard/admin/business-settings",
@@ -369,10 +387,10 @@ export const DASHBOARD_MANUAL: ManualEntry[] = [
     title: "Order Invoices",
     summary: "Invoices generated from actual purchases.",
     details:
-      "Order Invoices (shown to a customer as \"My Invoices\") lists invoices generated from a real purchase — Buy Plan for Customer or direct checkout. Customers can download or pay outstanding invoices here; staff can record a manual payment. For billing that isn't tied to a purchase — ad-hoc GST invoices, credit/debit notes — use Invoice CRM instead.",
+      "Order Invoices (shown to a customer as \"My Invoices\") lists invoices generated from a real purchase — Buy Plan for Customer or direct checkout. Customers can download or pay outstanding invoices here; staff can record a manual payment. Unpaid invoices chase themselves: the customer is emailed a reminder three days before the due date, then again at 1, 7, 14 and 30 days overdue, each with a direct payment link. Reminders stop as soon as the balance is cleared. For billing that isn't tied to a purchase — ad-hoc GST invoices, credit/debit notes — use Invoice CRM instead.",
     access:
       "A customer sees only their own invoices. Staff see invoices they created plus their reporting chain's; admin sees every invoice in the org (every org for platform_admin).",
-    keywords: ["my invoices", "pay invoice", "download invoice", "record payment"],
+    keywords: ["my invoices", "pay invoice", "download invoice", "record payment", "reminder", "overdue", "chase payment", "dunning"],
   },
   {
     path: "/dashboard/orders",

@@ -25,9 +25,12 @@ export async function GET(request: Request) {
   }
 
   const supabase = getSupabaseAdmin();
+  // "Uploaded For" and "Uploaded By" can differ — a manager/admin can
+  // upload a document on someone else's behalf — so both are worth
+  // showing per row rather than assuming they're always the same person.
   const { data, error } = await supabase
     .from("employee_documents")
-    .select("*")
+    .select("*, staff:profiles!employee_documents_staff_id_fkey(full_name), uploader:profiles!employee_documents_uploaded_by_fkey(full_name)")
     .eq("staff_id", staffId)
     .order("uploaded_at", { ascending: false });
 

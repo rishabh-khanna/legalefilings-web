@@ -30,6 +30,67 @@ const supabase = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL, process.env.
 
 const DEMO_PASSWORD = "Demo@12345";
 
+// Legal Efilings' own organization + its company_settings row are the
+// root of every organization_id FK in the schema (see
+// supabase/migrations/20260807000000_multi_tenant_phase0_foundation.sql)
+// — every table this script seeds into now requires one. Originally
+// created by that migration as a one-time bootstrap insert; recreated
+// here (upsert-by-slug) so this script is self-sufficient against a
+// genuinely empty database too, not just a partially-seeded one.
+async function ensureOrganization() {
+  const { data: existing } = await supabase.from("organizations").select("id").eq("slug", "legal-efilings").maybeSingle();
+  if (existing) return existing.id;
+  const { data, error } = await supabase
+    .from("organizations")
+    .insert({ name: "Legal Efilings", slug: "legal-efilings", plan_tier: "internal" })
+    .select("id")
+    .single();
+  if (error) throw new Error(`organizations insert: ${error.message}`);
+  return data.id;
+}
+
+async function ensureCompanySettings(organizationId) {
+  const { data: existing } = await supabase.from("company_settings").select("organization_id").eq("organization_id", organizationId).maybeSingle();
+  if (existing) return;
+  const { error } = await supabase.from("company_settings").insert({
+    organization_id: organizationId,
+    address: "Legal Efilings HQ, MG Road",
+    gst_number: "07AAAAA0000A1Z5",
+    pan_number: "AAAAA0000A",
+    financial_year_start_month: 4,
+    state: "Delhi",
+    state_code: "07",
+    bank_name: "HDFC Bank",
+    bank_account_number: "50100999888777",
+    bank_ifsc: "HDFC0001234",
+    bank_branch: "Hazratganj, Lucknow",
+    upi_id: "legalefilings@hdfcbank",
+    default_invoice_notes: "Thank you for your business. GST once charged is non-refundable. Subject to Lucknow jurisdiction.",
+    invoice_number_prefix: "INV",
+  });
+  if (error) throw new Error(`company_settings insert: ${error.message}`);
+}
+
+// Dedicated is_platform_admin=true account — not one of the org-scoped
+// DEMO_ACCOUNTS below, since a platform admin's whole point is not being
+// bound to one tenant the way every other role is. Needed for
+// /dashboard/platform/* and tests/e2e/auth.setup.ts's "platformAdmin" role.
+async function ensurePlatformAdmin(organizationId) {
+  const email = "platformadmin.e2e@legalefilings.com";
+  const user = await upsertAuthUser(email, DEMO_PASSWORD);
+  const { error } = await supabase.from("profiles").upsert({
+    id: user.id,
+    full_name: "Priya Platform Admin",
+    account_type: "admin",
+    organization_id: organizationId,
+    is_platform_admin: true,
+    employee_id: "PLATFORM-0001",
+    crm_status: "active",
+  });
+  if (error) throw new Error(`platform admin profile upsert: ${error.message}`);
+  return user.id;
+}
+
 const DEMO_ACCOUNTS = [
   { email: "admin@legalefilings.com", full_name: "Asha Admin", account_type: "admin" },
   { email: "groupleader@legalefilings.com", full_name: "Gaurav Group Leader", account_type: "staff", staff_level: "group_leader" },
@@ -49,6 +110,11 @@ async function upsertAuthUser(email, password) {
 }
 
 async function main() {
+  console.log("Ensuring Legal Efilings organization + company settings...");
+  const ORG_ID = await ensureOrganization();
+  await ensureCompanySettings(ORG_ID);
+  console.log(`  organization ready: ${ORG_ID}`);
+
   console.log("Seeding demo accounts...");
   const idByEmail = {};
   for (const acc of DEMO_ACCOUNTS) {
@@ -63,6 +129,7 @@ async function main() {
       full_name: acc.full_name,
       phone: acc.phone ?? null,
       account_type: acc.account_type,
+      organization_id: ORG_ID,
       customer_tier: acc.customer_tier ?? null,
       staff_level: acc.staff_level ?? null,
       reports_to: acc.reportsToEmail ? idByEmail[acc.reportsToEmail] : null,
@@ -75,23 +142,30 @@ async function main() {
   }
   console.log("Profiles upserted.");
 
-  const raterName = "Rahul Rater";
-  const leaderName = "Leena Leader";
+  await ensurePlatformAdmin(ORG_ID);
+  console.log("Platform admin account ready.");
+
+  // leads.assigned_to is a real uuid FK to profiles.id (went uuid -> text
+  // -> back to a proper FK across three migrations — see
+  // supabase/migrations/20260829000000_leads_assigned_to_fk.sql), not a
+  // display name.
+  const raterId = idByEmail["rater@legalefilings.com"];
+  const leaderId = idByEmail["leader@legalefilings.com"];
 
   console.log("Seeding leads...");
   const leadsPayload = [
-    { name: "Priya Nair", company: "Nair & Co Consulting", email: "priya.nair@naircons.in", phone: "+91 90000 11223", city: "Kochi", state: "Kerala", service: "Trademark Registration", status: "new", assigned_to: raterName, source: "website_consultation_form" },
-    { name: "Vikram Singh", company: "Singh Logistics", email: "vikram@singhlogistics.co.in", phone: "+91 99887 76655", city: "Ludhiana", state: "Punjab", service: "GST Registration", status: "contacted", assigned_to: raterName, source: "website_consultation_form" },
-    { name: "Fatima Khan", company: "Khan Design Studio", email: "fatima@khandesign.studio", phone: "+91 93456 78901", city: "Lucknow", state: "Uttar Pradesh", service: "Private Limited Company Registration", status: "in_progress", assigned_to: leaderName, source: "website_consultation_form" },
-    { name: "Suresh Iyer", company: "Iyer Exports", email: "suresh@iyerexports.in", phone: "+91 98111 22334", city: "Chennai", state: "Tamil Nadu", service: "IEC Registration", status: "won", assigned_to: leaderName, source: "website_consultation_form" },
-    { name: "Meena Joshi", company: null, email: "meena.joshi@gmail.com", phone: "+91 97000 44556", city: "Pune", state: "Maharashtra", service: "GST Registration", status: "lost", assigned_to: raterName, source: "website_consultation_form" },
+    { name: "Priya Nair", company: "Nair & Co Consulting", email: "priya.nair@naircons.in", phone: "+91 90000 11223", city: "Kochi", state: "Kerala", service: "Trademark Registration", status: "new", assigned_to: raterId, source: "website_consultation_form" },
+    { name: "Vikram Singh", company: "Singh Logistics", email: "vikram@singhlogistics.co.in", phone: "+91 99887 76655", city: "Ludhiana", state: "Punjab", service: "GST Registration", status: "contacted", assigned_to: raterId, source: "website_consultation_form" },
+    { name: "Fatima Khan", company: "Khan Design Studio", email: "fatima@khandesign.studio", phone: "+91 93456 78901", city: "Lucknow", state: "Uttar Pradesh", service: "Private Limited Company Registration", status: "in_progress", assigned_to: leaderId, source: "website_consultation_form" },
+    { name: "Suresh Iyer", company: "Iyer Exports", email: "suresh@iyerexports.in", phone: "+91 98111 22334", city: "Chennai", state: "Tamil Nadu", service: "IEC Registration", status: "won", assigned_to: leaderId, source: "website_consultation_form" },
+    { name: "Meena Joshi", company: null, email: "meena.joshi@gmail.com", phone: "+91 97000 44556", city: "Pune", state: "Maharashtra", service: "GST Registration", status: "lost", assigned_to: raterId, source: "website_consultation_form" },
   ];
   for (const lead of leadsPayload) {
     // leads.email has no unique constraint, so upsert-by-email isn't available —
     // insert-if-not-exists instead.
     const { data: existing } = await supabase.from("leads").select("id").eq("email", lead.email).maybeSingle();
     if (!existing) {
-      const { error } = await supabase.from("leads").insert(lead);
+      const { error } = await supabase.from("leads").insert({ ...lead, organization_id: ORG_ID });
       if (error) throw new Error(`leads insert (${lead.email}): ${error.message}`);
     }
   }
@@ -116,7 +190,7 @@ async function main() {
       orderIds.push(dup.id);
       continue;
     }
-    const { data, error } = await supabase.from("orders").insert(order).select().single();
+    const { data, error } = await supabase.from("orders").insert({ ...order, organization_id: ORG_ID }).select().single();
     if (error) throw new Error(`orders insert: ${error.message}`);
     orderIds.push(data.id);
   }
@@ -131,7 +205,7 @@ async function main() {
   for (const inv of invoicesPayload) {
     if (existingInvoices?.some((e) => e.order_id === inv.order_id)) continue;
     const { items, ...invoiceRow } = inv;
-    const { data, error } = await supabase.from("invoices").insert(invoiceRow).select().single();
+    const { data, error } = await supabase.from("invoices").insert({ ...invoiceRow, organization_id: ORG_ID }).select().single();
     if (error) throw new Error(`invoices insert: ${error.message}`);
     for (const item of items) {
       await supabase.from("invoice_line_items").insert({ invoice_id: data.id, ...item });
@@ -175,8 +249,8 @@ async function main() {
         .maybeSingle();
       if (existing) continue;
       await supabase.from("attendance_events").insert([
-        { staff_id: staffId, event_type: "check_in", occurred_at: checkIn.toISOString() },
-        { staff_id: staffId, event_type: "check_out", occurred_at: checkOut.toISOString() },
+        { staff_id: staffId, organization_id: ORG_ID, event_type: "check_in", occurred_at: checkIn.toISOString() },
+        { staff_id: staffId, organization_id: ORG_ID, event_type: "check_out", occurred_at: checkOut.toISOString() },
       ]);
     }
   }
@@ -196,7 +270,7 @@ async function main() {
       .eq("start_date", lr.start_date)
       .maybeSingle();
     if (existing) continue;
-    const { error } = await supabase.from("leave_requests").insert(lr);
+    const { error } = await supabase.from("leave_requests").insert({ ...lr, organization_id: ORG_ID });
     if (error) throw new Error(`leave_requests insert: ${error.message}`);
   }
   console.log("Leave requests seeded.");
@@ -210,7 +284,7 @@ async function main() {
   for (const [staffId, comp] of Object.entries(salaryByStaff)) {
     const { data: existingStructure } = await supabase.from("salary_structures").select("id").eq("staff_id", staffId).maybeSingle();
     if (!existingStructure) {
-      const { error } = await supabase.from("salary_structures").insert({ staff_id: staffId, ...comp, effective_from: "2023-04-01", created_by: idByEmail["admin@legalefilings.com"] });
+      const { error } = await supabase.from("salary_structures").insert({ staff_id: staffId, organization_id: ORG_ID, ...comp, effective_from: "2023-04-01", created_by: idByEmail["admin@legalefilings.com"] });
       if (error) throw new Error(`salary_structures insert: ${error.message}`);
     }
 
@@ -225,6 +299,7 @@ async function main() {
       if (existingPayslip) continue;
       const { error } = await supabase.from("payslips").insert({
         staff_id: staffId,
+        organization_id: ORG_ID,
         month,
         year,
         basic: comp.basic,
@@ -257,7 +332,7 @@ async function main() {
   for (const h of holidaysPayload) {
     const { data: existing } = await supabase.from("holidays").select("id").eq("name", h.name).eq("date", h.date).maybeSingle();
     if (existing) continue;
-    const { error } = await supabase.from("holidays").insert({ ...h, created_by: idByEmail["admin@legalefilings.com"] });
+    const { error } = await supabase.from("holidays").insert({ ...h, organization_id: ORG_ID, created_by: idByEmail["admin@legalefilings.com"] });
     if (error) throw new Error(`holidays insert: ${error.message}`);
   }
   console.log("Holidays seeded.");
@@ -274,7 +349,7 @@ async function main() {
   for (const doc of documentsPayload) {
     const { data: existing } = await supabase.from("employee_documents").select("id").eq("staff_id", doc.staff_id).eq("file_name", doc.file_name).maybeSingle();
     if (existing) continue;
-    const { error } = await supabase.from("employee_documents").insert({ ...doc, uploaded_by: doc.staff_id });
+    const { error } = await supabase.from("employee_documents").insert({ ...doc, organization_id: ORG_ID, uploaded_by: doc.staff_id });
     if (error) throw new Error(`employee_documents insert: ${error.message}`);
   }
   console.log("Employee document records seeded.");
@@ -287,7 +362,7 @@ async function main() {
   for (const letter of lettersPayload) {
     const { data: existing } = await supabase.from("generated_letters").select("id").eq("employee_name", letter.employee_name).eq("template_slug", letter.template_slug).maybeSingle();
     if (existing) continue;
-    const { error } = await supabase.from("generated_letters").insert(letter);
+    const { error } = await supabase.from("generated_letters").insert({ ...letter, organization_id: ORG_ID });
     if (error) throw new Error(`generated_letters insert: ${error.message}`);
   }
   console.log("Generated-letters audit log seeded.");
@@ -296,6 +371,7 @@ async function main() {
   const { data: existingRequest } = await supabase.from("account_requests").select("id").eq("email", "new.hire@legalefilings.com").maybeSingle();
   if (!existingRequest) {
     const { error } = await supabase.from("account_requests").insert({
+      organization_id: ORG_ID,
       full_name: "Priyanka Rao",
       email: "new.hire@legalefilings.com",
       phone: "+91 98000 12345",

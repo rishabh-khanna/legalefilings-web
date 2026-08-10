@@ -28,6 +28,9 @@ export type Lead = {
   message?: string;
   createdAt: string;
   stage: LeadStage;
+  /** The assignee's profile id — undefined means the lead is unclaimed and sits in the shared pool. */
+  assignedToId?: string;
+  /** Display name for the assignee, or the literal "Unassigned" when unclaimed. Never a stored value — derive actions from assignedToId. */
   assignedTo: string;
   notes: string;
   /** Set once this lead has actually been turned into a customer account + order (see /api/leads/[id]/convert) — undefined means not yet converted. */

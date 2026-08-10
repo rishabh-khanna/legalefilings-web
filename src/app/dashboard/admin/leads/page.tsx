@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Users, Sparkles, Clock, Trophy, AlertCircle, IndianRupee, MessageCircle, Check, X } from "lucide-react";
 import { LEAD_STAGES, LEAD_STAGE_LABELS, type Lead, type LeadStage } from "@/lib/leads";
@@ -13,11 +13,11 @@ import { SkeletonKpiCard, SkeletonRow } from "@/components/crm/Skeleton";
 import { LeadDetailDrawer } from "@/components/crm/LeadDetailDrawer";
 import { PageHelpButton } from "@/components/dashboard/PageHelpButton";
 import { Spinner } from "@/components/Spinner";
-import { usePagination } from "@/lib/use-pagination";
-import { TablePagination } from "@/components/TablePagination";
 import { useDateRangeFilter } from "@/lib/use-date-range-filter";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { ExportButton } from "@/components/ExportButton";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { MultiSelect } from "@/components/MultiSelect";
 
 function leadWhatsAppMessage(lead: Lead) {
   const firstName = lead.name.split(" ")[0];
@@ -63,8 +63,11 @@ function initials(name: string) {
 
 export default function AdminDashboard() {
   const [leads, setLeads] = useState<Lead[] | null>(null);
-  const [staffNames, setStaffNames] = useState<string[]>(["Unassigned"]);
-  const [viewer, setViewer] = useState("Everyone");
+  const [staffOptions, setStaffOptions] = useState<{ id: string; name: string }[]>([]);
+  // Empty means "Everyone" — same meaning the single-select's "Everyone"
+  // option used to carry, just represented as "nothing picked" instead of
+  // a sentinel string, so it composes with MultiSelect's own convention.
+  const [viewerFilter, setViewerFilter] = useState<Set<string>>(new Set());
   const [view, setView] = useState<"table" | "board">("board");
   const [draggingId, setDraggingId] = useState<string | null>(null);
   const [dragOverStage, setDragOverStage] = useState<LeadStage | null>(null);
@@ -78,6 +81,10 @@ export default function AdminDashboard() {
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
   const [noteStatus, setNoteStatus] = useState<Record<string, "saving" | "saved" | "error">>({});
   const [now, setNow] = useState<number | null>(null);
+  // A finished drag can still surface as a click on the card it started
+  // from, which would open the detail drawer right after someone moved a
+  // lead. Timestamped on dragend so the click that follows can be ignored.
+  const dragEndedAt = useRef(0);
   const toast = useToast();
 
   useEffect(() => {
@@ -90,16 +97,19 @@ export default function AdminDashboard() {
       setNow(Date.now());
       const res = await fetch("/api/team-members");
       const data = await res.json();
-      // Kept as plain names, not disambiguated with org (unlike the
-      // payroll/attendance staff pickers) — assignedTo is a plain-text
-      // name column on leads, not a profile id, so embedding an org
-      // suffix into the option's value here would break matching
-      // against the real full_name the API validates against. Leads
-      // are already strictly org-scoped, so two different orgs' staff
-      // sharing a display name is a cosmetic quirk in this one
-      // cross-org (platform_admin-only) picker, not a functional bug.
-      const names = ((data.members ?? []) as { full_name: string | null }[]).map((p) => p.full_name).filter((n): n is string => Boolean(n));
-      setStaffNames(["Unassigned", ...names]);
+      // Options carry the profile id as their value — assignment is by
+      // id now (leads.assigned_to is a profiles FK), so a display name
+      // is only ever a label. That also makes the org suffix safe to
+      // show for a platform_admin seeing several orgs' staff at once,
+      // which the old name-matching version couldn't risk.
+      const members = (data.members ?? []) as { id: string; full_name: string | null; organizationName?: string | null }[];
+      const orgCount = new Set(members.map((m) => m.organizationName)).size;
+      setStaffOptions(
+        members.map((m) => ({
+          id: m.id,
+          name: orgCount > 1 && m.organizationName ? `${m.full_name ?? "Unnamed"} — ${m.organizationName}` : (m.full_name ?? "Unnamed"),
+        }))
+      );
     }, 0);
     return () => clearTimeout(kickoff);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -108,18 +118,24 @@ export default function AdminDashboard() {
   const visibleLeads = useMemo(() => {
     if (!leads) return [];
     const sorted = [...leads].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    if (viewer === "Everyone") return sorted;
-    return sorted.filter((l) => l.assignedTo === viewer);
-  }, [leads, viewer]);
+    if (viewerFilter.size === 0) return sorted;
+    return sorted.filter((l) => (l.assignedToId ? viewerFilter.has(l.assignedToId) : viewerFilter.has("__unassigned__")));
+  }, [leads, viewerFilter]);
+
+  const viewerFilterLabel = useMemo(() => {
+    return [...viewerFilter]
+      .map((id) => (id === "__unassigned__" ? "Unassigned (shared pool)" : staffOptions.find((s) => s.id === id)?.name ?? "this person"))
+      .join(", ");
+  }, [viewerFilter, staffOptions]);
 
   const dateFilter = useDateRangeFilter(visibleLeads, (l) => l.createdAt);
   const dateFilteredLeads = dateFilter.filtered;
 
-  const [stageFilter, setStageFilter] = useState<LeadStage | "all">("all");
+  const [stageFilter, setStageFilter] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const filteredLeads = useMemo(() => {
     return dateFilteredLeads.filter((l) => {
-      if (stageFilter !== "all" && l.stage !== stageFilter) return false;
+      if (stageFilter.size > 0 && !stageFilter.has(l.stage)) return false;
       if (search.trim()) {
         const q = search.trim().toLowerCase();
         const hay = `${l.name} ${l.email} ${l.phone} ${l.service ?? ""} ${l.plan ?? ""}`.toLowerCase();
@@ -128,11 +144,6 @@ export default function AdminDashboard() {
       return true;
     });
   }, [dateFilteredLeads, stageFilter, search]);
-
-  // Pagination only makes sense for the flat table view — the board
-  // view is a drag-and-drop kanban grouped by stage, where "page 2"
-  // has no sensible meaning.
-  const { page, setPage, pageSize, setPageSize, pageItems: pagedLeads, totalPages, total, start, end } = usePagination(filteredLeads);
 
   const stats = useMemo(() => {
     const all = leads ?? [];
@@ -157,16 +168,56 @@ export default function AdminDashboard() {
     return { total: all.length, newCount, inProgress, won, conversion, weekTrend };
   }, [leads, now]);
 
-  async function updateLead(id: string, patch: Partial<Lead>, successText = "Saved.") {
-    setLeads((prev) => (prev ? prev.map((l) => (l.id === id ? { ...l, ...patch } : l)) : prev));
-    setActiveLead((prev) => (prev && prev.id === id ? { ...prev, ...patch } : prev));
+  // assignedToId is the wire field — a profile id, or null to send the
+  // lead back to the shared pool. assignedTo on Lead is only ever the
+  // resolved display name, which the server owns, so the optimistic
+  // merge below fills it in locally and the server's response is what
+  // ultimately settles it on the next load.
+  type LeadPatch = Partial<Omit<Lead, "assignedToId">> & { assignedToId?: string | null };
+
+  async function updateLead(id: string, patch: LeadPatch, successText = "Saved.") {
+    // Fold assignedTo/assignedToId in only when the caller actually sent
+    // one. This used to spread `assignedToId: patch.assignedToId ?? undefined`
+    // unconditionally, and an object spread copies undefined values — so a
+    // plain `{ stage }` patch wrote undefined over the lead's real
+    // assignee. Every stage change silently un-owned the lead on screen:
+    // the card swapped the assignee's name back to a "Claim" button, and
+    // clicking it 409'd because the server still had it assigned.
+    const { assignedToId, ...rest } = patch;
+    const optimistic: Partial<Lead> = { ...rest };
+    if ("assignedToId" in patch) {
+      optimistic.assignedToId = assignedToId ?? undefined;
+      optimistic.assignedTo = assignedToId
+        ? (staffOptions.find((s) => s.id === assignedToId)?.name ?? "Unassigned")
+        : "Unassigned";
+    }
+
+    const previous = leads?.find((l) => l.id === id) ?? null;
+    setLeads((prev) => (prev ? prev.map((l) => (l.id === id ? { ...l, ...optimistic } : l)) : prev));
+    setActiveLead((prev) => (prev && prev.id === id ? { ...prev, ...optimistic } : prev));
+
     const res = await fetch("/api/leads", {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, ...patch }),
     }).catch(() => null);
+
     if (!res || !res.ok) {
-      toast("error", "Failed to save change.");
+      // Undo the optimistic write. Without this the card stayed in
+      // whichever column it was dropped into even though the server had
+      // refused the change — the board showed a stage the database never
+      // had, and only a reload revealed it. Only the fields this call
+      // touched are rolled back, so a note saved a moment earlier from
+      // the drawer isn't reverted along with the failed stage move.
+      if (previous) {
+        const revert: Partial<Lead> = {};
+        for (const key of Object.keys(optimistic) as (keyof Lead)[]) {
+          (revert as Record<string, unknown>)[key] = previous[key];
+        }
+        setLeads((prev) => (prev ? prev.map((l) => (l.id === id ? { ...l, ...revert } : l)) : prev));
+        setActiveLead((prev) => (prev && prev.id === id ? { ...prev, ...revert } : prev));
+      }
+      toast("error", "Couldn't save that — put it back.");
       return false;
     }
     toast("success", successText);
@@ -191,7 +242,12 @@ export default function AdminDashboard() {
       return;
     }
     const data = await res.json();
-    setLeads((prev) => (prev ? prev.map((l) => (l.id === id ? { ...l, assignedTo: data.lead.assignedTo } : l)) : prev));
+    // Both fields — the card's "show Claim button" check reads
+    // assignedToId, not the display-name assignedTo, so patching only
+    // the name left the button showing even after a successful claim.
+    setLeads((prev) =>
+      prev ? prev.map((l) => (l.id === id ? { ...l, assignedTo: data.lead.assignedTo, assignedToId: data.lead.assignedToId } : l)) : prev
+    );
     toast("success", "Lead claimed.");
   }
 
@@ -200,6 +256,230 @@ export default function AdminDashboard() {
     { label: "New", value: stats.newCount, icon: Sparkles, tone: "#1d4fb8" },
     { label: "In Progress", value: stats.inProgress, icon: Clock, tone: "var(--color-action-dark)" },
     { label: "Won · Conversion", value: stats.won, suffix: ` · ${stats.conversion}%`, icon: Trophy, tone: "#116a2c" },
+  ];
+
+  const leadColumns: DataTableColumn<Lead>[] = [
+    {
+      key: "lead",
+      header: "Lead",
+      className: "w-[18%]",
+      render: (lead) => {
+        const avatar = avatarStyle(lead.name);
+        return (
+          <div className="flex items-start gap-2">
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold" style={{ backgroundColor: avatar.bg, color: avatar.text }} aria-hidden="true">
+              {initials(lead.name)}
+            </span>
+            {/* break-words, not truncate — this table was missing
+                fixedLayout (see below), so table-layout:auto let this
+                column balloon to fit the longest unwrapped email on the
+                page and starve Stage/Assigned/Notes down to a couple of
+                clipped characters each. Now that the column has a real
+                bounded width, wrapping the name/email/phone onto extra
+                lines keeps the full value visible instead of cutting it
+                with an ellipsis. */}
+            <div className="min-w-0">
+              <div className="break-words font-medium" style={{ color: "var(--color-ink)" }}>{lead.name}</div>
+              <div className="break-words" style={{ color: "var(--color-ink-soft)" }}>{lead.email}</div>
+              <div className="break-words" style={{ color: "var(--color-ink-soft)" }}>{lead.phone}</div>
+              {(lead.city || lead.state) && (
+                <div className="break-words text-xs" style={{ color: "var(--color-ink-soft)", opacity: 0.8 }}>
+                  {[lead.city, lead.state].filter(Boolean).join(", ")}
+                </div>
+              )}
+            </div>
+          </div>
+        );
+      },
+      exportValue: (lead) => lead.name,
+      sortValue: (lead) => lead.name,
+    },
+    {
+      key: "service",
+      header: "Service / Plan",
+      className: "w-[13%]",
+      render: (lead) => (
+        <>
+          <p className="break-words" style={{ color: "var(--color-ink-soft)" }}>{lead.service ?? "—"}</p>
+          {lead.plan && (
+            <p className="break-words text-xs" style={{ color: "var(--color-ink-soft)", opacity: 0.8 }}>
+              {lead.plan}
+              {lead.planPrice && ` · ${lead.planPrice}`}
+            </p>
+          )}
+        </>
+      ),
+      exportValue: (lead) => lead.service ?? lead.plan ?? "",
+      sortValue: (lead) => lead.service ?? lead.plan,
+    },
+    {
+      key: "stage",
+      header: "Stage",
+      className: "w-[13%]",
+      render: (lead) => {
+        const stageStyle = STAGE_STYLES[lead.stage];
+        return (
+          // max-w-[110px] + truncate used to clip "In Progress" down to
+          // "N.." — a native <select>'s own displayed value can't wrap
+          // via CSS at all (it's rendered by the OS, not the page), so
+          // the only real fix for a select is giving its column enough
+          // width to show the label whole. w-full now fills whatever
+          // width the fixed-layout column actually has.
+          <select
+            value={lead.stage}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => updateLead(lead.id, { stage: e.target.value as LeadStage }, "Stage updated.")}
+            className="w-full rounded-full px-2 py-1 text-xs font-semibold outline-none"
+            style={{ backgroundColor: stageStyle.bg, color: stageStyle.text, border: "none" }}
+          >
+            {LEAD_STAGES.map((s) => (
+              <option key={s} value={s}>
+                {LEAD_STAGE_LABELS[s]}
+              </option>
+            ))}
+          </select>
+        );
+      },
+      exportValue: (lead) => LEAD_STAGE_LABELS[lead.stage],
+      sortValue: (lead) => LEAD_STAGE_LABELS[lead.stage],
+    },
+    {
+      key: "assignedTo",
+      header: "Assigned to",
+      className: "w-[13%]",
+      render: (lead) =>
+        !lead.assignedToId ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              claimLead(lead.id);
+            }}
+            className="rounded-full px-3 py-1 text-xs font-semibold text-white transition-transform hover:scale-[1.02]"
+            style={{ backgroundColor: "var(--color-action)" }}
+          >
+            Claim
+          </button>
+        ) : (
+          <select
+            value={lead.assignedToId}
+            onClick={(e) => e.stopPropagation()}
+            onChange={(e) => updateLead(lead.id, { assignedToId: e.target.value || null }, "Reassigned.")}
+            className="w-full max-w-full rounded-lg border px-2 py-1 text-xs outline-none"
+            style={{ borderColor: "var(--color-line)" }}
+          >
+            <option value="">Unassigned</option>
+            {staffOptions.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+        ),
+      exportValue: (lead) => lead.assignedTo,
+      sortValue: (lead) => lead.assignedTo,
+    },
+    {
+      key: "notes",
+      header: "Notes",
+      className: "w-[18%]",
+      render: (lead) => {
+        const draft = noteDrafts[lead.id] ?? lead.notes ?? "";
+        const dirty = draft !== (lead.notes ?? "");
+        const status = noteStatus[lead.id];
+        return (
+          <div onClick={(e) => e.stopPropagation()}>
+            <textarea
+              value={draft}
+              onChange={(e) => setNoteDrafts((d) => ({ ...d, [lead.id]: e.target.value }))}
+              placeholder="Add a note…"
+              rows={2}
+              className="w-full rounded-lg border px-2 py-1 text-xs outline-none focus:border-[var(--color-action)]"
+              style={{ borderColor: "var(--color-line)" }}
+            />
+            <div className="mt-1 flex items-center gap-2">
+              {dirty && (
+                <>
+                  <button
+                    type="button"
+                    disabled={status === "saving"}
+                    onClick={async () => {
+                      setNoteStatus((s) => ({ ...s, [lead.id]: "saving" }));
+                      const ok = await updateLead(lead.id, { notes: draft }, "Note saved.");
+                      setNoteStatus((s) => ({ ...s, [lead.id]: ok ? "saved" : "error" }));
+                      if (ok) {
+                        setNoteDrafts((d) => {
+                          const next = { ...d };
+                          delete next[lead.id];
+                          return next;
+                        });
+                      }
+                    }}
+                    aria-label="Save note"
+                    title="Save note"
+                    className="flex h-6 w-6 items-center justify-center rounded-full text-white disabled:opacity-60"
+                    style={{ backgroundColor: "#116a2c" }}
+                  >
+                    <Check className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    disabled={status === "saving"}
+                    onClick={() =>
+                      setNoteDrafts((d) => {
+                        const next = { ...d };
+                        delete next[lead.id];
+                        return next;
+                      })
+                    }
+                    aria-label="Discard changes"
+                    title="Discard changes"
+                    className="flex h-6 w-6 items-center justify-center rounded-full border disabled:opacity-60"
+                    style={{ borderColor: "var(--color-line)", color: "var(--color-ink-soft)" }}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </>
+              )}
+              {status === "saving" && (
+                <span className="text-[10px]" style={{ color: "var(--color-ink-soft)" }}>Saving…</span>
+              )}
+              {!dirty && status === "saved" && (
+                <span className="text-[10px] font-medium" style={{ color: "#116a2c" }}>Saved ✓</span>
+              )}
+              {status === "error" && (
+                <span className="text-[10px] font-medium" style={{ color: "#b42318" }}>Failed to save — try again</span>
+              )}
+            </div>
+          </div>
+        );
+      },
+    },
+    {
+      key: "received",
+      header: "Received",
+      className: "w-[8%] whitespace-nowrap",
+      render: (lead) => new Date(lead.createdAt).toLocaleDateString(),
+      exportValue: (lead) => new Date(lead.createdAt).toLocaleDateString(),
+      sortValue: (lead) => lead.createdAt,
+    },
+    {
+      key: "whatsapp",
+      header: "",
+      className: "w-[13%]",
+      render: (lead) => (
+        <a
+          href={buildWhatsAppLink(lead.phone, leadWhatsAppMessage(lead))}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold transition-transform hover:scale-[1.02]"
+          style={{ backgroundColor: "#dcfce3", color: "#116a2c" }}
+        >
+          WhatsApp
+        </a>
+      ),
+    },
   ];
 
   return (
@@ -228,74 +508,64 @@ export default function AdminDashboard() {
           style={{ backgroundColor: "var(--color-action)", opacity: 0.12 }}
         />
 
-        <div className="relative flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-1.5">
-              <h2 className="text-2xl font-extrabold" style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)" }}>
-                Pipeline
-              </h2>
-              <PageHelpButton />
-            </div>
-            <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
-              {leads === null ? <Spinner size={12} /> : `${filteredLeads.length} lead${filteredLeads.length === 1 ? "" : "s"}`}
-            </p>
+        <div className="relative">
+          <div className="flex items-center gap-1.5">
+            <h2 className="text-2xl font-extrabold" style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)" }}>
+              Pipeline
+            </h2>
+            <PageHelpButton />
           </div>
-          <div className="flex items-center gap-3 text-sm">
-            <div className="flex items-center gap-1 rounded-full border bg-white/70 p-1 backdrop-blur" style={{ borderColor: "var(--color-line)" }}>
-              {(["board", "table"] as const).map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => setView(v)}
-                  className="rounded-full px-3 py-1.5 text-xs font-semibold capitalize transition-colors"
-                  style={view === v ? { backgroundColor: "var(--color-accent)", color: "var(--color-ink)" } : { color: "var(--color-ink-soft)" }}
-                >
-                  {v}
-                </button>
-              ))}
-            </div>
-            <label htmlFor="viewer" style={{ color: "var(--color-ink-soft)" }}>
-              Viewing as
-            </label>
-            <select
-              id="viewer"
-              value={viewer}
-              onChange={(e) => setViewer(e.target.value)}
-              className="rounded-lg border bg-white/70 px-2.5 py-1.5 text-sm outline-none backdrop-blur"
-              style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
-            >
-              <option value="Everyone">Everyone</option>
-              {staffNames.filter((s) => s !== "Unassigned").map((v) => (
-                <option key={v} value={v}>
-                  {v}
-                </option>
-              ))}
-            </select>
-          </div>
+          <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
+            {leads === null ? <Spinner size={12} /> : `${filteredLeads.length} lead${filteredLeads.length === 1 ? "" : "s"}`}
+          </p>
         </div>
 
-        <div className="relative mt-4 flex flex-wrap items-center gap-2">
+        {/* Every control — view toggle, viewer filter, search, stage
+            filter, date range, export — on one wrapping row, instead of
+            splitting "who's viewing" from "what's filtered" across two
+            separate rows that read as unrelated toolbars. */}
+        {/* items-end, not items-center: DateRangeFilter stacks a "From"/"To"
+            label above its input, so centering the row floated every other
+            control up by half a label and left the date boxes sitting lower
+            than the stage filter and Export beside them. Bottom-aligning is
+            what DataTable's own toolbar already does. Every control here is
+            px-3 py-2 text-sm to match the shared DateRangeFilter and
+            ExportButton, so the row is one clean band. */}
+        <div className="relative mt-4 flex flex-wrap items-end gap-2">
+          <div className="flex items-center gap-1 rounded-full border bg-white/70 p-1 text-sm backdrop-blur" style={{ borderColor: "var(--color-line)" }}>
+            {(["board", "table"] as const).map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => setView(v)}
+                className="rounded-full px-3 py-1.5 text-xs font-semibold capitalize transition-colors"
+                style={view === v ? { backgroundColor: "var(--color-accent)", color: "var(--color-ink)" } : { color: "var(--color-ink-soft)" }}
+              >
+                {v}
+              </button>
+            ))}
+          </div>
+          <MultiSelect
+            options={[{ value: "__unassigned__", label: "Unassigned (shared pool)" }, ...staffOptions.map((v) => ({ value: v.id, label: v.name }))]}
+            selected={viewerFilter}
+            onChange={setViewerFilter}
+            placeholder="Everyone"
+            searchable
+          />
           <input
             type="search"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search name, email, phone, service…"
-            className="w-full max-w-xs rounded-lg border bg-white/70 px-3 py-1.5 text-sm outline-none backdrop-blur focus:border-[var(--color-action)]"
+            className="w-full max-w-xs rounded-lg border bg-white/70 px-3 py-2 text-sm outline-none backdrop-blur focus:border-[var(--color-action)]"
             style={{ borderColor: "var(--color-line)" }}
           />
-          <select
-            value={stageFilter}
-            onChange={(e) => setStageFilter(e.target.value as LeadStage | "all")}
-            className="rounded-lg border bg-white/70 px-2.5 py-1.5 text-sm outline-none backdrop-blur"
-            style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
-          >
-            <option value="all">All stages</option>
-            {LEAD_STAGES.map((s) => (
-              <option key={s} value={s}>
-                {LEAD_STAGE_LABELS[s]}
-              </option>
-            ))}
-          </select>
+          <MultiSelect
+            options={LEAD_STAGES.map((s) => ({ value: s, label: LEAD_STAGE_LABELS[s] }))}
+            selected={stageFilter}
+            onChange={setStageFilter}
+            placeholder="All stages"
+          />
           <DateRangeFilter
             from={dateFilter.from}
             to={dateFilter.to}
@@ -304,14 +574,14 @@ export default function AdminDashboard() {
             onClear={dateFilter.clear}
             active={dateFilter.active}
           />
-          {(search.trim() || stageFilter !== "all") && (
+          {(search.trim() || stageFilter.size > 0) && (
             <button
               type="button"
               onClick={() => {
                 setSearch("");
-                setStageFilter("all");
+                setStageFilter(new Set());
               }}
-              className="text-xs font-semibold"
+              className="rounded-lg px-2 py-2 text-xs font-semibold"
               style={{ color: "var(--color-action-dark)" }}
             >
               Clear filters
@@ -355,9 +625,9 @@ export default function AdminDashboard() {
         </div>
       </div>
 
-      {viewer !== "Everyone" && (
+      {viewerFilter.size > 0 && (
         <p className="mb-4 text-xs rounded-lg px-3 py-2" style={{ color: "var(--color-ink-soft)", backgroundColor: "var(--color-paper)", border: "1px solid var(--color-line)" }}>
-          Showing only leads assigned to {viewer}.
+          Showing only: {viewerFilterLabel}.
         </p>
       )}
 
@@ -372,15 +642,41 @@ export default function AdminDashboard() {
                 key={stage}
                 onDragOver={(e) => {
                   e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
                   setDragOverStage(stage);
                 }}
-                onDragLeave={() => setDragOverStage((s) => (s === stage ? null : s))}
+                onDragLeave={(e) => {
+                  // dragleave also fires every time the pointer crosses onto
+                  // a card inside this column, so without the containment
+                  // check the drop highlight strobes the whole way down.
+                  if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+                  setDragOverStage((s) => (s === stage ? null : s));
+                }}
                 onDrop={(e) => {
                   e.preventDefault();
                   setDragOverStage(null);
-                  const id = e.dataTransfer.getData("text/lead-id");
-                  if (id) updateLead(id, { stage }, "Stage updated.");
+                  const id = e.dataTransfer.getData("text/lead-id") || draggingId;
                   setDraggingId(null);
+                  if (!id) return;
+                  const dropped = leads?.find((l) => l.id === id);
+                  // Dropping a card back into the column it came from is not
+                  // a stage change. This used to PATCH and toast "Stage
+                  // updated." regardless, so the board announced a status
+                  // change every time a drag was abandoned mid-air over its
+                  // own column and nothing had actually moved.
+                  if (!dropped || dropped.stage === stage) return;
+                  const moved = `Moved to ${LEAD_STAGE_LABELS[stage]}.`;
+                  updateLead(
+                    id,
+                    { stage },
+                    // Dragging into Won only flips the stage — it doesn't
+                    // create the customer account and order that "Convert to
+                    // Order" does, so say so rather than let Won quietly mean
+                    // two different things depending on how it was reached.
+                    stage === "won" && !dropped.convertedToProfileId
+                      ? `${moved} Open the lead to create their customer account and order.`
+                      : moved
+                  );
                 }}
                 className="min-w-0 rounded-2xl p-3 transition-colors"
                 style={{ background: isDragOver ? stageStyle.bg : stageStyle.grad, border: `1px solid ${isDragOver ? stageStyle.text : "var(--color-line)"}` }}
@@ -410,12 +706,32 @@ export default function AdminDashboard() {
                           whileHover={{ y: -2 }}
                           transition={{ duration: 0.18 }}
                           draggable
-                          onDragStart={(e) => {
-                            (e as unknown as React.DragEvent).dataTransfer.setData("text/lead-id", lead.id);
+                          // *Capture, not the plain handlers. framer-motion
+                          // claims onDragStart/onDrag/onDragEnd as its own
+                          // pan-gesture props (see isValidMotionProp) and
+                          // strips them off the DOM element — and since this
+                          // card doesn't set framer's `drag` prop, its drag
+                          // feature never loads either, so those handlers
+                          // fired nowhere at all. dataTransfer was therefore
+                          // never populated, every drop read an empty lead id,
+                          // and dragging a card across the board did nothing.
+                          // isValidMotionProp doesn't match the *Capture
+                          // variants (or the `draggable` attribute), so React
+                          // attaches these to the element for real.
+                          onDragStartCapture={(e) => {
+                            e.dataTransfer.setData("text/lead-id", lead.id);
+                            e.dataTransfer.effectAllowed = "move";
                             setDraggingId(lead.id);
                           }}
-                          onDragEnd={() => setDraggingId(null)}
-                          onClick={() => setActiveLead(lead)}
+                          onDragEndCapture={() => {
+                            setDraggingId(null);
+                            setDragOverStage(null);
+                            dragEndedAt.current = Date.now();
+                          }}
+                          onClick={() => {
+                            if (Date.now() - dragEndedAt.current < 250) return;
+                            setActiveLead(lead);
+                          }}
                           className="cursor-grab space-y-2 rounded-xl border bg-white p-3 shadow-sm transition-shadow hover:shadow-lg active:cursor-grabbing dark:bg-[var(--color-paper-raised)]"
                           style={{ borderColor: "var(--color-line)", opacity: draggingId === lead.id ? 0.4 : 1 }}
                         >
@@ -461,7 +777,7 @@ export default function AdminDashboard() {
                           )}
 
                           <div className="flex items-center justify-between gap-2">
-                            {lead.assignedTo === "Unassigned" ? (
+                            {!lead.assignedToId ? (
                               <button
                                 type="button"
                                 onClick={(e) => {
@@ -504,222 +820,37 @@ export default function AdminDashboard() {
             );
           })}
         </div>
-      ) : (
-        <>
-          <TablePagination
-            page={page}
-            totalPages={totalPages}
-            pageSize={pageSize}
-            onPageChange={setPage}
-            onPageSizeChange={setPageSize}
-            start={start}
-            end={end}
-            total={total}
-            itemLabel="leads"
-          />
-        <div className="overflow-x-auto rounded-2xl border bg-white dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-          <table className="dt-table w-full min-w-[860px] table-fixed text-sm">
-            <thead>
-              <tr className="sticky top-0 z-10 text-left text-xs uppercase tracking-wide" style={{ backgroundColor: "var(--color-paper)", color: "var(--color-ink-soft)" }}>
-                <th className="w-[4%] px-3 py-2.5">#</th>
-                <th className="w-[18%] px-3 py-2.5">Lead</th>
-                <th className="w-[14%] px-3 py-2.5">Service / Plan</th>
-                <th className="w-[11%] px-3 py-2.5">Stage</th>
-                <th className="w-[12%] px-3 py-2.5">Assigned to</th>
-                <th className="w-[21%] px-3 py-2.5">Notes</th>
-                <th className="w-[8%] px-3 py-2.5">Received</th>
-                <th className="w-[12%] px-3 py-2.5"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
-              {leads === null &&
-                Array.from({ length: 5 }).map((_, i) => (
-                  <tr key={i}>
-                    <td colSpan={8}>
-                      <SkeletonRow />
-                    </td>
-                  </tr>
-                ))}
-              {pagedLeads.map((lead, i) => {
-                const avatar = avatarStyle(lead.name);
-                const stageStyle = STAGE_STYLES[lead.stage];
-                return (
-                  <tr
-                    key={lead.id}
-                    onClick={() => setActiveLead(lead)}
-                    className="cursor-pointer align-top transition-colors hover:bg-[var(--color-paper)]"
-                  >
-                    <td className="overflow-hidden px-3 py-3" style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                    <td className="overflow-hidden px-3 py-3">
-                      <div className="flex items-start gap-2">
-                        <span
-                          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold"
-                          style={{ backgroundColor: avatar.bg, color: avatar.text }}
-                          aria-hidden="true"
-                        >
-                          {initials(lead.name)}
-                        </span>
-                        <div className="min-w-0">
-                          <div className="truncate font-medium" style={{ color: "var(--color-ink)" }}>{lead.name}</div>
-                          <div className="truncate" style={{ color: "var(--color-ink-soft)" }}>{lead.email}</div>
-                          <div className="truncate" style={{ color: "var(--color-ink-soft)" }}>{lead.phone}</div>
-                          {(lead.city || lead.state) && (
-                            <div className="truncate text-xs" style={{ color: "var(--color-ink-soft)", opacity: 0.8 }}>
-                              {[lead.city, lead.state].filter(Boolean).join(", ")}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    <td className="overflow-hidden px-3 py-3" style={{ color: "var(--color-ink-soft)" }}>
-                      <p className="truncate">{lead.service ?? "—"}</p>
-                      {lead.plan && (
-                        <p className="truncate text-xs" style={{ opacity: 0.8 }}>
-                          {lead.plan}
-                          {lead.planPrice && ` · ${lead.planPrice}`}
-                        </p>
-                      )}
-                    </td>
-                    <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                      <select
-                        value={lead.stage}
-                        onChange={(e) => updateLead(lead.id, { stage: e.target.value as LeadStage }, "Stage updated.")}
-                        className="w-full max-w-[110px] truncate rounded-full px-2 py-1 text-xs font-semibold outline-none"
-                        style={{ backgroundColor: stageStyle.bg, color: stageStyle.text, border: "none" }}
-                      >
-                        {LEAD_STAGES.map((s) => (
-                          <option key={s} value={s}>
-                            {LEAD_STAGE_LABELS[s]}
-                          </option>
-                        ))}
-                      </select>
-                    </td>
-                    <td className="overflow-hidden px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                      {lead.assignedTo === "Unassigned" ? (
-                        <button
-                          type="button"
-                          onClick={() => claimLead(lead.id)}
-                          className="rounded-full px-3 py-1 text-xs font-semibold text-white transition-transform hover:scale-[1.02]"
-                          style={{ backgroundColor: "var(--color-action)" }}
-                        >
-                          Claim
-                        </button>
-                      ) : (
-                        <select
-                          value={lead.assignedTo}
-                          onChange={(e) => updateLead(lead.id, { assignedTo: e.target.value }, "Reassigned.")}
-                          className="w-full max-w-full rounded-lg border px-2 py-1 text-xs outline-none"
-                          style={{ borderColor: "var(--color-line)" }}
-                        >
-                          {staffNames.map((s) => (
-                            <option key={s} value={s}>
-                              {s}
-                            </option>
-                          ))}
-                        </select>
-                      )}
-                    </td>
-                    <td className="px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                      {(() => {
-                        const draft = noteDrafts[lead.id] ?? lead.notes ?? "";
-                        const dirty = draft !== (lead.notes ?? "");
-                        const status = noteStatus[lead.id];
-                        return (
-                          <>
-                            <textarea
-                              value={draft}
-                              onChange={(e) => setNoteDrafts((d) => ({ ...d, [lead.id]: e.target.value }))}
-                              placeholder="Add a note…"
-                              rows={2}
-                              className="w-full rounded-lg border px-2 py-1 text-xs outline-none focus:border-[var(--color-action)]"
-                              style={{ borderColor: "var(--color-line)" }}
-                            />
-                            <div className="mt-1 flex items-center gap-2">
-                              {dirty && (
-                                <>
-                                  <button
-                                    type="button"
-                                    disabled={status === "saving"}
-                                    onClick={async () => {
-                                      setNoteStatus((s) => ({ ...s, [lead.id]: "saving" }));
-                                      const ok = await updateLead(lead.id, { notes: draft }, "Note saved.");
-                                      setNoteStatus((s) => ({ ...s, [lead.id]: ok ? "saved" : "error" }));
-                                      if (ok) {
-                                        setNoteDrafts((d) => {
-                                          const next = { ...d };
-                                          delete next[lead.id];
-                                          return next;
-                                        });
-                                      }
-                                    }}
-                                    aria-label="Save note"
-                                    title="Save note"
-                                    className="flex h-6 w-6 items-center justify-center rounded-full text-white disabled:opacity-60"
-                                    style={{ backgroundColor: "#116a2c" }}
-                                  >
-                                    <Check className="h-3.5 w-3.5" />
-                                  </button>
-                                  <button
-                                    type="button"
-                                    disabled={status === "saving"}
-                                    onClick={() =>
-                                      setNoteDrafts((d) => {
-                                        const next = { ...d };
-                                        delete next[lead.id];
-                                        return next;
-                                      })
-                                    }
-                                    aria-label="Discard changes"
-                                    title="Discard changes"
-                                    className="flex h-6 w-6 items-center justify-center rounded-full border disabled:opacity-60"
-                                    style={{ borderColor: "var(--color-line)", color: "var(--color-ink-soft)" }}
-                                  >
-                                    <X className="h-3.5 w-3.5" />
-                                  </button>
-                                </>
-                              )}
-                              {status === "saving" && (
-                                <span className="text-[10px]" style={{ color: "var(--color-ink-soft)" }}>Saving…</span>
-                              )}
-                              {!dirty && status === "saved" && (
-                                <span className="text-[10px] font-medium" style={{ color: "#116a2c" }}>Saved ✓</span>
-                              )}
-                              {status === "error" && (
-                                <span className="text-[10px] font-medium" style={{ color: "#b42318" }}>Failed to save — try again</span>
-                              )}
-                            </div>
-                          </>
-                        );
-                      })()}
-                    </td>
-                    <td className="overflow-hidden px-3 py-3 whitespace-nowrap" style={{ color: "var(--color-ink-soft)" }}>
-                      {new Date(lead.createdAt).toLocaleDateString()}
-                    </td>
-                    <td className="overflow-hidden px-3 py-3" onClick={(e) => e.stopPropagation()}>
-                      <a
-                        href={buildWhatsAppLink(lead.phone, leadWhatsAppMessage(lead))}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold transition-transform hover:scale-[1.02]"
-                        style={{ backgroundColor: "#dcfce3", color: "#116a2c" }}
-                      >
-                        WhatsApp
-                      </a>
-                    </td>
-                  </tr>
-                );
-              })}
-              {leads !== null && filteredLeads.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-4 py-10 text-center" style={{ color: "var(--color-ink-soft)" }}>
-                    No leads {viewer !== "Everyone" ? `assigned to ${viewer}` : "yet"}.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
+      ) : leads === null ? (
+        <div className="space-y-2 rounded-2xl border bg-white dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
+          {Array.from({ length: 5 }).map((_, i) => (
+            <SkeletonRow key={i} />
+          ))}
         </div>
-        </>
+      ) : (
+        <DataTable
+          columns={leadColumns}
+          rows={filteredLeads}
+          getRowKey={(lead) => lead.id}
+          itemLabel="leads"
+          emptyMessage={
+            viewerFilter.size === 0
+              ? "No leads yet."
+              : `No leads matching: ${viewerFilterLabel}.`
+          }
+          onRowClick={(lead) => setActiveLead(lead)}
+          // fixedLayout: this table defines w-[%] widths on every column
+          // (see leadColumns above) but was never actually opted into
+          // table-layout: fixed — under the default auto layout those
+          // percentages are decorative only, and the browser sized the
+          // Lead column to fit its longest unwrapped line (an email
+          // address) while squeezing Stage/Assigned/Notes down to a
+          // couple of visible characters each. minWidth bumped from 860
+          // to give the two <select> columns (Stage, Assigned to) enough
+          // real pixels to show a full label like "In Progress" rather
+          // than just being technically un-clipped at a near-zero width.
+          fixedLayout
+          minWidth={980}
+        />
       )}
 
       <LeadDetailDrawer

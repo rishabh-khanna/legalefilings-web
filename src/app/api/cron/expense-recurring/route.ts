@@ -5,9 +5,16 @@ import { applyExpenseBalanceEffect, logExpenseAudit } from "@/lib/expense-manage
 import { sendBillReminderEmail } from "@/lib/email";
 import { logEmailFailure } from "@/lib/email-failures";
 
+// Date.UTC, not new Date(y, m, d) — the latter builds a LOCAL date and
+// toISOString() then converts it to UTC, shifting the result back a day
+// for any timezone ahead of UTC. In IST this quietly moved every
+// recurring expense one day earlier on each advance.
 function addOneMonth(dayOfMonth: number, from: string): string {
   const [y, m] = from.split("-").map(Number);
-  return new Date(y, m, dayOfMonth).toISOString().slice(0, 10);
+  // Clamp to the target month's last day so a 29/30/31 anchor doesn't
+  // roll over into the following month.
+  const lastDay = new Date(Date.UTC(y, m + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(y, m, Math.min(dayOfMonth, lastDay))).toISOString().slice(0, 10);
 }
 
 // GET /api/cron/expense-recurring — triggered daily by Vercel Cron (see

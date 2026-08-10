@@ -319,11 +319,37 @@ export function InvoicePdf({ invoice, company, items, qrDataUrl, template }: { i
   );
 }
 
-export async function buildInvoicePdfBuffer(opts: { invoice: Record<string, unknown>; company: Record<string, unknown> | null; items: PdfLineItem[] }) {
+export async function buildInvoicePdfBuffer(opts: {
+  invoice: Record<string, unknown>;
+  company: Record<string, unknown> | null;
+  items: PdfLineItem[];
+  /** Issuing organization's name — the QR's payee label. */
+  orgName?: string | null;
+}) {
   let qrDataUrl: string | null = null;
   if (opts.company?.upi_id) {
-    const upiUri = `upi://pay?pa=${encodeURIComponent(opts.company.upi_id as string)}&pn=${encodeURIComponent(SITE_NAME)}&am=${Number(opts.invoice.total ?? 0).toFixed(2)}&tn=${encodeURIComponent((opts.invoice.invoice_number as string) ?? "")}`;
-    qrDataUrl = await QRCode.toDataURL(upiUri, { margin: 1, width: 200 }).catch(() => null);
+    // Amount is the balance still owed, not the invoice face value. The
+    // QR used to always request the full total, so a customer who had
+    // already part-paid and then scanned the code on their copy would be
+    // asked for the whole amount again — overcharging them by whatever
+    // they'd already sent.
+    const payments = (opts.invoice.invoice_payments as { amount: number }[] | null) ?? [];
+    const paid = payments.reduce((s, p) => s + Number(p.amount), 0);
+    const balanceDue = Math.max(0, Number(opts.invoice.total ?? 0) - paid);
+
+    // Nothing owed means no QR at all. Rendering a scannable pay code on
+    // a settled invoice invites a duplicate payment.
+    if (balanceDue > 0.5) {
+      // Payee name is the org that actually issued this invoice, not the
+      // platform. It was hardcoded to Legal Efilings while the payee UPI
+      // ID came from the tenant's own settings — so a tenant's customer
+      // scanned a code that paid the tenant but displayed "Legal
+      // Efilings" in their UPI app, which reads like a mis-issued or
+      // fraudulent request.
+      const payeeName = opts.orgName || (opts.company.business_name as string) || SITE_NAME;
+      const upiUri = `upi://pay?pa=${encodeURIComponent(opts.company.upi_id as string)}&pn=${encodeURIComponent(payeeName)}&am=${balanceDue.toFixed(2)}&tn=${encodeURIComponent((opts.invoice.invoice_number as string) ?? "")}`;
+      qrDataUrl = await QRCode.toDataURL(upiUri, { margin: 1, width: 200 }).catch(() => null);
+    }
   }
   return renderToBuffer(
     <InvoicePdf invoice={opts.invoice} company={opts.company} items={opts.items} qrDataUrl={qrDataUrl} template={(opts.invoice.pdf_template as string) ?? "classic"} />

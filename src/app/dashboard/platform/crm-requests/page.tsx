@@ -2,7 +2,8 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
-import { Clock, CheckCircle2, XCircle } from "lucide-react";
+import { Clock, CheckCircle2, XCircle, Check, X } from "lucide-react";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
 
 type CrmAccessRequest = {
   id: string;
@@ -24,6 +25,7 @@ const REQUEST_STATUS_STYLE: Record<"approved" | "rejected", { bg: string; fg: st
 // queue, not part of managing the org list itself, so it gets its own
 // nav entry and page instead of sharing one with Organizations.
 export default function CrmRequestsPage() {
+  const [view, setView] = useState<"pending" | "reviewed">("pending");
   const [crmRequests, setCrmRequests] = useState<CrmAccessRequest[] | null>(null);
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState("");
@@ -76,6 +78,74 @@ export default function CrmRequestsPage() {
   const pending = (crmRequests ?? []).filter((r) => r.status === "pending");
   const reviewed = (crmRequests ?? []).filter((r) => r.status !== "pending");
 
+  const pendingColumns: DataTableColumn<CrmAccessRequest>[] = [
+    { key: "org", header: "Organization", render: (r) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{r.organization_name}</span>, exportValue: (r) => r.organization_name, sortValue: (r) => r.organization_name },
+    { key: "requestedBy", header: "Requested By", render: (r) => r.profiles?.full_name ?? "Unknown", exportValue: (r) => r.profiles?.full_name ?? "Unknown", sortValue: (r) => r.profiles?.full_name },
+    { key: "plan", header: "Plan", className: "w-[16%] whitespace-nowrap", render: (r) => r.orders ? `${r.orders.service} — ${r.orders.plan}` : "—", exportValue: (r) => (r.orders ? `${r.orders.service} — ${r.orders.plan}` : "") },
+    { key: "requestedOn", header: "Requested On", className: "w-[12%] whitespace-nowrap", render: (r) => new Date(r.created_at).toLocaleDateString("en-IN"), exportValue: (r) => new Date(r.created_at).toLocaleDateString("en-IN"), sortValue: (r) => r.created_at },
+    {
+      key: "actions",
+      header: "Actions",
+      className: "w-[26%] text-right",
+      render: (r) =>
+        rejectingId === r.id ? (
+          <div className="flex items-center justify-end gap-2">
+            <input
+              autoFocus
+              value={rejectReason}
+              onChange={(e) => setRejectReason(e.target.value)}
+              placeholder="Reason"
+              className="w-40 rounded-lg border px-2 py-1.5 text-sm outline-none"
+              style={{ borderColor: "var(--color-line)" }}
+            />
+            <button type="button" onClick={() => handleRejectRequest(r.id)} className="text-sm font-semibold" style={{ color: "#b42318" }}>Confirm</button>
+            <button type="button" onClick={() => { setRejectingId(null); setRejectReason(""); }} className="text-sm" style={{ color: "var(--color-ink-soft)" }}>Cancel</button>
+          </div>
+        ) : (
+          <div className="flex items-center justify-end gap-2">
+            <button type="button" onClick={() => handleApproveRequest(r.id)} aria-label="Approve" className="rounded-full p-1.5 transition-colors hover:bg-[var(--color-accent-tint)]">
+              <Check className="h-4 w-4" style={{ color: "#116a2c" }} />
+            </button>
+            <button type="button" onClick={() => setRejectingId(r.id)} aria-label="Reject" className="rounded-full p-1.5 transition-colors hover:bg-[var(--color-accent-tint)]">
+              <X className="h-4 w-4" style={{ color: "#b42318" }} />
+            </button>
+          </div>
+        ),
+    },
+  ];
+
+  const reviewedColumns: DataTableColumn<CrmAccessRequest>[] = [
+    { key: "org", header: "Organization", render: (r) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{r.organization_name}</span>, exportValue: (r) => r.organization_name, sortValue: (r) => r.organization_name },
+    { key: "requestedBy", header: "Requested By", render: (r) => r.profiles?.full_name ?? "Unknown", exportValue: (r) => r.profiles?.full_name ?? "Unknown", sortValue: (r) => r.profiles?.full_name },
+    { key: "plan", header: "Plan", className: "w-[16%] whitespace-nowrap", render: (r) => r.orders ? `${r.orders.service} — ${r.orders.plan}` : "—", exportValue: (r) => (r.orders ? `${r.orders.service} — ${r.orders.plan}` : "") },
+    { key: "requestedOn", header: "Requested On", className: "w-[12%] whitespace-nowrap", render: (r) => new Date(r.created_at).toLocaleDateString("en-IN"), exportValue: (r) => new Date(r.created_at).toLocaleDateString("en-IN"), sortValue: (r) => r.created_at },
+    {
+      key: "status",
+      header: "Status",
+      className: "w-[10%] whitespace-nowrap",
+      render: (r) => {
+        const style = REQUEST_STATUS_STYLE[r.status as "approved" | "rejected"];
+        return (
+          <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: style.bg, color: style.fg }}>
+            {r.status}
+          </span>
+        );
+      },
+      exportValue: (r) => r.status,
+      sortValue: (r) => r.status,
+    },
+    {
+      key: "note",
+      header: "Note",
+      render: (r) => (
+        <span className="max-w-xs" style={{ color: r.status === "rejected" && r.review_note ? "#b42318" : "var(--color-ink-soft)" }}>
+          {r.status === "rejected" && r.review_note ? r.review_note : "—"}
+        </span>
+      ),
+      exportValue: (r) => (r.status === "rejected" ? r.review_note ?? "" : ""),
+    },
+  ];
+
   return (
     <div>
       <DashboardPageHero
@@ -89,116 +159,54 @@ export default function CrmRequestsPage() {
         </div>
       </DashboardPageHero>
 
-      <div className="mt-6 overflow-x-auto rounded-2xl border bg-white dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-        <div className="border-b px-4 py-3" style={{ borderColor: "var(--color-line)" }}>
-          <h2 className="font-semibold" style={{ color: "var(--color-ink)" }}>Pending CRM Requests</h2>
-          <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>Customers who purchased a plan and asked for their own CRM workspace.</p>
-        </div>
-        {reviewError && (
-          <p className="px-4 pt-3 text-sm" style={{ color: "#b42318" }}>{reviewError}</p>
-        )}
-        {crmRequests === null ? (
-          <p className="px-4 py-6 text-sm" style={{ color: "var(--color-ink-soft)" }}>Loading…</p>
-        ) : pending.length === 0 ? (
-          <p className="px-4 py-6 text-sm" style={{ color: "var(--color-ink-soft)" }}>No pending requests.</p>
-        ) : (
-          <table className="dt-table w-full min-w-[640px]">
-            <thead>
-              <tr className="text-left">
-                <th>#</th>
-                <th>Organization</th>
-                <th>Requested By</th>
-                <th>Requested On</th>
-                <th className="text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {pending.map((r, i) => (
-                <tr key={r.id}>
-                  <td style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                  <td className="font-medium" style={{ color: "var(--color-ink)" }}>{r.organization_name}</td>
-                  <td style={{ color: "var(--color-ink-soft)" }}>{r.profiles?.full_name ?? "Unknown"}</td>
-                  <td style={{ color: "var(--color-ink-soft)" }}>{new Date(r.created_at).toLocaleDateString("en-IN")}</td>
-                  <td className="text-right">
-                    {rejectingId === r.id ? (
-                      <div className="flex items-center justify-end gap-2">
-                        <input
-                          autoFocus
-                          value={rejectReason}
-                          onChange={(e) => setRejectReason(e.target.value)}
-                          placeholder="Reason"
-                          className="w-40 rounded-lg border px-2 py-1.5 text-sm outline-none"
-                          style={{ borderColor: "var(--color-line)" }}
-                        />
-                        <button type="button" onClick={() => handleRejectRequest(r.id)} className="text-sm font-semibold" style={{ color: "#b42318" }}>Confirm</button>
-                        <button type="button" onClick={() => { setRejectingId(null); setRejectReason(""); }} className="text-sm" style={{ color: "var(--color-ink-soft)" }}>Cancel</button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-end gap-3">
-                        <button type="button" onClick={() => setRejectingId(r.id)} className="text-sm font-medium" style={{ color: "#b42318" }}>Reject</button>
-                        <button
-                          type="button"
-                          onClick={() => handleApproveRequest(r.id)}
-                          className="rounded-full px-4 py-1.5 text-sm font-semibold text-white"
-                          style={{ backgroundColor: "var(--color-action)" }}
-                        >
-                          Approve
-                        </button>
-                      </div>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
+      {reviewError && (
+        <p className="mt-4 text-sm" style={{ color: "#b42318" }}>{reviewError}</p>
+      )}
+
+      <div className="mt-6 flex items-center gap-1 rounded-full border p-1" style={{ borderColor: "var(--color-line)" }}>
+        {([["pending", `Pending${pending.length > 0 ? ` (${pending.length})` : ""}`], ["reviewed", "Reviewed"]] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setView(value)}
+            className="rounded-full px-4 py-2 text-sm font-semibold transition-colors"
+            style={view === value ? { backgroundColor: "var(--color-accent)", color: "var(--color-ink)" } : { color: "var(--color-ink-soft)" }}
+          >
+            {label}
+          </button>
+        ))}
       </div>
 
-      <div className="mt-6 overflow-x-auto rounded-2xl border bg-white dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-        <div className="border-b px-4 py-3" style={{ borderColor: "var(--color-line)" }}>
-          <h2 className="font-semibold" style={{ color: "var(--color-ink)" }}>Reviewed CRM Requests</h2>
-          <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>Approved and rejected workspace requests — including ones turned down.</p>
-        </div>
-        {crmRequests === null ? (
-          <p className="px-4 py-6 text-sm" style={{ color: "var(--color-ink-soft)" }}>Loading…</p>
-        ) : reviewed.length === 0 ? (
-          <p className="px-4 py-6 text-sm" style={{ color: "var(--color-ink-soft)" }}>No reviewed requests yet.</p>
-        ) : (
-          <table className="dt-table w-full min-w-[640px]">
-            <thead>
-              <tr className="text-left">
-                <th>#</th>
-                <th>Organization</th>
-                <th>Requested By</th>
-                <th>Requested On</th>
-                <th>Status</th>
-                <th>Note</th>
-              </tr>
-            </thead>
-            <tbody>
-              {reviewed.map((r, i) => {
-                const style = REQUEST_STATUS_STYLE[r.status as "approved" | "rejected"];
-                return (
-                  <tr key={r.id}>
-                    <td style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                    <td className="font-medium" style={{ color: "var(--color-ink)" }}>{r.organization_name}</td>
-                    <td style={{ color: "var(--color-ink-soft)" }}>{r.profiles?.full_name ?? "Unknown"}</td>
-                    <td style={{ color: "var(--color-ink-soft)" }}>{new Date(r.created_at).toLocaleDateString("en-IN")}</td>
-                    <td>
-                      <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: style.bg, color: style.fg }}>
-                        {r.status}
-                      </span>
-                    </td>
-                    <td className="max-w-xs" style={{ color: r.status === "rejected" && r.review_note ? "#b42318" : "var(--color-ink-soft)" }}>
-                      {r.status === "rejected" && r.review_note ? r.review_note : "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        )}
-      </div>
+      {view === "pending" && (
+        <>
+          <p className="mt-4 text-sm" style={{ color: "var(--color-ink-soft)" }}>Customers who purchased a plan and asked for their own CRM workspace.</p>
+          <DataTable
+            columns={pendingColumns}
+            fixedLayout
+            rows={pending}
+            getRowKey={(r) => r.id}
+            itemLabel="requests"
+            emptyMessage="No pending requests."
+            exportFilename="pending-crm-requests"
+          />
+        </>
+      )}
+
+      {view === "reviewed" && (
+        <>
+          <p className="mt-4 text-sm" style={{ color: "var(--color-ink-soft)" }}>Approved and rejected workspace requests — including ones turned down.</p>
+          <DataTable
+            columns={reviewedColumns}
+            fixedLayout
+            rows={reviewed}
+            getRowKey={(r) => r.id}
+            itemLabel="requests"
+            emptyMessage="No reviewed requests yet."
+            search={{ placeholder: "Search organization…", filter: (r, q) => r.organization_name.toLowerCase().includes(q) }}
+            exportFilename="reviewed-crm-requests"
+          />
+        </>
+      )}
     </div>
   );
 }

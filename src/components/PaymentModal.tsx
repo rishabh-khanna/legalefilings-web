@@ -8,6 +8,11 @@ import { SITE_NAME } from "@/config/site";
 // ₹1,999 / ₹4,999+ / ₹4,999 per month → 1999 / 4999 / 4999 — strips the
 // currency symbol, thousands separators, and any trailing "+"/period
 // qualifier the pricing copy tacks on (govt. fee notes, "/mo" etc.).
+// GST rate applied by createOrderInvoice on the server. Kept in sync
+// deliberately: if the invoice's default rate changes, this display must
+// change with it or the modal starts lying about the total.
+const CHECKOUT_GST_RATE = 18;
+
 function parsePrice(price: string): number {
   const digits = price.replace(/[^\d]/g, "");
   return digits ? Number(digits) : 0;
@@ -18,6 +23,12 @@ type Status = "form" | "submitting" | "error";
 export function PaymentModal() {
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState<PaymentModalDetail | null>(null);
+  // What the customer will actually be charged, derived from the same
+  // parsePrice() the submit path sends to the server — so the figure
+  // shown and the figure billed come from one source.
+  const payableTotal = detail
+    ? Math.round(parsePrice(detail.plan.price) * (1 + CHECKOUT_GST_RATE / 100))
+    : null;
   const [status, setStatus] = useState<Status>("form");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -146,6 +157,20 @@ export function PaymentModal() {
             >
               {detail.plan.name} — {detail.plan.price}
             </span>
+            {/* The listed price is exclusive of GST — the invoice adds 18%
+                on top (see createOrderInvoice). Showing only the card
+                price here meant the Razorpay popup was the first time the
+                customer saw the real amount, 18% higher than the number
+                they clicked. Stating the total up front isn't a pricing
+                change, just an honest one. */}
+            {payableTotal !== null && (
+              <p className="mt-2 text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+                Total payable: ₹{payableTotal.toLocaleString("en-IN")}{" "}
+                <span className="font-normal" style={{ color: "var(--color-ink-soft)" }}>
+                  (incl. 18% GST)
+                </span>
+              </p>
+            )}
             <p className="mt-2 text-xs" style={{ color: "var(--color-ink-soft)" }}>
               We&apos;ll create your account (if you don&apos;t have one) and take you straight to secure checkout.
             </p>

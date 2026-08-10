@@ -23,13 +23,16 @@ test("admin creates a department, adds a manager-level role, toggles it, then de
   // contains this dept's name AND some other dept's Delete button,
   // satisfying both filters independently) — anchor on the exact <p>
   // holding just this dept's name, then climb to its own card via the
-  // nearest rounded-xl ancestor, same pattern used elsewhere in this suite.
-  const deptCard = page.locator("p", { hasText: deptName }).locator("xpath=ancestor::div[contains(@class,'rounded-xl')][1]");
+  // nearest rounded-2xl ancestor (the card itself — role rows one level
+  // down use rounded-xl, same pattern used elsewhere in this suite).
+  const deptCard = page.locator("p", { hasText: deptName }).locator("xpath=ancestor::div[contains(@class,'rounded-2xl')][1]");
   await expect(deptCard).toBeVisible();
 
-  await deptCard.getByPlaceholder("e.g. Lead, Manager, Senior Manager").fill(roleTitle);
+  await deptCard.getByPlaceholder("Add a role title, e.g. Lead, Manager, Senior Manager").fill(roleTitle);
   await deptCard.locator('input[type="checkbox"]').check();
-  await deptCard.getByRole("button", { name: "Add Role" }).click();
+  // exact:true — "Add" alone also substring-matches "Add Department" up
+  // in the create-department form above this card.
+  await deptCard.getByRole("button", { name: "Add", exact: true }).click();
   await expect(page.getByText("Role added.")).toBeVisible({ timeout: 10000 });
 
   // Same wrapper-div trap as deptCard above — anchor on the <span>
@@ -46,7 +49,7 @@ test("admin creates a department, adds a manager-level role, toggles it, then de
   await expect(page.locator("div", { hasText: roleTitle })).toHaveCount(0);
 
   page.once("dialog", (dialog) => dialog.accept());
-  await deptCard.getByRole("button", { name: "Delete Department" }).click();
+  await deptCard.getByRole("button", { name: "Delete department" }).click();
   await expect(page.getByText("Department deleted.")).toBeVisible({ timeout: 10000 });
   await expect(page.getByText(deptName)).toHaveCount(0);
 });

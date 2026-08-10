@@ -10,6 +10,7 @@ import { BrandSpinner } from "@/components/BrandSpinner";
 import { Logo } from "@/components/Logo";
 import { ProfileCompletionBanner } from "@/components/dashboard/ProfileCompletionBanner";
 import { BusinessSettingsCompletionBanner } from "@/components/dashboard/BusinessSettingsCompletionBanner";
+import { NotificationBell } from "@/components/dashboard/NotificationBell";
 
 type Session = {
   name: string;
@@ -17,6 +18,7 @@ type Session = {
   profile: Profile;
   departmentRole: { title: string; is_manager_level: boolean } | null;
   grantedTools: Set<ToolKey>;
+  orgName: string | null;
 };
 // `section` groups the desktop nav into labeled clusters instead of one
 // long undifferentiated list — undefined means "no header" (top-level
@@ -45,7 +47,7 @@ const CUSTOMER_NAV_ITEMS: NavItem[] = [
   // buttons ON the finance page itself, where `can(...)` can actually
   // hide them per role instead of showing a dead-end nav link.
   { href: "/dashboard/finance", label: "Business Finance", section: "CRM Access" },
-  { href: "/dashboard/finance/reports", label: "Reports", section: "CRM Access" },
+  { href: "/dashboard/finance/reports", label: "Finance Reports", section: "CRM Access" },
   // No section — a standalone top-level item, same shape as Overview,
   // not nested inside the CRM Access group. Requesting access is a
   // different kind of thing from an access you already have, so it
@@ -86,6 +88,10 @@ const STAFF_BASE_ITEMS: NavItem[] = [
   { href: "/dashboard/finance", label: "Business Finance", section: "Sales & Billing" },
   { href: "/dashboard/finance/reports", label: "Finance Reports", section: "Sales & Billing" },
   { href: "/dashboard/attendance", label: "Attendance", section: "My Workspace" },
+  // Split out from Attendance — a personal, paginated history of your
+  // own correction requests (pending/approved/rejected), separate from
+  // the team-wide review queue on the admin Team Attendance page.
+  { href: "/dashboard/attendance/corrections", label: "Attendance Correction Requests", section: "My Workspace" },
   { href: "/dashboard/leave", label: "Leave", section: "My Workspace" },
   { href: "/dashboard/payslips", label: "My Payslips", section: "My Workspace" },
   { href: "/dashboard/holidays", label: "Holidays", section: "My Workspace" },
@@ -108,7 +114,7 @@ const ADMIN_ONLY_ITEMS: NavItem[] = [
   { href: "/dashboard/admin/payslips", label: "Payslips", section: "Administration", toolKey: "payslips" },
   { href: "/dashboard/admin/hr-letters", label: "HR Letters", section: "Administration", toolKey: "hr_letters" },
   { href: "/dashboard/admin/product-catalog", label: "Invoice Item Catalog", section: "Administration", toolKey: "product_catalog" },
-  { href: "/dashboard/admin/reports", label: "Reports", section: "Administration", toolKey: "reports" },
+  { href: "/dashboard/admin/reports", label: "Data Exports", section: "Administration", toolKey: "reports" },
   // toolKey stays "company_settings" — it's a persisted staff_tool_grants
   // column value, not user-facing text, so it wasn't touched by the
   // "Company Settings" -> "Business Settings" rename.
@@ -117,6 +123,7 @@ const ADMIN_ONLY_ITEMS: NavItem[] = [
   { href: "/dashboard/admin/leave-types", label: "Leave Types", section: "Administration", toolKey: "leave_types" },
   // Not itself delegable (Admin can already grant these individually
   // here) — org-admin only, matches proxy.ts's ADMIN_ONLY_SECTIONS.
+  { href: "/dashboard/admin/activity", label: "Activity Log", section: "Administration" },
   { href: "/dashboard/admin/tool-access", label: "Delegated Access", section: "Administration" },
 ];
 
@@ -125,10 +132,16 @@ const ADMIN_ONLY_ITEMS: NavItem[] = [
 // (the API scopes by reporting chain), but hiding the nav link avoids the
 // confusing "why is this blank" moment.
 const TEAM_MANAGEMENT_ITEMS: NavItem[] = [
-  { href: "/dashboard/admin/leads", label: "Team Leads CRM", section: "Team Management" },
-  { href: "/dashboard/admin/attendance", label: "Team Attendance", section: "Team Management" },
-  { href: "/dashboard/admin/leave-requests", label: "Team Leave Requests", section: "Team Management" },
+  { href: "/dashboard/admin/leads", label: "Team Leads CRM", section: "Team Management", toolKey: "leads_crm" },
+  { href: "/dashboard/admin/attendance", label: "Team Attendance", section: "Team Management", toolKey: "team_attendance" },
+  { href: "/dashboard/admin/leave-requests", label: "Team Leave Requests", section: "Team Management", toolKey: "team_leave" },
 ];
+
+// Only used for the customer-with-grant path below — a staff/admin
+// always gets Invoice CRM unconditionally via STAFF_BASE_ITEMS, so this
+// duplicate exists purely so a granted customer can get the same link
+// without account_type ever changing.
+const CUSTOMER_INVOICE_CRM_ITEM: NavItem = { href: "/dashboard/invoice-crm", label: "Invoice CRM", section: "CRM Access", toolKey: "invoice_crm" };
 
 // Company-wide financials/headcount — group_leader and admin only.
 const ANALYTICS_ITEM: NavItem = { href: "/dashboard/admin/analytics", label: "Analytics", section: "Team Management", toolKey: "analytics" };
@@ -152,7 +165,23 @@ const PLATFORM_ITEMS: NavItem[] = [
 // Management the same way leader/group_leader always has, without
 // needing those exact three names.
 function buildNavItems(profile: Profile, isManagerLevel: boolean, grantedTools: Set<ToolKey>): NavItem[] {
-  if (!isStaffOrAdmin(profile)) return CUSTOMER_NAV_ITEMS;
+  if (!isStaffOrAdmin(profile)) {
+    if (profile.account_type !== "customer" || grantedTools.size === 0) return CUSTOMER_NAV_ITEMS;
+    // A customer delegated real CRM tools (Leads/Invoice CRM/Team
+    // Attendance/Team Leave, plus anything else grantable like
+    // Employees/Payroll) gets those folded into their normal customer
+    // nav — the same pages staff use, without account_type ever
+    // changing from "customer".
+    const items = [...CUSTOMER_NAV_ITEMS];
+    for (const item of TEAM_MANAGEMENT_ITEMS) {
+      if (item.toolKey && grantedTools.has(item.toolKey)) items.push(item);
+    }
+    if (grantedTools.has("invoice_crm")) items.push(CUSTOMER_INVOICE_CRM_ITEM);
+    for (const item of ADMIN_ONLY_ITEMS) {
+      if (item.toolKey && grantedTools.has(item.toolKey)) items.push(item);
+    }
+    return items;
+  }
 
   const isAdmin = profile.account_type === "admin";
   const items = [...STAFF_BASE_ITEMS];
@@ -236,6 +265,12 @@ const NAV_ICONS: Record<string, (props: { className?: string }) => React.JSX.Ele
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
       <circle cx="12" cy="12" r="8.5" />
       <path d="M12 7.5V12l3 2" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  "/dashboard/attendance/corrections": ({ className }) => (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
+      <rect x="4" y="3.5" width="16" height="17" rx="2" />
+      <path d="M8 8.5h8M8 12h8M8 15.5h5" strokeLinecap="round" />
     </svg>
   ),
   "/dashboard/leave": ({ className }) => (
@@ -423,6 +458,29 @@ const DEFAULT_NAV_ICON = ({ className }: { className?: string }) => (
   </svg>
 );
 
+// A freshly-constructed browser client's session isn't guaranteed to be
+// hydrated from cookies yet on the very first call — most visible right
+// after LoginForm's hard navigation into /dashboard, where this mounts
+// on a brand-new page load a few milliseconds after the session cookie
+// was written. A single getUser() call in that window can come back
+// with no user even though proxy.ts's own (server-side, cookie-based)
+// check just let the request through, incorrectly bouncing a real
+// logged-in session back to /login. Retrying a couple of times over a
+// short window absorbs that startup race without weakening the actual
+// security boundary — this check is a client-side UX convenience only;
+// every real authorization decision still happens server-side (proxy.ts,
+// API routes) against the actual cookie, not this.
+async function getUserWithRetry(supabase: ReturnType<typeof createSupabaseBrowserClient>) {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (user) return user;
+    if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 200));
+  }
+  return null;
+}
+
 // Sits INSIDE the normal site layout (header/footer/nav still render around
 // it — see SiteChrome) rather than replacing it, so a logged-in client can
 // still browse services, check pricing, and buy another plan without the
@@ -434,21 +492,46 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null | "loading">("loading");
   // Which section's flyout is open, keyed by section name. The sidebar
   // is a fixed, always-open (never collapsed) labeled column — a grouped
-  // item's links live in a hover-triggered popover next to its row
-  // instead of expanding inline underneath it. A short close delay
-  // avoids the flyout vanishing during the brief mouse travel from the
-  // row into the popover itself.
+  // item's links live in a hover/click-triggered popover next to its row
+  // instead of expanding inline underneath it. Opening on hover is
+  // debounced (openTimer, ~120ms) — an earlier version opened instantly
+  // on mouseenter, so a flyout would flash open for every row the cursor
+  // merely passed over on its way somewhere else. A short delay means
+  // only a deliberate pause over a row opens it; a click also opens it
+  // immediately for anyone who doesn't want to wait (or can't hover —
+  // touch/keyboard).
   const [openFlyout, setOpenFlyout] = useState<string | null>(null);
+  const navRef = useRef<HTMLElement | null>(null);
+  const openTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  function openGroup(section: string) {
+  function clearTimers() {
+    if (openTimer.current) clearTimeout(openTimer.current);
     if (closeTimer.current) clearTimeout(closeTimer.current);
-    setOpenFlyout(section);
+  }
+  function scheduleOpen(section: string) {
+    clearTimers();
+    openTimer.current = setTimeout(() => setOpenFlyout(section), 120);
   }
   function scheduleClose() {
-    if (closeTimer.current) clearTimeout(closeTimer.current);
+    clearTimers();
     closeTimer.current = setTimeout(() => setOpenFlyout(null), 150);
   }
+  function toggleOpen(section: string) {
+    clearTimers();
+    setOpenFlyout((prev) => (prev === section ? null : section));
+  }
+
+  useEffect(() => clearTimers, []);
+
+  useEffect(() => {
+    if (!openFlyout) return;
+    function handlePointerDown(e: MouseEvent) {
+      if (navRef.current && !navRef.current.contains(e.target as Node)) setOpenFlyout(null);
+    }
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [openFlyout]);
 
   useEffect(() => {
     // Deferred (not called synchronously in the effect body) — same pattern
@@ -456,23 +539,27 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
     // the cascading-render lint rule.
     const kickoff = setTimeout(async () => {
       const supabase = createSupabaseBrowserClient();
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const user = await getUserWithRetry(supabase);
       if (!user) {
         router.replace("/login");
         return;
       }
+      // department_roles!profiles_department_role_id_fkey — profiles has
+      // two FKs to department_roles (this one, plus
+      // department_roles.created_by pointing back at profiles), so an
+      // unqualified embed is ambiguous (PGRST201) and fails outright,
+      // which is what was actually sending real logged-in sessions back
+      // to /login here — not a session/cookie timing issue.
       const { data: profile } = await supabase
         .from("profiles")
-        .select("*, department_roles(title, is_manager_level)")
+        .select("*, department_roles!profiles_department_role_id_fkey(title, is_manager_level), organizations!organization_id(name)")
         .eq("id", user.id)
         .single();
       if (!profile) {
         router.replace("/login");
         return;
       }
-      const { department_roles, ...profileFields } = profile;
+      const { department_roles, organizations, ...profileFields } = profile;
       // Own delegated-tool grants (staff_tool_grants RLS restricts this
       // select to the caller's own rows) — drives which admin-only nav
       // items show up for a non-admin who's been individually delegated
@@ -481,12 +568,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       const grantedTools = new Set<ToolKey>(
         (grants ?? []).filter((g) => isGrantActive(g)).map((g) => g.tool_key as ToolKey)
       );
+      const orgRow = Array.isArray(organizations) ? (organizations[0] ?? null) : (organizations ?? null);
       setSession({
         name: profileFields.full_name ?? user.email ?? "Account",
         email: user.email ?? "",
         profile: { ...profileFields, email: user.email ?? "" },
         departmentRole: Array.isArray(department_roles) ? (department_roles[0] ?? null) : (department_roles ?? null),
         grantedTools,
+        orgName: orgRow?.name ?? null,
       });
     }, 0);
     return () => clearTimeout(kickoff);
@@ -503,6 +592,33 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
       ? buildNavItems(session.profile, session.departmentRole?.is_manager_level ?? false, session.grantedTools)
       : CUSTOMER_NAV_ITEMS;
 
+  // Two nav items can both be a prefix-match for the same URL — e.g.
+  // "/dashboard/finance" (Business Finance) is itself a prefix of
+  // "/dashboard/finance/reports" (Finance Reports), so a plain
+  // pathname.startsWith(item.href) lit up both at once on the reports
+  // page. Only the single longest (most specific) matching href should
+  // ever be treated as active; every other item that merely matches as
+  // a prefix stays inactive. "+ /" boundary check also stops
+  // "/dashboard/lead" (hypothetical) from matching "/dashboard/leads".
+  function hrefMatches(href: string) {
+    return pathname === href || pathname.startsWith(`${href}/`);
+  }
+  const bestHref = navItems.reduce<string | null>((best, item) => {
+    if (!hrefMatches(item.href)) return best;
+    if (!best || item.href.length > best.length) return item.href;
+    return best;
+  }, null);
+  function isItemActive(item: NavItem) {
+    return item.exact ? pathname === item.href : item.href === bestHref;
+  }
+
+  // "Section / Page" for the top bar — the sidebar already highlights the
+  // active item, but that's scrolled out of view on any page long enough
+  // to need it. Overview has no section (it's the one standalone item at
+  // the top level), so it's shown alone rather than as "undefined / Overview".
+  const activeNavItem = navItems.find((item) => isItemActive(item));
+  const breadcrumb = activeNavItem ? (activeNavItem.section ? `${activeNavItem.section} / ${activeNavItem.label}` : activeNavItem.label) : null;
+
   // Collapses the flat navItems list into rail entries — a standalone
   // item (no section, e.g. Overview) becomes a direct-link rail icon; a
   // run of items sharing the same section becomes one rail icon whose
@@ -512,7 +628,7 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
   navItems.forEach((item, i) => {
     const Icon = NAV_ICONS[item.href] ?? DEFAULT_NAV_ICON;
     const tint = ICON_TINTS[i % ICON_TINTS.length];
-    const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+    const active = isItemActive(item);
     if (!item.section) {
       railEntries.push({ type: "link", key: item.href, href: item.href, label: item.label, icon: Icon, tint, active });
       return;
@@ -568,22 +684,73 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           app you're in, plus a persistent, obvious way out, without any
           of the marketing chrome that used to sit above every page. */}
       <div className="border-b" style={{ borderColor: "var(--color-line)" }}>
-        <div className="mx-auto flex max-w-[1800px] items-center justify-between px-4 py-3 sm:px-6 lg:px-10">
-          <Link href="/" aria-label="Legal Efilings — back to the main site">
-            <Logo />
-          </Link>
-          <button
-            type="button"
-            onClick={handleLogout}
-            className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-[var(--color-accent-tint)]"
-            style={{ borderColor: "var(--color-line)", color: "var(--color-ink-soft)" }}
-          >
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.75">
-              <path d="M15 4.5H8a1.5 1.5 0 0 0-1.5 1.5v12A1.5 1.5 0 0 0 8 19.5h7" strokeLinecap="round" strokeLinejoin="round" />
-              <path d="M11 12h9.5m0 0-3-3m3 3-3 3" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Log out
-          </button>
+        <div className="mx-auto flex max-w-[1800px] items-center justify-between gap-4 px-4 py-3 sm:px-6 lg:px-10">
+          <div className="flex min-w-0 items-center gap-4">
+            <Link href="/" aria-label="Legal Efilings — back to the main site" className="shrink-0">
+              <Logo />
+            </Link>
+            {/* Where you are — the sidebar's own active-state highlight is
+                the primary version of this, but it scrolls out of view on
+                any page long enough to need reminding. Hidden below lg,
+                where the mobile tab row just below already shows the
+                current section. */}
+            {breadcrumb && (
+              <p className="hidden min-w-0 truncate text-sm font-medium lg:block" style={{ color: "var(--color-ink-soft)" }}>
+                {breadcrumb}
+              </p>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2.5">
+            {/* Which tenant's data is on screen. Worth stating plainly in
+                this app specifically — a platform admin's pages pool every
+                organization's records together, and a lot of this app's
+                real bugs have come from exactly that boundary being
+                implicit instead of visible.
+                A real Link now, not a static span — a colored pill next to
+                a button reads as clickable regardless of intent, and the
+                one genuinely useful thing to do with "which orgs am I
+                seeing" is jump straight to the Organizations list. */}
+            {session.profile.is_platform_admin ? (
+              <Link
+                href="/dashboard/platform/organizations"
+                className="hidden items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors hover:brightness-95 sm:inline-flex"
+                style={{ backgroundColor: "#ede9fe", color: "#5b21b6" }}
+              >
+                <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.75">
+                  <rect x="3.5" y="3.5" width="7" height="7" rx="1.5" />
+                  <rect x="13.5" y="3.5" width="7" height="7" rx="1.5" />
+                  <rect x="3.5" y="13.5" width="7" height="7" rx="1.5" />
+                  <rect x="13.5" y="13.5" width="7" height="7" rx="1.5" />
+                </svg>
+                All Organizations
+              </Link>
+            ) : (
+              session.orgName && (
+                <span
+                  className="hidden max-w-[220px] items-center gap-1.5 truncate rounded-full px-3 py-1.5 text-xs font-semibold sm:inline-flex"
+                  style={{ backgroundColor: "var(--color-accent-tint)", color: "var(--color-action-dark)" }}
+                >
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="1.75">
+                    <path d="M5 20.5V5a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v15.5M13 9.5h5a1 1 0 0 1 1 1v10" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M8 8h.01M8 11.5h.01M8 15h.01M16.5 13h.01M16.5 16.5h.01" strokeLinecap="round" />
+                  </svg>
+                  <span className="truncate">{session.orgName}</span>
+                </span>
+              )
+            )}
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-[var(--color-accent-tint)]"
+              style={{ borderColor: "var(--color-line)", color: "var(--color-ink-soft)" }}
+            >
+              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="1.75">
+                <path d="M15 4.5H8a1.5 1.5 0 0 0-1.5 1.5v12A1.5 1.5 0 0 0 8 19.5h7" strokeLinecap="round" strokeLinejoin="round" />
+                <path d="M11 12h9.5m0 0-3-3m3 3-3 3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Log out
+            </button>
+          </div>
         </div>
       </div>
 
@@ -604,6 +771,8 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>{roleLabel(session.profile, session.departmentRole?.title)}</p>
               </div>
             </div>
+            <div className="flex items-center gap-3">
+              <NotificationBell />
             {/* Staff/admin already have "Buy Plan for Customer" in the
                 sidebar nav — repeating it here as well read as redundant. */}
             {!isStaffOrAdmin(session.profile) && (
@@ -618,18 +787,21 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 </svg>
               </Link>
             )}
+            </div>
           </div>
         </div>
       </div>
 
-      <ProfileCompletionBanner profile={session.profile} />
-      <BusinessSettingsCompletionBanner profile={session.profile} />
+      <div>
+        <ProfileCompletionBanner profile={session.profile} />
+        <BusinessSettingsCompletionBanner profile={session.profile} />
+      </div>
 
       <div className="mx-auto max-w-[1800px] px-4 pb-16 sm:px-6 lg:grid lg:grid-cols-[240px_1fr] lg:gap-6 lg:px-10">
         {/* Mobile: horizontal scrollable tab row instead of a duplicate off-canvas menu — the site header's own hamburger already covers site-wide nav. */}
         <div className="-mx-4 mb-6 flex gap-2 overflow-x-auto px-4 pb-1 lg:hidden">
           {navItems.map((item, i) => {
-            const active = item.exact ? pathname === item.href : pathname.startsWith(item.href);
+            const active = isItemActive(item);
             const Icon = NAV_ICONS[item.href] ?? DEFAULT_NAV_ICON;
             const tint = ICON_TINTS[i % ICON_TINTS.length];
             return (
@@ -682,19 +854,21 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
           </button>
         </div>
 
-        {/* sticky + self-start: without this, a grid item stretches to
-            match the tallest column by default, which left a long dead
-            whitespace tail under the nav card on pages with a lot of
-            content. Fixed, always-open labeled width — no collapse
-            toggle at all; grouped sections reveal their links in a
-            hover-triggered flyout instead of expanding inline.
-            z-40: `sticky` always creates its own stacking context, so
-            without an explicit z-index here this whole subtree paints
+        {/* Fixed, always-open labeled width — no collapse toggle at all;
+            grouped sections reveal their links in a hover-triggered
+            flyout instead of expanding inline.
+            sticky top-24: the page itself is the scrolling ancestor
+            (normal document scroll), so the nav just stays pinned near
+            the top of the viewport as you scroll `<main>`'s content
+            past it, instead of owning its own separate scrollbox.
+            z-40: establishing its own stacking context here (`relative`)
+            means without an explicit z-index this whole subtree paints
             *underneath* the later `<main>` sibling wherever they
             visually overlap, which would make a flyout render behind
             page content instead of on top of it. */}
         <aside className="relative z-40 hidden lg:sticky lg:top-24 lg:block lg:self-start">
           <nav
+            ref={navRef}
             className="flex flex-col gap-1 rounded-2xl border bg-white p-2.5 dark:bg-[var(--color-paper-raised)]"
             style={{ borderColor: "var(--color-line)" }}
           >
@@ -728,17 +902,26 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                 <div
                   key={entry.key}
                   className="relative"
-                  onMouseEnter={() => openGroup(entry.section)}
+                  onMouseEnter={() => scheduleOpen(entry.section)}
                   onMouseLeave={scheduleClose}
                 >
                   <div
                     role="button"
                     tabIndex={0}
-                    onFocus={() => openGroup(entry.section)}
-                    onBlur={scheduleClose}
-                    onClick={() => setOpenFlyout((prev) => (prev === entry.section ? null : entry.section))}
+                    onClick={() => toggleOpen(entry.section)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        toggleOpen(entry.section);
+                      }
+                    }}
                     aria-expanded={isOpen}
-                    className="group flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-muted-tint)]"
+                    // outline-none + focus-visible:ring replaces the
+                    // browser's default focus ring — that default ring
+                    // rendering on top of the isOpen background tint is
+                    // what made an open row look like two different
+                    // things were highlighted at once.
+                    className="group flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-sm font-medium outline-none transition-colors hover:bg-[var(--color-muted-tint)] focus-visible:ring-2 focus-visible:ring-[var(--color-action)]"
                     style={isOpen ? { backgroundColor: "var(--color-accent-tint)", color: "var(--color-ink)" } : rowStyle}
                   >
                     <span
@@ -754,50 +937,64 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                   </div>
 
                   {isOpen && (
-                    <div
-                      className="absolute left-full top-0 z-30 ml-2 w-56 rounded-2xl border bg-white shadow-xl dark:bg-[var(--color-paper-raised)]"
-                      style={{ borderColor: "var(--color-line)" }}
-                    >
-                      {/* max-h caps a long flyout (e.g. Administration's
-                          10 items) instead of letting it run off the
-                          bottom of the viewport; overflow-y-auto + the
-                          bottom fade below are the cue that there's more
-                          to scroll to, since a plain clipped list gives
-                          no such signal on its own. */}
-                      <div className="max-h-[70vh] overflow-y-auto p-2">
-                        <p className="px-2.5 pb-1.5 pt-1 text-[11px] font-bold uppercase tracking-wide" style={{ color: "var(--color-ink-soft)" }}>
-                          {entry.section}
-                        </p>
-                        {entry.items.map((item, j) => {
-                        const ItemIcon = NAV_ICONS[item.href] ?? DEFAULT_NAV_ICON;
-                        const itemTint = ICON_TINTS[j % ICON_TINTS.length];
-                        const itemActive = item.exact ? pathname === item.href : pathname.startsWith(item.href);
-                        return (
-                          <Link
-                            key={item.href}
-                            href={item.href}
-                            onClick={() => setOpenFlyout(null)}
-                            className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-medium transition-colors ${itemActive ? "" : "hover:bg-[var(--color-muted-tint)]"}`}
-                            style={itemActive ? { backgroundColor: "var(--color-accent-tint)", color: "var(--color-ink)" } : { color: "var(--color-ink-soft)" }}
-                          >
-                            <span
-                              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
-                              style={{ backgroundColor: itemTint.bg, color: itemTint.fg }}
+                    // The 8px gap to the trigger row used to be a plain
+                    // `ml-2` margin on the card below — real empty space
+                    // that belongs to neither the trigger nor the flyout.
+                    // Moving the mouse diagonally toward an item lower in
+                    // the list (the natural path) crossed that dead zone,
+                    // fired a genuine mouseleave, and — if the cursor
+                    // lingered there at all — closed the flyout before it
+                    // was reached, forcing a re-hover to open it again.
+                    // Padding instead of margin keeps the same visual
+                    // offset but makes that space part of this outer
+                    // element's own hoverable box, so crossing it no
+                    // longer leaves the hover target at all.
+                    <div className="absolute left-full top-0 z-30 w-60 pl-2">
+                      <div
+                        className="rounded-2xl border bg-white shadow-xl dark:bg-[var(--color-paper-raised)]"
+                        style={{ borderColor: "var(--color-line)" }}
+                      >
+                        {/* max-h caps a long flyout (e.g. Administration's
+                            10 items) instead of letting it run off the
+                            bottom of the viewport; overflow-y-auto + the
+                            bottom fade below are the cue that there's more
+                            to scroll to, since a plain clipped list gives
+                            no such signal on its own. */}
+                        <div className="max-h-[70vh] overflow-y-auto p-2">
+                          <p className="px-2.5 pb-1.5 pt-1 text-[11px] font-bold uppercase tracking-wide" style={{ color: "var(--color-ink-soft)" }}>
+                            {entry.section}
+                          </p>
+                          {entry.items.map((item, j) => {
+                          const ItemIcon = NAV_ICONS[item.href] ?? DEFAULT_NAV_ICON;
+                          const itemTint = ICON_TINTS[j % ICON_TINTS.length];
+                          const itemActive = isItemActive(item);
+                          return (
+                            <Link
+                              key={item.href}
+                              href={item.href}
+                              onClick={() => setOpenFlyout(null)}
+                              className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-medium transition-colors ${itemActive ? "" : "hover:bg-[var(--color-muted-tint)]"}`}
+                              style={itemActive ? { backgroundColor: "var(--color-accent-tint)", color: "var(--color-ink)" } : { color: "var(--color-ink-soft)" }}
                             >
-                              <ItemIcon className="h-3.5 w-3.5" />
-                            </span>
-                            {item.label}
-                          </Link>
-                        );
-                        })}
+                              <span
+                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
+                                style={{ backgroundColor: itemTint.bg, color: itemTint.fg }}
+                              >
+                                <ItemIcon className="h-3.5 w-3.5" />
+                              </span>
+                              {item.label}
+                            </Link>
+                          );
+                          })}
+                        </div>
+                        {entry.items.length > 6 && (
+                          <div
+                            aria-hidden="true"
+                            className="pointer-events-none absolute inset-x-0 bottom-0 h-6 rounded-b-2xl"
+                            style={{ background: "linear-gradient(180deg, transparent, var(--color-paper-raised))" }}
+                          />
+                        )}
                       </div>
-                      {entry.items.length > 6 && (
-                        <div
-                          aria-hidden="true"
-                          className="pointer-events-none absolute inset-x-0 bottom-0 h-6 rounded-b-2xl"
-                          style={{ background: "linear-gradient(180deg, transparent, var(--color-paper-raised))" }}
-                        />
-                      )}
                     </div>
                   )}
                 </div>
@@ -832,10 +1029,10 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
 
         {/* min-w-0 is load-bearing: a grid item's default min-width is
             "auto", which lets it grow to fit a wide child (the leads/
-            invoices tables) instead of respecting the grid track — that
-            expands the whole page rather than letting the table's own
-            overflow-x-auto container scroll internally, which is what
-            made the right side of wide tables unreachable. */}
+            invoices tables) instead of respecting the grid track — a
+            wide table scrolls horizontally inside its own
+            overflow-x-auto container (see DataTable) rather than
+            stretching this column and pushing the page wider. */}
         <main className="min-w-0">{children}</main>
       </div>
     </div>

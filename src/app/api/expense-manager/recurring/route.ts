@@ -3,10 +3,16 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { getBookAccess, hasPermission } from "@/lib/expense-manager";
 
+// All UTC: new Date(y, m, d) builds a local date and toISOString()
+// converts it back, landing a day early for any timezone ahead of UTC —
+// in IST this set every new recurring template's first run one day
+// before the day the user actually picked. Also clamps to the target
+// month's last day so a 29/30/31 pick doesn't roll into the next month.
 function nextRunDateFor(dayOfMonth: number, from = new Date()): string {
-  const year = from.getFullYear();
-  const month = from.getDate() > dayOfMonth ? from.getMonth() + 1 : from.getMonth();
-  return new Date(year, month, dayOfMonth).toISOString().slice(0, 10);
+  const year = from.getUTCFullYear();
+  const month = from.getUTCDate() > dayOfMonth ? from.getUTCMonth() + 1 : from.getUTCMonth();
+  const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+  return new Date(Date.UTC(year, month, Math.min(dayOfMonth, lastDay))).toISOString().slice(0, 10);
 }
 
 // GET /api/expense-manager/recurring?bookOwnerId=... — every standing

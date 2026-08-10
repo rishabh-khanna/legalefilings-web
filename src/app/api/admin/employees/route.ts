@@ -17,9 +17,14 @@ export async function GET() {
   // organizations(name) only actually matters for a platform_admin, who
   // sees every org's staff pooled together here — without it, employees
   // from different orgs are indistinguishable in the list.
+  // organizations!organization_id and department_roles!profiles_department_role_id_fkey
+  // both disambiguate their embed — profiles has more than one FK to each
+  // (organizations: multiple FKs; department_roles: this one plus
+  // department_roles.created_by pointing back at profiles), so PostgREST
+  // can't infer either alone (PGRST201, "more than one relationship found").
   let query = supabase
     .from("profiles")
-    .select("*, department_roles(title, is_manager_level), organizations(name)")
+    .select("*, department_roles!profiles_department_role_id_fkey(title, is_manager_level), organizations!organization_id(name)")
     .in("account_type", ["staff", "admin"])
     .order("full_name", { ascending: true });
   if (!canSeeAllOrgs(profile)) query = query.eq("organization_id", profile.organization_id);

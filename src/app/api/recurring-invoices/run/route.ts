@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { isStaffOrAdmin } from "@/lib/roles";
 import { canSeeAllOrgs } from "@/lib/organization";
+import { hasToolAccess } from "@/lib/tool-grants";
 import { nextRunAfter } from "@/lib/invoice-calc";
 import { createBilledInvoice, type CreateBilledInvoiceInput } from "@/lib/create-billed-invoice";
 
@@ -21,7 +22,8 @@ export async function GET(request: Request) {
   let staffProfile: Awaited<ReturnType<typeof getCurrentProfile>> = null;
   if (!isCron) {
     staffProfile = await getCurrentProfile();
-    if (!isStaffOrAdmin(staffProfile)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    const isCustomerOperator = staffProfile?.account_type === "customer" && (await hasToolAccess(staffProfile, "invoice_crm"));
+    if (!isStaffOrAdmin(staffProfile) && !isCustomerOperator) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -50,7 +52,15 @@ export async function GET(request: Request) {
       });
       await supabase
         .from("recurring_invoice_templates")
-        .update({ next_run_date: nextRunAfter(new Date(), template.frequency).toISOString().slice(0, 10), last_generated_invoice_id: invoice.id })
+        .update({
+          // Advance from the schedule's own due date, not from now — a
+          // cron that ran late, or a manual "Run Now", would otherwise
+          // drag every future billing date along with it.
+          next_run_date: nextRunAfter(new Date(`${template.next_run_date}T00:00:00Z`), template.frequency, template.anchor_day)
+            .toISOString()
+            .slice(0, 10),
+          last_generated_invoice_id: invoice.id,
+        })
         .eq("id", template.id);
       results.push({ templateId: template.id, invoiceId: invoice.id });
     } catch (err) {

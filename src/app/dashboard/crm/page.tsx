@@ -10,11 +10,10 @@ import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { SITE_NAME } from "@/config/site";
 import { useActionMessage } from "@/lib/use-action-message";
 import { ActionMessage } from "@/components/ActionMessage";
-import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
+import { DashboardPageHero, HeroAction, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
-import { usePagination } from "@/lib/use-pagination";
-import { TablePagination } from "@/components/TablePagination";
-import { ExportButton } from "@/components/ExportButton";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { MultiSelect } from "@/components/MultiSelect";
 
 type LeadRow = {
   id: string;
@@ -37,16 +36,20 @@ const STATUS_STYLE: Record<LeadStage, { bg: string; fg: string }> = {
 
 export default function CrmPage() {
   const [leads, setLeads] = useState<LeadRow[]>([]);
-  const [staffName, setStaffName] = useState<string | null>(null);
+  const [staffId, setStaffId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
-  const [statusFilter, setStatusFilter] = useState<LeadStage | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
   const [selectedState, setSelectedState] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const { message, showSuccess, showError } = useActionMessage();
 
-  async function reload(supabase: ReturnType<typeof createSupabaseBrowserClient>, name: string) {
-    const { data } = await supabase.from("leads").select("*").eq("assigned_to", name).order("created_at", { ascending: false });
+  // leads.assigned_to is a profiles FK (uuid), not a display name — see
+  // supabase/migrations/20260829000000_leads_assigned_to_fk.sql. Filtering
+  // by the caller's full_name (a leftover from the earlier text-column
+  // era) never matched anything once that migration landed.
+  async function reload(supabase: ReturnType<typeof createSupabaseBrowserClient>, id: string) {
+    const { data } = await supabase.from("leads").select("*").eq("assigned_to", id).order("created_at", { ascending: false });
     setLeads((data as LeadRow[] | null) ?? []);
   }
 
@@ -57,10 +60,8 @@ export default function CrmPage() {
         data: { user },
       } = await supabase.auth.getUser();
       if (!user) return;
-      const { data: profile } = await supabase.from("profiles").select("full_name").eq("id", user.id).single();
-      const name = profile?.full_name ?? user.email ?? "";
-      setStaffName(name);
-      await reload(supabase, name);
+      setStaffId(user.id);
+      await reload(supabase, user.id);
       setLoading(false);
     }, 0);
     return () => clearTimeout(kickoff);
@@ -91,9 +92,9 @@ export default function CrmPage() {
       showError("Failed to save lead — please try again.");
       return;
     }
-    if (staffName) {
+    if (staffId) {
       const supabase = createSupabaseBrowserClient();
-      await reload(supabase, staffName);
+      await reload(supabase, staffId);
     }
     form.reset();
     setSelectedState("");
@@ -101,93 +102,75 @@ export default function CrmPage() {
     showSuccess("Lead added.");
   }
 
-  const leadStats = useMemo(() => {
-    const won = leads.filter((l) => l.status === "won").length;
-    const inProgress = leads.filter((l) => l.status === "contacted" || l.status === "in_progress").length;
-    const fresh = leads.filter((l) => l.status === "new").length;
-    return { total: leads.length, won, inProgress, fresh };
+  const leadsByStatus = useMemo(() => {
+    return {
+      won: leads.filter((l) => l.status === "won"),
+      inProgress: leads.filter((l) => l.status === "contacted" || l.status === "in_progress"),
+      fresh: leads.filter((l) => l.status === "new"),
+    };
   }, [leads]);
 
-  const [search, setSearch] = useState("");
-  const filteredLeads = useMemo(() => {
-    return leads.filter((l) => {
-      if (statusFilter !== "all" && l.status !== statusFilter) return false;
-      if (search.trim()) {
-        const q = search.trim().toLowerCase();
-        const hay = `${l.name} ${l.email} ${l.phone} ${l.company ?? ""}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [leads, statusFilter, search]);
-  const { page, setPage, pageSize, setPageSize, pageItems: pagedLeads, totalPages, total, start, end } = usePagination(filteredLeads);
+  const statusFilteredLeads = useMemo(() => {
+    return leads.filter((l) => statusFilter.size === 0 || statusFilter.has(l.status));
+  }, [leads, statusFilter]);
 
   if (loading) {
     return <LoadingBlock />;
   }
 
+  const columns: DataTableColumn<LeadRow>[] = [
+    { key: "name", header: "Name", render: (l) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{l.name}</span>, exportValue: (l) => l.name, sortValue: (l) => l.name },
+    { key: "company", header: "Company", render: (l) => l.company || "—", exportValue: (l) => l.company || "", sortValue: (l) => l.company },
+    { key: "contact", header: "Contact", render: (l) => <><div>{l.email}</div><div>{l.phone}</div></>, exportValue: (l) => `${l.email} ${l.phone}`, sortValue: (l) => l.email },
+    { key: "location", header: "Location", render: (l) => [l.city, l.state].filter(Boolean).join(", ") || "—", exportValue: (l) => [l.city, l.state].filter(Boolean).join(", ") },
+    {
+      key: "status",
+      header: "Status",
+      className: "w-[14%] whitespace-nowrap",
+      render: (l) => (
+        <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: STATUS_STYLE[l.status].bg, color: STATUS_STYLE[l.status].fg }}>
+          {LEAD_STAGE_LABELS[l.status]}
+        </span>
+      ),
+      exportValue: (l) => LEAD_STAGE_LABELS[l.status],
+      sortValue: (l) => LEAD_STAGE_LABELS[l.status],
+    },
+    {
+      key: "actions",
+      header: "",
+      className: "whitespace-nowrap",
+      render: (l) => (
+        <a
+          href={buildWhatsAppLink(l.phone, `Hi ${l.name.split(" ")[0]}, this is ${SITE_NAME} following up on your enquiry. How can we help you get started?`)}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold"
+          style={{ backgroundColor: "#d0f4db", color: "#116a2c" }}
+        >
+          WhatsApp
+        </a>
+      ),
+    },
+  ];
+
   return (
     <div>
-      <DashboardPageHero title="My Leads" subtitle="Leads assigned to you — track them from first contact to close.">
+      <DashboardPageHero
+        title="My Leads"
+        subtitle="Leads assigned to you — track them from first contact to close."
+        action={
+          <HeroAction onClick={() => setShowForm((v) => !v)}>
+            {showForm ? "Cancel" : "+ Add Lead"}
+          </HeroAction>
+        }
+      >
         <div className="relative mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <HeroKpi icon={Users} label="Total" value={leadStats.total} />
-          <HeroKpi icon={Sparkles} label="New" value={leadStats.fresh} />
-          <HeroKpi icon={Clock} label="In Progress" value={leadStats.inProgress} />
-          <HeroKpi icon={Trophy} label="Won" value={leadStats.won} />
+          <HeroKpi icon={Users} label="Total" value={leads.length} />
+          <HeroKpi icon={Sparkles} label="New" value={leadsByStatus.fresh.length} />
+          <HeroKpi icon={Clock} label="In Progress" value={leadsByStatus.inProgress.length} />
+          <HeroKpi icon={Trophy} label="Won" value={leadsByStatus.won.length} />
         </div>
       </DashboardPageHero>
-
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name, email, phone, company…"
-            className="w-full max-w-xs rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]"
-            style={{ borderColor: "var(--color-line)" }}
-          />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as LeadStage | "all")}
-            className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]"
-            style={{ borderColor: "var(--color-line)" }}
-          >
-            <option value="all">All statuses</option>
-            {Object.entries(LEAD_STAGE_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-          {(search.trim() || statusFilter !== "all") && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearch("");
-                setStatusFilter("all");
-              }}
-              className="text-xs font-semibold"
-              style={{ color: "var(--color-action-dark)" }}
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
-        <div className="flex items-center gap-3">
-          <ExportButton
-            filename="crm-leads"
-            headers={["Name", "Company", "Contact", "Location", "Status"]}
-            rows={filteredLeads.map((l) => [l.name, l.company || "", `${l.email} ${l.phone}`, [l.city, l.state].filter(Boolean).join(", "), LEAD_STAGE_LABELS[l.status]])}
-          />
-          <button
-            type="button"
-            onClick={() => setShowForm((v) => !v)}
-            className="rounded-full px-4 py-2 text-sm font-semibold text-white transition-transform hover:scale-[1.02]"
-            style={{ backgroundColor: "var(--color-action)" }}
-          >
-            {showForm ? "Cancel" : "+ Add Lead"}
-          </button>
-        </div>
-      </div>
 
       <div className="mt-3">
         <ActionMessage message={message} />
@@ -217,86 +200,47 @@ export default function CrmPage() {
             className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]"
             style={{ borderColor: "var(--color-line)" }}
           />
-          <button
-            type="submit"
-            disabled={submitting}
-            className="sm:col-span-2 rounded-full py-2.5 text-sm font-semibold text-white disabled:opacity-60"
-            style={{ backgroundColor: "var(--color-action)" }}
-          >
-            {submitting ? "Saving…" : "Save Lead"}
-          </button>
+          <div className="flex gap-2 sm:col-span-2">
+            <button
+              type="submit"
+              disabled={submitting}
+              className="rounded-full px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
+              style={{ backgroundColor: "var(--color-action)" }}
+            >
+              {submitting ? "Saving…" : "Save Lead"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors hover:bg-[var(--color-accent-tint)]"
+              style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
+            >
+              Cancel
+            </button>
+          </div>
         </form>
       )}
 
-      <TablePagination
-        page={page}
-        totalPages={totalPages}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={setPageSize}
-        start={start}
-        end={end}
-        total={total}
+      <DataTable
+        columns={columns}
+        fixedLayout
+        rows={statusFilteredLeads}
+        getRowKey={(l) => l.id}
         itemLabel="leads"
+        emptyMessage={leads.length === 0 ? "No leads assigned to you yet." : "No leads match this filter."}
+        filteredEmptyMessage="No leads match this filter."
+        search={{ placeholder: "Search name, email, phone, company…", filter: (l, q) => `${l.name} ${l.email} ${l.phone} ${l.company ?? ""}`.toLowerCase().includes(q) }}
+        exportFilename="crm-leads"
+        minWidth={560}
+        toolbar={
+          <MultiSelect
+            options={Object.entries(LEAD_STAGE_LABELS).map(([value, label]) => ({ value, label }))}
+            selected={statusFilter}
+            onChange={setStatusFilter}
+            placeholder="All statuses"
+          />
+        }
       />
-
-      <div className="mt-3 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
-        <table className="dt-table w-full min-w-[560px] text-left text-sm">
-          <thead>
-            <tr style={{ backgroundColor: "var(--color-muted-tint)" }}>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>#</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Name</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Company</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Contact</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Location</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Status</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
-            {pagedLeads.map((l, i) => {
-              const style = STATUS_STYLE[l.status];
-              return (
-                <tr key={l.id} className="align-top" style={{ borderColor: "var(--color-line)" }}>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                  <td className="px-4 py-3 font-medium" style={{ color: "var(--color-ink)" }}>{l.name}</td>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{l.company || "—"}</td>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>
-                    <div>{l.email}</div>
-                    <div>{l.phone}</div>
-                  </td>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>
-                    {[l.city, l.state].filter(Boolean).join(", ") || "—"}
-                  </td>
-                  <td className="px-4 py-3">
-                    <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: style.bg, color: style.fg }}>
-                      {LEAD_STAGE_LABELS[l.status]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <a
-                      href={buildWhatsAppLink(l.phone, `Hi ${l.name.split(" ")[0]}, this is ${SITE_NAME} following up on your enquiry. How can we help you get started?`)}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold"
-                      style={{ backgroundColor: "#d0f4db", color: "#116a2c" }}
-                    >
-                      WhatsApp
-                    </a>
-                  </td>
-                </tr>
-              );
-            })}
-            {filteredLeads.length === 0 && (
-              <tr>
-                <td colSpan={7} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>
-                  {leads.length === 0 ? "No leads assigned to you yet." : "No leads match this filter."}
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }

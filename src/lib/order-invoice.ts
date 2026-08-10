@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { computeInvoiceTotals } from "@/lib/invoice-calc";
+import { allocateInvoiceNumber } from "@/lib/invoice-number";
 
 // Shared by the two "buy a plan" paths (staff-assisted buy-for-customer,
 // and direct customer checkout) — both create a single-line-item order
@@ -22,7 +23,7 @@ export async function createOrderInvoice(opts: {
 }) {
   const supabase = getSupabaseAdmin();
   const [{ data: company }, { data: customer }] = await Promise.all([
-    supabase.from("company_settings").select("state, state_code, invoice_number_prefix, default_invoice_notes").eq("organization_id", opts.organizationId).single(),
+    supabase.from("company_settings").select("state, state_code, invoice_number_prefix, default_invoice_notes, financial_year_start_month").eq("organization_id", opts.organizationId).single(),
     supabase.from("profiles").select("gstin, pan_number, state, state_code, billing_address, shipping_address").eq("id", opts.customerId).eq("organization_id", opts.organizationId).single(),
   ]);
 
@@ -43,8 +44,11 @@ export async function createOrderInvoice(opts: {
   });
 
   const now = new Date();
-  const prefix = company?.invoice_number_prefix || "INV";
-  const invoiceNumber = `${prefix}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}-${now.getTime().toString().slice(-6)}`;
+  const invoiceNumber = await allocateInvoiceNumber(supabase, opts.organizationId, {
+    prefix: company?.invoice_number_prefix,
+    financialYearStartMonth: company?.financial_year_start_month,
+    now,
+  });
 
   const { data: invoice, error: invoiceError } = await supabase
     .from("invoices")

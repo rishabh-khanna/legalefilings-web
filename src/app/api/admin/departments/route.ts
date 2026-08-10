@@ -17,7 +17,10 @@ export async function GET() {
   // sees every org's departments pooled together here — without it,
   // e.g. two different orgs' "Operations" department render as
   // indistinguishable duplicate cards.
-  let query = supabase.from("departments").select("*, department_roles(*), organizations(name)").order("name");
+  let query = supabase
+    .from("departments")
+    .select("*, department_roles(*, creator:profiles!department_roles_created_by_fkey(full_name)), organizations(name), creator:profiles!departments_created_by_fkey(full_name)")
+    .order("name");
   if (!canSeeAllOrgs(profile)) query = query.eq("organization_id", profile.organization_id);
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -42,7 +45,7 @@ export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from("departments")
-    .insert({ organization_id: profile.organization_id, name })
+    .insert({ organization_id: profile.organization_id, name, created_by: profile.id })
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

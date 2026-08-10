@@ -7,8 +7,9 @@ import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
 import { RequiredMark } from "@/components/RequiredMark";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
 
-type LeaveType = { id: string; name: string; code: string; annual_credit_days: number; carry_forward_cap: number; is_active: boolean };
+type LeaveType = { id: string; name: string; code: string; annual_credit_days: number; carry_forward_cap: number; is_active: boolean; creator?: { full_name: string | null } | null };
 
 // Admin-only (or a staff member individually delegated the "leave_types"
 // tool). Each org defines its own leave types here — a yearly credit
@@ -78,6 +79,83 @@ export default function LeaveTypesPage() {
 
   const inputClass = "w-full rounded-lg border px-2.5 py-1.5 text-sm outline-none focus:border-[var(--color-action)]";
 
+  const columns: DataTableColumn<LeaveType>[] = [
+    {
+      key: "name",
+      header: "Name",
+      render: (t) => <>{t.name} <span className="font-normal" style={{ color: "var(--color-ink-soft)" }}>({t.code})</span></>,
+      className: "font-semibold",
+      exportValue: (t) => `${t.name} (${t.code})`,
+      sortValue: (t) => t.name,
+    },
+    {
+      key: "days",
+      header: "Days/Year",
+      className: "w-[16%] whitespace-nowrap",
+      render: (t) => (
+        <input
+          type="number"
+          min="0"
+          defaultValue={t.annual_credit_days}
+          disabled={savingId === t.id}
+          onBlur={(e) => {
+            const v = Number(e.target.value);
+            if (!Number.isNaN(v) && v !== t.annual_credit_days) handleUpdate(t, { annualCreditDays: v });
+          }}
+          className="w-20 rounded-lg border px-2 py-1 text-xs"
+          style={{ borderColor: "var(--color-line)" }}
+        />
+      ),
+      exportValue: (t) => t.annual_credit_days,
+      sortValue: (t) => t.annual_credit_days,
+    },
+    {
+      key: "carryForward",
+      header: "Carry-Forward Cap",
+      className: "w-[20%] whitespace-nowrap",
+      render: (t) => (
+        <input
+          type="number"
+          min="0"
+          defaultValue={t.carry_forward_cap}
+          disabled={savingId === t.id}
+          onBlur={(e) => {
+            const v = Number(e.target.value);
+            if (!Number.isNaN(v) && v !== t.carry_forward_cap) handleUpdate(t, { carryForwardCap: v });
+          }}
+          className="w-20 rounded-lg border px-2 py-1 text-xs"
+          style={{ borderColor: "var(--color-line)" }}
+        />
+      ),
+      exportValue: (t) => t.carry_forward_cap,
+    },
+    {
+      key: "createdBy",
+      header: "Created By",
+      className: "w-[16%] whitespace-nowrap",
+      render: (t) => <span style={{ color: "var(--color-ink-soft)" }}>{t.creator?.full_name ?? "—"}</span>,
+      exportValue: (t) => t.creator?.full_name ?? "",
+      sortValue: (t) => t.creator?.full_name,
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (t) => (
+        <button
+          type="button"
+          onClick={() => {
+            if (window.confirm(`Deactivate "${t.name}"? Staff won't be able to apply for this leave type anymore, but existing leave records are unaffected.`)) handleUpdate(t, { isActive: false });
+          }}
+          disabled={savingId === t.id}
+          className="rounded-full border px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-60"
+          style={{ borderColor: "var(--color-line)" }}
+        >
+          Deactivate
+        </button>
+      ),
+    },
+  ];
+
   return (
     <div>
       <DashboardPageHero title="Leave Types" subtitle="Define the leave types your team can apply for, with a yearly credit and carry-forward cap.">
@@ -118,71 +196,17 @@ export default function LeaveTypesPage() {
 
       {types === null ? (
         <LoadingBlock className="mt-6" />
-      ) : types.length === 0 ? (
-        <p className="mt-6 text-sm" style={{ color: "var(--color-ink-soft)" }}>No leave types yet — add one above.</p>
       ) : (
-        <div className="mt-5 overflow-x-auto rounded-2xl border bg-white dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-          <table className="dt-table w-full min-w-[560px]">
-            <thead>
-              <tr className="text-left">
-                <th>#</th>
-                <th>Name</th>
-                <th>Days/Year</th>
-                <th>Carry-Forward Cap</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {types.map((t, i) => (
-                <tr key={t.id}>
-                  <td style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                  <td className="font-semibold" style={{ color: "var(--color-ink)" }}>{t.name} <span className="font-normal" style={{ color: "var(--color-ink-soft)" }}>({t.code})</span></td>
-                  <td>
-                    <input
-                      type="number"
-                      min="0"
-                      defaultValue={t.annual_credit_days}
-                      disabled={savingId === t.id}
-                      onBlur={(e) => {
-                        const v = Number(e.target.value);
-                        if (!Number.isNaN(v) && v !== t.annual_credit_days) handleUpdate(t, { annualCreditDays: v });
-                      }}
-                      className="w-20 rounded-lg border px-2 py-1 text-xs"
-                      style={{ borderColor: "var(--color-line)" }}
-                    />
-                  </td>
-                  <td>
-                    <input
-                      type="number"
-                      min="0"
-                      defaultValue={t.carry_forward_cap}
-                      disabled={savingId === t.id}
-                      onBlur={(e) => {
-                        const v = Number(e.target.value);
-                        if (!Number.isNaN(v) && v !== t.carry_forward_cap) handleUpdate(t, { carryForwardCap: v });
-                      }}
-                      className="w-20 rounded-lg border px-2 py-1 text-xs"
-                      style={{ borderColor: "var(--color-line)" }}
-                    />
-                  </td>
-                  <td>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (window.confirm(`Deactivate "${t.name}"? Staff won't be able to apply for this leave type anymore, but existing leave records are unaffected.`)) handleUpdate(t, { isActive: false });
-                      }}
-                      disabled={savingId === t.id}
-                      className="rounded-full border px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-60"
-                      style={{ borderColor: "var(--color-line)" }}
-                    >
-                      Deactivate
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={columns}
+          fixedLayout
+          rows={types}
+          getRowKey={(t) => t.id}
+          itemLabel="leave types"
+          emptyMessage="No leave types yet — add one above."
+          exportFilename="leave-types"
+          minWidth={560}
+        />
       )}
     </div>
   );

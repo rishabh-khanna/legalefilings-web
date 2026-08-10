@@ -266,7 +266,7 @@ export default function ProfilePage() {
         <button
           type="submit"
           disabled={saving}
-          className="rounded-full px-6 py-2.5 text-sm font-semibold text-white transition-transform hover:scale-[1.02] disabled:opacity-60"
+          className="rounded-full px-4 py-1.5 text-xs font-semibold text-white transition-transform hover:scale-[1.02] disabled:opacity-60"
           style={{ backgroundColor: "var(--color-action)" }}
         >
           {saving ? "Saving…" : "Save Changes"}

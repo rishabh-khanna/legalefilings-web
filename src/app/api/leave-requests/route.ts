@@ -4,8 +4,12 @@ import { getCurrentProfile } from "@/lib/current-profile";
 import { getReportingChainIds } from "@/lib/reporting-chain";
 import { canSeeAllOrgs } from "@/lib/organization";
 import { getLeaveBalance, type LeaveType } from "@/lib/leave-balance";
+import { countWorkingDays, fetchHolidayDates } from "@/lib/working-days";
+import { hasToolAccess } from "@/lib/tool-grants";
 
-function daysBetweenInclusive(startDate: string, endDate: string): number {
+// Calendar span — used ONLY to reject an end-before-start range. Leave
+// *duration* is always working days (see countWorkingDays), never this.
+function calendarSpanInclusive(startDate: string, endDate: string): number {
   const start = new Date(`${startDate}T00:00:00Z`);
   const end = new Date(`${endDate}T00:00:00Z`);
   return Math.round((end.getTime() - start.getTime()) / 86400000) + 1;
@@ -21,17 +25,18 @@ async function sumCommittedDays(
   supabase: ReturnType<typeof import("@/lib/supabase-admin").getSupabaseAdmin>,
   staffId: string,
   leaveTypeId: string,
-  year: number
+  year: number,
+  holidays: Set<string>
 ): Promise<number> {
   const { data } = await supabase
     .from("leave_requests")
-    .select("start_date, end_date")
+    .select("start_date, end_date, day_fraction")
     .eq("staff_id", staffId)
     .eq("leave_type_id", leaveTypeId)
     .in("status", ["pending", "approved"])
     .gte("start_date", `${year}-01-01`)
     .lte("start_date", `${year}-12-31`);
-  return (data ?? []).reduce((sum, r) => sum + daysBetweenInclusive(r.start_date, r.end_date), 0);
+  return (data ?? []).reduce((sum, r) => sum + countWorkingDays(r.start_date, r.end_date, holidays) * Number(r.day_fraction ?? 1), 0);
 }
 
 // A day already covered by another pending/approved request (of any
@@ -65,7 +70,10 @@ async function hasOverlappingRequest(
 // team's requests folded into what reads as their personal history.
 export async function GET(request: Request) {
   const profile = await getCurrentProfile();
-  if (!profile || profile.account_type === "customer") {
+  // A customer delegated Team Leave Requests operates this same queue
+  // admin does — see the isCustomerOperator branches below.
+  const isCustomerOperator = profile?.account_type === "customer" && (await hasToolAccess(profile, "team_leave"));
+  if (!profile || (profile.account_type === "customer" && !isCustomerOperator)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -84,7 +92,7 @@ export async function GET(request: Request) {
   if (!canSeeAllOrgs(profile)) query = query.eq("organization_id", profile.organization_id);
   if (mineOnly) {
     query = query.eq("staff_id", profile.id);
-  } else if (profile.account_type !== "admin" && !canSeeAllOrgs(profile)) {
+  } else if (profile.account_type !== "admin" && !canSeeAllOrgs(profile) && !isCustomerOperator) {
     const chain = await getReportingChainIds(profile.id);
     query = query.in("staff_id", [profile.id, ...chain]);
   }
@@ -110,12 +118,32 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json().catch(() => null);
-  const { leaveTypeId, startDate, endDate, reason } = body ?? {};
+  const { leaveTypeId, startDate, endDate, reason, halfDay, halfDayPeriod } = body ?? {};
   if (!startDate || !endDate) {
     return NextResponse.json({ error: "startDate and endDate are required" }, { status: 400 });
   }
-  if (daysBetweenInclusive(startDate, endDate) < 1) {
+  if (calendarSpanInclusive(startDate, endDate) < 1) {
     return NextResponse.json({ error: "endDate must be on or after startDate" }, { status: 400 });
+  }
+  // Half-day only makes sense on a single date — half of a multi-day
+  // range is ambiguous, and the DB constraint rejects it anyway, so
+  // catch it here with a message rather than a raw constraint error.
+  const dayFraction = halfDay === true ? 0.5 : 1;
+  if (dayFraction === 0.5 && startDate !== endDate) {
+    return NextResponse.json({ error: "A half day has to be a single date — set the same start and end date." }, { status: 400 });
+  }
+  const period = dayFraction === 0.5 ? (halfDayPeriod === "second_half" ? "second_half" : "first_half") : null;
+
+  // No backdating. Leave applied for after the fact can paper over an
+  // absence payroll has already run on, which quietly reverses that
+  // month's loss-of-pay. A genuine retrospective correction is a
+  // deliberate admin action, not something the employee self-serves.
+  const todayKey = new Date().toISOString().slice(0, 10);
+  if (startDate < todayKey) {
+    return NextResponse.json(
+      { error: "Leave can't start in the past. Ask your manager to record a past absence for you." },
+      { status: 400 }
+    );
   }
 
   const supabase = getSupabaseAdmin();
@@ -128,7 +156,7 @@ export async function POST(request: Request) {
     // Explicit Unpaid — no balance to check.
     const { data, error } = await supabase
       .from("leave_requests")
-      .insert({ organization_id: profile.organization_id, staff_id: profile.id, leave_type: "unpaid", start_date: startDate, end_date: endDate, reason: reason ?? null })
+      .insert({ organization_id: profile.organization_id, staff_id: profile.id, leave_type: "unpaid", start_date: startDate, end_date: endDate, reason: reason ?? null, day_fraction: dayFraction, half_day_period: period })
       .select()
       .single();
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -149,10 +177,23 @@ export async function POST(request: Request) {
   // year's balance, not this year's (which is what getLeaveBalance
   // would default to without this).
   const requestYear = new Date(`${startDate}T00:00:00Z`).getUTCFullYear();
+  // Holidays for the whole balance year, not just this request's range —
+  // sumCommittedDays re-measures every other request in the year and
+  // needs the same holiday set to measure them consistently.
+  const holidays = await fetchHolidayDates(supabase, profile.organization_id, `${requestYear}-01-01`, `${requestYear}-12-31`);
   const balance = await getLeaveBalance(supabase, profile.id, leaveType, profile.organization_id, profile.date_of_joining, requestYear);
-  const alreadyCommitted = await sumCommittedDays(supabase, profile.id, leaveType.id, requestYear);
+  const alreadyCommitted = await sumCommittedDays(supabase, profile.id, leaveType.id, requestYear, holidays);
   const trueAvailable = balance.available - alreadyCommitted;
-  const requestedDays = daysBetweenInclusive(startDate, endDate);
+  const requestedDays = countWorkingDays(startDate, endDate, holidays) * dayFraction;
+  // A range that lands entirely on weekends/holidays costs nothing and
+  // means nothing — reject it rather than silently booking a zero-day
+  // leave that shows up in the list and blocks the dates.
+  if (requestedDays === 0) {
+    return NextResponse.json(
+      { error: "That range has no working days in it — it falls entirely on weekends or company holidays." },
+      { status: 400 }
+    );
+  }
   if (requestedDays > trueAvailable) {
     return NextResponse.json(
       { error: `Only ${Math.max(0, trueAvailable).toFixed(1)} day${trueAvailable === 1 ? "" : "s"} of ${leaveType.name} available — this request needs ${requestedDays}. Reduce the range or apply for Unpaid Leave instead.` },
@@ -170,6 +211,8 @@ export async function POST(request: Request) {
       start_date: startDate,
       end_date: endDate,
       reason: reason ?? null,
+      day_fraction: dayFraction,
+      half_day_period: period,
     })
     .select()
     .single();

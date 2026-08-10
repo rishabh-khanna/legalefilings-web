@@ -11,7 +11,9 @@ const REPORT_TYPES = ["attendance", "salary", "leave", "employees", "department"
 
 test("Reports page lists every report with a working Export CSV link", async ({ page }) => {
   await page.goto("/dashboard/admin/reports");
-  await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible({ timeout: 15000 });
+  // The page's heading is "Data Exports" — "Reports" survives only as
+  // this test's own name and the nav label, not the on-page heading.
+  await expect(page.getByRole("heading", { name: "Data Exports" })).toBeVisible({ timeout: 15000 });
 
   for (const label of ["Attendance Report", "Salary Report", "Leave Report", "Employee List", "Department-wise Report", "Invoice Ageing Report"]) {
     await expect(page.getByText(label, { exact: true })).toBeVisible();

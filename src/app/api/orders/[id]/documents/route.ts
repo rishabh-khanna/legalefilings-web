@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { loadOrderForAccess } from "@/lib/organization";
 import { validateUpload, DOCUMENT_UPLOAD_RULE } from "@/lib/upload-validation";
+import { notifyDocumentsRequested, notifyDocumentsSubmitted } from "@/lib/order-document-notify";
 
 const BUCKET = "order-documents";
 
@@ -78,6 +79,11 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     await supabase.from("orders").update({ document_status: "submitted" }).eq("id", id);
   }
 
+  // Tell whoever is working this order that something arrived. Awaited
+  // rather than fire-and-forget: a serverless function can be frozen the
+  // moment the response is returned, which would drop the send.
+  await notifyDocumentsSubmitted(supabase, order, file.name, profile.id);
+
   return NextResponse.json({ ok: true, document: data }, { status: 201 });
 }
 
@@ -103,6 +109,15 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const { data, error } = await supabase.from("orders").update({ document_status: documentStatus }).eq("id", id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // Asking for paperwork is the one transition the customer has to act
+  // on, and nothing told them before — an order could sit in "Documents
+  // Needed" indefinitely with the customer entirely unaware. Only fires
+  // on the actual transition INTO awaiting, so re-saving the same status
+  // doesn't re-nag them.
+  if (documentStatus === "awaiting" && order.document_status !== "awaiting") {
+    await notifyDocumentsRequested(supabase, order);
+  }
 
   // "Mark all verified" used to only flip this order-level badge, leaving
   // any individual document still sitting at 'pending' underneath it —

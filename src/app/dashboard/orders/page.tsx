@@ -10,19 +10,29 @@ import type { OrderDocumentStatus } from "@/components/crm/OrderDocumentsDrawer"
 
 type OrderRow = {
   id: string;
+  customer_id: string;
   service: string;
   plan: string;
   plan_price: number | null;
   status: "new" | "assigned" | "in_progress" | "under_review" | "completed" | "cancelled";
   document_status: OrderDocumentStatus;
   created_at: string;
+  organization_id: string;
+  profiles?: { full_name: string | null; company: string | null } | null;
+  organizations?: { name: string | null } | null;
 };
 
 export default async function OrderHistoryPage() {
   const profile = await getCurrentProfile();
   const supabase = getSupabaseAdmin();
 
-  let query = supabase.from("orders").select("*").order("created_at", { ascending: false });
+  // organizations(name) only actually matters for a platform_admin, who
+  // sees every org's orders pooled together here — without it, there'd
+  // be no way to tell which tenant an order belongs to.
+  let query = supabase
+    .from("orders")
+    .select("*, profiles!orders_customer_id_fkey(full_name, company), organizations(name)")
+    .order("created_at", { ascending: false });
   if (profile?.account_type === "customer") {
     query = query.eq("customer_id", profile.id);
   } else if (profile) {
@@ -50,8 +60,8 @@ export default async function OrderHistoryPage() {
   }
   const { data } = await query;
   const orders = (data as OrderRow[] | null) ?? [];
-  const activeOrders = orders.filter((o) => !["completed", "cancelled"].includes(o.status)).length;
-  const completedOrders = orders.filter((o) => o.status === "completed").length;
+  const activeOrders = orders.filter((o) => !["completed", "cancelled"].includes(o.status));
+  const completedOrders = orders.filter((o) => o.status === "completed");
   const totalValue = orders.reduce((sum, o) => sum + Number(o.plan_price ?? 0), 0);
 
   // Payment status is its own thing from the order's process status — an
@@ -68,25 +78,37 @@ export default async function OrderHistoryPage() {
   }
   const ordersWithPayment = orders.map((o) => ({ ...o, payment_status: paymentStatusByOrderId.get(o.id) ?? "no_invoice" }));
 
+  // Only a platform_admin's request ever returns more than one org's
+  // orders pooled together — the column is only worth showing once it's
+  // actually ambiguous which org a row belongs to.
+  const spansMultipleOrgs = new Set(orders.map((o) => o.organization_id)).size > 1;
+
   return (
     <div>
       <DashboardPageHero
         title={profile && isStaffOrAdmin(profile) ? "Orders" : "Order History"}
         subtitle={
-          profile && isStaffOrAdmin(profile)
-            ? "Every engagement across all customers."
-            : "Every registration and filing you've ordered with us."
+          spansMultipleOrgs
+            ? "Every organization's orders, pooled here for platform-level support."
+            : profile && isStaffOrAdmin(profile)
+              ? "Every engagement across all customers."
+              : "Every registration and filing you've ordered with us."
         }
       >
+        {/* Plain stat tiles, not the click-for-a-popup-list treatment
+            most KPIs elsewhere get — the table right below already has
+            a status filter, search, sort, and click-to-open-documents
+            per row, so a popup here would just be a strictly worse,
+            non-interactive re-listing of the same rows. */}
         <div className="relative mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <HeroKpi icon={Package} label="Total Orders" value={orders.length} />
-          <HeroKpi icon={Loader2} label="In Progress" value={activeOrders} />
-          <HeroKpi icon={CheckCircle2} label="Completed" value={completedOrders} />
-          <HeroKpi icon={IndianRupee} label="Total Value" value={`₹${totalValue.toLocaleString("en-IN")}`} />
+          <HeroKpi icon={<Package className="h-4 w-4" />} label="Total Orders" value={orders.length} />
+          <HeroKpi icon={<Loader2 className="h-4 w-4" />} label="In Progress" value={activeOrders.length} />
+          <HeroKpi icon={<CheckCircle2 className="h-4 w-4" />} label="Completed" value={completedOrders.length} />
+          <HeroKpi icon={<IndianRupee className="h-4 w-4" />} label="Total Value" value={`₹${totalValue.toLocaleString("en-IN")}`} />
         </div>
       </DashboardPageHero>
 
-      <OrdersTableClient orders={ordersWithPayment} isStaff={Boolean(profile && isStaffOrAdmin(profile))} />
+      <OrdersTableClient orders={ordersWithPayment} isStaff={Boolean(profile && isStaffOrAdmin(profile))} spansMultipleOrgs={spansMultipleOrgs} />
     </div>
   );
 }

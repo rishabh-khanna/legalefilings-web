@@ -15,7 +15,9 @@ test.describe("Documents — admin", () => {
 
     await page.locator("text=Document Type").locator("xpath=following-sibling::select[1]").selectOption("PAN");
     await page.locator('input[type="file"]').setInputFiles(TEST_FILE);
-    await page.getByRole("button", { name: "Upload" }).click();
+    // exact:true — the table's now-sortable column headers ("Uploaded",
+    // "Uploaded By", "Uploaded For") all substring-match "Upload" too.
+    await page.getByRole("button", { name: "Upload", exact: true }).click();
     await expect(page.getByText("Document uploaded.")).toBeVisible({ timeout: 15000 });
 
     const row = page.locator("tr", { hasText: "PAN" }).first();

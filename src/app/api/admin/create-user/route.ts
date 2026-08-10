@@ -83,11 +83,16 @@ export async function POST(request: Request) {
         .eq("organization_id", profile.organization_id)
         .single();
       if (leadRow) {
+        // .eq("assigned_to", "Unassigned") never matched: an unclaimed
+        // lead holds NULL, not that literal string, so this hand-off
+        // silently no-op'd on every account creation. assigned_to is a
+        // profiles FK now (20260829000000), so this assigns the new
+        // user's id and matches unclaimed the same way the claim path does.
         const { data: claimed } = await supabase
           .from("leads")
-          .update({ assigned_to: String(fullName) })
+          .update({ assigned_to: userId })
           .eq("id", assignLeadId)
-          .eq("assigned_to", "Unassigned")
+          .is("assigned_to", null)
           .select()
           .single();
         leadAssigned = Boolean(claimed);

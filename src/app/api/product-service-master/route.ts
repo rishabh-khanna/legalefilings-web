@@ -12,7 +12,8 @@ import { hasToolAccess } from "@/lib/tool-grants";
 // would corrupt GST rates on every future invoice, not just their own.
 export async function GET() {
   const profile = await getCurrentProfile();
-  if (!isStaffOrAdmin(profile) || !profile) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const isCustomerOperator = profile?.account_type === "customer" && (await hasToolAccess(profile, "invoice_crm"));
+  if (!profile || (!isStaffOrAdmin(profile) && !isCustomerOperator)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const supabase = getSupabaseAdmin();
   // organizations(name) only actually matters for a platform_admin, who

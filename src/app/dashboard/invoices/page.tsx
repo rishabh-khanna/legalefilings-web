@@ -9,11 +9,9 @@ import { useActionMessage } from "@/lib/use-action-message";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
-import { usePagination } from "@/lib/use-pagination";
-import { TablePagination } from "@/components/TablePagination";
-import { useDateRangeFilter } from "@/lib/use-date-range-filter";
-import { DateRangeFilter } from "@/components/DateRangeFilter";
-import { ExportButton } from "@/components/ExportButton";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { MultiSelect } from "@/components/MultiSelect";
+import { isCollectableInvoiceType } from "@/lib/invoice-calc";
 
 type InvoiceRow = {
   id: string;
@@ -25,8 +23,10 @@ type InvoiceRow = {
   created_at: string;
   due_at: string | null;
   customer_id: string;
+  organization_id: string;
   profiles?: { full_name: string | null; company: string | null } | null;
   invoice_payments?: { amount: number }[];
+  organizations?: { name: string | null } | null;
 };
 
 const STATUS_STYLE: Record<InvoiceRow["status"], { bg: string; fg: string }> = {
@@ -54,7 +54,7 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(true);
   const { message, showSuccess, showError } = useActionMessage();
 
-  const [statusFilter, setStatusFilter] = useState<InvoiceRow["status"] | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
   const [payingInvoice, setPayingInvoice] = useState<InvoiceRow | null>(null);
   const [payAmount, setPayAmount] = useState("");
   const [payMode, setPayMode] = useState("Bank Transfer");
@@ -86,17 +86,33 @@ export default function InvoicesPage() {
 
   const orderInvoices = useMemo(() => invoices.filter((i) => canManage ? i.order_id : true), [invoices, canManage]);
   const statusFilteredInvoices = useMemo(
-    () => (statusFilter === "all" ? orderInvoices : orderInvoices.filter((i) => i.status === statusFilter)),
+    () => (statusFilter.size === 0 ? orderInvoices : orderInvoices.filter((i) => statusFilter.has(i.status))),
     [orderInvoices, statusFilter]
   );
-  const dateFilter = useDateRangeFilter(statusFilteredInvoices, (i) => i.created_at);
-  const filteredInvoices = dateFilter.filtered;
-  const { page, setPage, pageSize, setPageSize, pageItems: pagedInvoices, totalPages, total, start, end } = usePagination(filteredInvoices);
 
-  const invoiceStats = useMemo(() => {
-    const paid = orderInvoices.filter((i) => i.status === "paid").length;
+  // Replaces the old group-by-client clustering (canManage only — a
+  // customer's own invoice list was never grouped, it's already just
+  // theirs) with one dropdown to narrow the table to a single client
+  // instead of the whole list visually reorganized around them.
+  const [clientFilter, setClientFilter] = useState<Set<string>>(new Set());
+  const clientOptions = useMemo(() => {
+    if (!canManage) return [];
+    const byId = new Map<string, string>();
+    for (const inv of orderInvoices) {
+      if (!byId.has(inv.customer_id)) byId.set(inv.customer_id, inv.profiles?.full_name ?? "—");
+    }
+    return [...byId.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [orderInvoices, canManage]);
+  const clientFilteredInvoices = useMemo(
+    () => (clientFilter.size === 0 ? statusFilteredInvoices : statusFilteredInvoices.filter((i) => clientFilter.has(i.customer_id))),
+    [statusFilteredInvoices, clientFilter]
+  );
+
+  const invoicesByStatus = useMemo(() => {
+    const paid = orderInvoices.filter((i) => i.status === "paid");
+    const pending = orderInvoices.filter((i) => i.status !== "paid");
     const totalValue = orderInvoices.filter((i) => i.status !== "cancelled").reduce((sum, i) => sum + Number(i.total), 0);
-    return { total: orderInvoices.length, paid, pending: orderInvoices.length - paid, totalValue };
+    return { paid, pending, totalValue };
   }, [orderInvoices]);
 
   async function handleRecordPayment() {
@@ -121,11 +137,75 @@ export default function InvoicesPage() {
   }
 
   function balanceOf(inv: InvoiceRow) {
+    // A credit note is money owed TO the customer and a proforma is a
+    // quotation — neither is a receivable, so neither carries an
+    // outstanding balance to display or collect.
+    if (!isCollectableInvoiceType(inv.invoice_type)) return 0;
     const paid = (inv.invoice_payments ?? []).reduce((sum, p) => sum + Number(p.amount), 0);
     return Math.max(0, Number(inv.total) - paid);
   }
 
   const inputClass = "w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]";
+
+  // Only a platform_admin's request ever returns more than one org's
+  // invoices pooled together — the column is only worth showing once
+  // it's actually ambiguous which org a row belongs to.
+  const spansMultipleOrgs = new Set(orderInvoices.map((i) => i.organization_id)).size > 1;
+
+  const invoiceColumns: DataTableColumn<InvoiceRow>[] = [
+    { key: "invoice", header: "Invoice", render: (inv) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{inv.invoice_number}</span>, exportValue: (inv) => inv.invoice_number, sortValue: (inv) => inv.invoice_number },
+    ...(canManage
+      ? [{ key: "client", header: "Client", render: (inv: InvoiceRow) => inv.profiles?.full_name ?? "—", exportValue: (inv: InvoiceRow) => inv.profiles?.full_name ?? "—", sortValue: (inv: InvoiceRow) => inv.profiles?.full_name } as DataTableColumn<InvoiceRow>]
+      : []),
+    { key: "date", header: "Date", className: "w-[12%] whitespace-nowrap", render: (inv) => new Date(inv.created_at).toLocaleDateString("en-IN"), exportValue: (inv) => new Date(inv.created_at).toLocaleDateString("en-IN"), sortValue: (inv) => inv.created_at },
+    { key: "amount", header: "Amount", className: "w-[12%] whitespace-nowrap", render: (inv) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>₹{Number(inv.total).toLocaleString("en-IN")}</span>, exportValue: (inv) => Number(inv.total), sortValue: (inv) => Number(inv.total) },
+    {
+      key: "balance",
+      header: "Balance",
+      className: "w-[12%] whitespace-nowrap",
+      render: (inv) => {
+        const balance = balanceOf(inv);
+        return <span style={{ color: balance > 0 ? "#b42318" : "var(--color-ink-soft)" }}>{balance > 0 ? `₹${balance.toLocaleString("en-IN")}` : "—"}</span>;
+      },
+      exportValue: (inv) => balanceOf(inv),
+      sortValue: (inv) => balanceOf(inv),
+    },
+    {
+      key: "status",
+      header: "Status",
+      className: "w-[10%] whitespace-nowrap",
+      render: (inv) => (
+        <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: STATUS_STYLE[inv.status].bg, color: STATUS_STYLE[inv.status].fg }}>{inv.status.replace("_", " ")}</span>
+      ),
+      exportValue: (inv) => inv.status.replace("_", " "),
+      sortValue: (inv) => inv.status,
+    },
+    ...(spansMultipleOrgs
+      ? [{ key: "org", header: "Organization", className: "w-[12%]", render: (inv: InvoiceRow) => inv.organizations?.name ?? "—", exportValue: (inv: InvoiceRow) => inv.organizations?.name ?? "Unknown organization" } as DataTableColumn<InvoiceRow>]
+      : []),
+    {
+      key: "actions",
+      header: "",
+      render: (inv) => {
+        const balance = balanceOf(inv);
+        return (
+          <div className="flex flex-wrap items-center gap-2.5">
+            <a href={`/api/invoices/${inv.id}/download`} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>PDF</a>
+            {canManage && isCollectableInvoiceType(inv.invoice_type) && inv.status !== "paid" && inv.status !== "cancelled" && (
+              <button type="button" onClick={() => { setPayingInvoice(inv); setPayAmount(String(balance)); }} className="text-xs font-semibold underline" style={{ color: "#116a2c" }}>
+                Record Payment
+              </button>
+            )}
+            {!canManage && isCollectableInvoiceType(inv.invoice_type) && inv.status !== "paid" && inv.status !== "cancelled" && (
+              <Link href={`/pay/${inv.id}`} target="_blank" className="text-xs font-semibold underline" style={{ color: "#116a2c" }}>
+                Pay Now
+              </Link>
+            )}
+          </div>
+        );
+      },
+    },
+  ];
 
   if (loading) {
     return <LoadingBlock />;
@@ -136,16 +216,18 @@ export default function InvoicesPage() {
       <DashboardPageHero
         title={canManage ? "Order Invoices" : "My Invoices"}
         subtitle={
-          canManage
-            ? "Invoices generated from purchases — Buy Plan for Customer and direct checkout. For ad-hoc billing, use Invoice CRM."
-            : "Invoices issued to your account."
+          spansMultipleOrgs
+            ? "Every organization's order invoices, pooled here for platform-level support."
+            : canManage
+              ? "Invoices generated from purchases — Buy Plan for Customer and direct checkout. For ad-hoc billing, use Invoice CRM."
+              : "Invoices issued to your account."
         }
       >
         <div className="relative mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <HeroKpi icon={FileText} label="Total" value={invoiceStats.total} />
-          <HeroKpi icon={CheckCircle2} label="Paid" value={invoiceStats.paid} />
-          <HeroKpi icon={Clock} label="Pending" value={invoiceStats.pending} />
-          <HeroKpi icon={IndianRupee} label="Total Value" value={`₹${invoiceStats.totalValue.toLocaleString("en-IN")}`} />
+          <HeroKpi icon={FileText} label="Total" value={orderInvoices.length} />
+          <HeroKpi icon={CheckCircle2} label="Paid" value={invoicesByStatus.paid.length} />
+          <HeroKpi icon={Clock} label="Pending" value={invoicesByStatus.pending.length} />
+          <HeroKpi icon={IndianRupee} label="Total Value" value={`₹${invoicesByStatus.totalValue.toLocaleString("en-IN")}`} />
         </div>
       </DashboardPageHero>
 
@@ -182,127 +264,44 @@ export default function InvoicesPage() {
         </div>
       )}
 
-      <div className="mt-5 overflow-hidden rounded-2xl border bg-white dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-        <div className="flex flex-wrap items-end justify-end gap-3 border-b p-4" style={{ borderColor: "var(--color-line)" }}>
-          <DateRangeFilter
-            from={dateFilter.from}
-            to={dateFilter.to}
-            onFromChange={dateFilter.setFrom}
-            onToChange={dateFilter.setTo}
-            onClear={dateFilter.clear}
-            active={dateFilter.active}
-          />
-          {/* Matches DateRangeFilter's own "label row + input row"
-              structure (an invisible label of the same height) so this
-              select's input lines up with the date inputs' baseline
-              instead of sitting lower once items-end is measuring two
-              different control heights. */}
-          <div>
-            <label className="mb-1 block text-xs font-medium invisible" aria-hidden="true">Status</label>
-            <select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value as InvoiceRow["status"] | "all")}
-              className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]"
-              style={{ borderColor: "var(--color-line)" }}
-            >
-              <option value="all">All statuses</option>
-              <option value="draft">Draft</option>
-              <option value="sent">Sent</option>
-              <option value="paid">Paid</option>
-              <option value="partially_paid">Partially Paid</option>
-              <option value="overdue">Overdue</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium invisible" aria-hidden="true">Export</label>
-            <ExportButton
-              filename="invoices"
-              headers={["Invoice", ...(canManage ? ["Client"] : []), "Date", "Amount", "Balance", "Status"]}
-              rows={filteredInvoices.map((inv) => [
-                inv.invoice_number,
-                ...(canManage ? [inv.profiles?.full_name ?? "—"] : []),
-                new Date(inv.created_at).toLocaleDateString("en-IN"),
-                Number(inv.total),
-                balanceOf(inv),
-                inv.status.replace("_", " "),
-              ])}
+      <DataTable
+        columns={invoiceColumns}
+        fixedLayout
+        rows={clientFilteredInvoices}
+        getRowKey={(inv) => inv.id}
+        itemLabel="invoices"
+        emptyMessage="No invoices yet."
+        filteredEmptyMessage="No invoices match this filter."
+        dateFilter={{ getDate: (inv) => inv.created_at }}
+        exportFilename="invoices"
+        minWidth={640}
+        toolbar={
+          <>
+            <MultiSelect
+              options={[
+                { value: "draft", label: "Draft" },
+                { value: "sent", label: "Sent" },
+                { value: "paid", label: "Paid" },
+                { value: "partially_paid", label: "Partially Paid" },
+                { value: "overdue", label: "Overdue" },
+                { value: "cancelled", label: "Cancelled" },
+              ]}
+              selected={statusFilter}
+              onChange={setStatusFilter}
+              placeholder="All statuses"
             />
-          </div>
-        </div>
-
-        <div className="border-b px-4 py-2.5" style={{ borderColor: "var(--color-line)" }}>
-          <TablePagination
-            page={page}
-            totalPages={totalPages}
-            pageSize={pageSize}
-            onPageChange={setPage}
-            onPageSizeChange={setPageSize}
-            start={start}
-            end={end}
-            total={total}
-            itemLabel="invoices"
-          />
-        </div>
-
-        <div className="overflow-x-auto">
-        <table className="dt-table w-full min-w-[640px] text-left text-sm">
-          <thead>
-            <tr style={{ backgroundColor: "var(--color-muted-tint)" }}>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>#</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Invoice</th>
-              {canManage && <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Client</th>}
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Date</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Amount</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Balance</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Status</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
-            {pagedInvoices.map((inv, i) => {
-              const style = STATUS_STYLE[inv.status];
-              const balance = balanceOf(inv);
-              return (
-                <tr key={inv.id} style={{ borderColor: "var(--color-line)" }}>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                  <td className="px-4 py-3 font-medium" style={{ color: "var(--color-ink)" }}>{inv.invoice_number}</td>
-                  {canManage && <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{inv.profiles?.full_name ?? "—"}</td>}
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{new Date(inv.created_at).toLocaleDateString("en-IN")}</td>
-                  <td className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>₹{Number(inv.total).toLocaleString("en-IN")}</td>
-                  <td className="px-4 py-3" style={{ color: balance > 0 ? "#b42318" : "var(--color-ink-soft)" }}>{balance > 0 ? `₹${balance.toLocaleString("en-IN")}` : "—"}</td>
-                  <td className="px-4 py-3">
-                    <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: style.bg, color: style.fg }}>{inv.status.replace("_", " ")}</span>
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap items-center gap-2.5">
-                      <a href={`/api/invoices/${inv.id}/download`} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>PDF</a>
-                      {canManage && inv.status !== "paid" && inv.status !== "cancelled" && (
-                        <button type="button" onClick={() => { setPayingInvoice(inv); setPayAmount(String(balance)); }} className="text-xs font-semibold underline" style={{ color: "#116a2c" }}>
-                          Record Payment
-                        </button>
-                      )}
-                      {!canManage && inv.status !== "paid" && inv.status !== "cancelled" && (
-                        <Link href={`/pay/${inv.id}`} target="_blank" className="text-xs font-semibold underline" style={{ color: "#116a2c" }}>
-                          Pay Now
-                        </Link>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-            {filteredInvoices.length === 0 && (
-              <tr>
-                <td colSpan={canManage ? 8 : 7} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>
-                  {orderInvoices.length === 0 ? "No invoices yet." : "No invoices match this filter."}
-                </td>
-              </tr>
+            {canManage && (
+              <MultiSelect
+                options={clientOptions.map(([id, name]) => ({ value: id, label: name }))}
+                selected={clientFilter}
+                onChange={setClientFilter}
+                placeholder="All clients"
+                searchable
+              />
             )}
-          </tbody>
-        </table>
-        </div>
-      </div>
+          </>
+        }
+      />
     </div>
   );
 }

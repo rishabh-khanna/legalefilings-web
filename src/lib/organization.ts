@@ -22,7 +22,14 @@ export function canSeeAllOrgs(profile: Pick<Profile, "is_platform_admin">): bool
 // purchase, not a lifetime grant — see Phase 4, org_access_requests) —
 // null means no expiry set (Legal Efilings' own "internal" org, and any
 // org a platform_admin hand-provisions without setting one).
-export function isOrgAccessActive(org: { access_expires_at: string | null }): boolean {
+// A suspended org is cut off regardless of its expiry date — status is
+// the deliberate operator lever ("stop serving this tenant now"),
+// access_expires_at is the automatic one. Suspension used to be purely
+// decorative: `status` existed on the row and in the Organizations table
+// UI, but nothing anywhere ever read it, so suspending a tenant did
+// nothing at all.
+export function isOrgAccessActive(org: { access_expires_at: string | null; status?: string | null }): boolean {
+  if (org.status === "suspended") return false;
   return !org.access_expires_at || new Date(org.access_expires_at) > new Date();
 }
 

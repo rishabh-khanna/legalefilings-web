@@ -32,3 +32,23 @@ export const ORDER_STATUS_STYLE: Record<OrderStatus, { bg: string; fg: string }>
 // "cancelled" is reachable from any non-final state but isn't part of
 // this forward progression — it's offered as a separate action.
 export const ORDER_STATUS_FLOW: OrderStatus[] = ["new", "assigned", "in_progress", "under_review", "completed"];
+
+// Completed and cancelled are terminal. Everything before them can move
+// freely in either direction — walking an order back a stage is a normal
+// correction, not an anomaly — but once work is signed off or called
+// off, reopening it should be a deliberate new order rather than a
+// status flip. The API previously validated only that the incoming value
+// was a member of the enum, so `completed -> new` and
+// `cancelled -> in_progress` were both accepted and dutifully written to
+// the status history as though they had really happened.
+const TERMINAL_STATUSES: OrderStatus[] = ["completed", "cancelled"];
+
+export function isTerminalOrderStatus(status: OrderStatus): boolean {
+  return TERMINAL_STATUSES.includes(status);
+}
+
+export function isValidOrderTransition(from: OrderStatus, to: OrderStatus): boolean {
+  if (from === to) return true;
+  if (isTerminalOrderStatus(from)) return false;
+  return ORDER_STATUS_FLOW.includes(to) || to === "cancelled";
+}

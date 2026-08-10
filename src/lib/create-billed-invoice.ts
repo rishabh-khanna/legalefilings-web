@@ -1,5 +1,6 @@
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { computeInvoiceTotals, isTaxableInvoiceType, resolveDueDate, type LineItemDraft } from "@/lib/invoice-calc";
+import { allocateInvoiceNumber } from "@/lib/invoice-number";
 
 type LineItemInput = {
   catalogItemId?: string;
@@ -73,7 +74,7 @@ export async function createBilledInvoice(input: CreateBilledInvoiceInput) {
 
   const [{ data: customer }, { data: company }, { data: registration }] = await Promise.all([
     supabase.from("profiles").select("full_name, company, gstin, pan_number, state, state_code, billing_address, shipping_address, organization_id").eq("id", input.customerId).single(),
-    supabase.from("company_settings").select("state_code, invoice_number_prefix, default_invoice_notes").eq("organization_id", input.organizationId).single(),
+    supabase.from("company_settings").select("state_code, invoice_number_prefix, default_invoice_notes, financial_year_start_month").eq("organization_id", input.organizationId).single(),
     input.gstRegistrationId
       ? supabase.from("company_gst_registrations").select("state_code").eq("id", input.gstRegistrationId).eq("organization_id", input.organizationId).single()
       : Promise.resolve({ data: null }),
@@ -117,8 +118,11 @@ export async function createBilledInvoice(input: CreateBilledInvoiceInput) {
   const now = new Date();
   const paymentTerms = input.paymentTerms ?? "Immediate";
   const dueDate = resolveDueDate(now, paymentTerms);
-  const prefix = company?.invoice_number_prefix || "INV";
-  const invoiceNumber = `${prefix}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}-${now.getTime().toString().slice(-6)}`;
+  const invoiceNumber = await allocateInvoiceNumber(supabase, input.organizationId, {
+    prefix: company?.invoice_number_prefix,
+    financialYearStartMonth: company?.financial_year_start_month,
+    now,
+  });
 
   const { data: invoice, error } = await supabase
     .from("invoices")

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { DELEGABLE_TOOLS, isGrantActive } from "@/lib/tool-grants";
+import { isOrgAccessActive } from "@/lib/organization";
 
 // Next.js 16 renamed the `middleware.ts` file convention to `proxy.ts`
 // (function renamed `middleware` -> `proxy`) — see
@@ -39,10 +40,13 @@ const ADMIN_ONLY_SECTIONS: string[] = [
   // Grant/revoke management itself is never delegable — only an org
   // admin decides who else gets delegated into an admin-only section.
   "/dashboard/admin/tool-access",
+  // Reads across every audit trail in the org — admin only.
+  "/dashboard/admin/activity",
 ];
 const GROUP_LEADER_UP_SECTIONS = ["/dashboard/admin/analytics"];
 const STAFF_UP_PREFIX = "/dashboard/admin";
 const PLATFORM_ADMIN_PREFIX = "/dashboard/platform";
+const INVOICE_CRM_PREFIX = "/dashboard/invoice-crm";
 // CRM access is time-boxed (bundled free with a plan purchase, not
 // permanent — see org_access_requests, Phase 4) — these stay reachable
 // even once an org's access has lapsed, so someone can still see why
@@ -118,12 +122,32 @@ export async function proxy(request: NextRequest) {
     !profile.is_platform_admin &&
     !EXPIRY_ALLOWLIST.some((p) => path.startsWith(p))
   ) {
-    const { data: org } = await supabase.from("organizations").select("access_expires_at").eq("id", profile.organization_id).single();
-    if (org?.access_expires_at && new Date(org.access_expires_at) < new Date()) {
+    // Goes through isOrgAccessActive rather than re-testing the date
+    // inline: this rule now also covers a suspended org, and having two
+    // copies of it is how they drift apart.
+    const { data: org } = await supabase
+      .from("organizations")
+      .select("access_expires_at, status")
+      .eq("id", profile.organization_id)
+      .single();
+    if (org && !isOrgAccessActive(org)) {
       const url = request.nextUrl.clone();
       url.pathname = "/dashboard/access-expired";
       return NextResponse.redirect(url);
     }
+  }
+
+  // /dashboard/invoice-crm sits outside /dashboard/admin/*, so it needs
+  // its own gate rather than falling under the STAFF_UP_PREFIX block
+  // below — same customer+grant pattern as everything in that block.
+  if (path.startsWith(INVOICE_CRM_PREFIX) && profile.account_type === "customer") {
+    const { data: grant } = await supabase
+      .from("staff_tool_grants")
+      .select("expires_at")
+      .eq("staff_id", user.id)
+      .eq("tool_key", "invoice_crm")
+      .maybeSingle();
+    if (!grant || !isGrantActive(grant)) return bounce();
   }
 
   if (path.startsWith(STAFF_UP_PREFIX) || path.startsWith(PLATFORM_ADMIN_PREFIX)) {
@@ -133,7 +157,26 @@ export async function proxy(request: NextRequest) {
       return profile.is_platform_admin ? response : bounce();
     }
 
-    if (profile.account_type === "customer") return bounce();
+    if (profile.account_type === "customer") {
+      // A customer normally has no business under /dashboard/admin/* at
+      // all — but one individually delegated a CRM tool (see
+      // staff_tool_grants / src/lib/tool-grants.ts: leads_crm,
+      // team_attendance, team_leave) is the one exception, and unlike
+      // staff (who get most of this prefix "for free" and only need a
+      // grant for the ADMIN_ONLY_SECTIONS below) a customer needs an
+      // explicit grant for literally every section under this prefix —
+      // there's no seniority tier standing in for one.
+      const matchedTool = DELEGABLE_TOOLS.find((t) => path.startsWith(t.path));
+      if (!matchedTool) return bounce();
+      const { data: grant } = await supabase
+        .from("staff_tool_grants")
+        .select("expires_at")
+        .eq("staff_id", user.id)
+        .eq("tool_key", matchedTool.key)
+        .maybeSingle();
+      if (!grant || !isGrantActive(grant)) return bounce();
+      return response;
+    }
 
     const needsAdmin = ADMIN_ONLY_SECTIONS.some((p) => path.startsWith(p)) && profile.account_type !== "admin";
     const needsGroupLeaderUp =
@@ -149,7 +192,7 @@ export async function proxy(request: NextRequest) {
       // a live grant before bouncing them.
       const matchedTool = DELEGABLE_TOOLS.find((t) => path.startsWith(t.path));
       const { data: grant } = matchedTool
-        ? await supabase.from("staff_tool_grants").select("expires_at").eq("tool_key", matchedTool.key).maybeSingle()
+        ? await supabase.from("staff_tool_grants").select("expires_at").eq("staff_id", user.id).eq("tool_key", matchedTool.key).maybeSingle()
         : { data: null };
       if (!grant || !isGrantActive(grant)) return bounce();
     }

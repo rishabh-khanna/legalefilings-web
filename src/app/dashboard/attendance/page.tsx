@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import Link from "next/link";
 import { Clock3, CalendarCheck, Hourglass } from "lucide-react";
 import { formatHoursMinutes } from "@/lib/format-duration";
 import { useActionMessage } from "@/lib/use-action-message";
@@ -8,11 +9,9 @@ import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
 import { toISTDateString } from "@/lib/ist-date";
-import { usePagination } from "@/lib/use-pagination";
-import { TablePagination } from "@/components/TablePagination";
-import { useDateRangeFilter } from "@/lib/use-date-range-filter";
-import { DateRangeFilter } from "@/components/DateRangeFilter";
-import { ExportButton } from "@/components/ExportButton";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+
+type DayEntry = [string, { checkIn?: string; checkInLoc?: string | null; checkOut?: string; checkOutLoc?: string | null; checkOutAutoClosed?: boolean }];
 
 type AttendanceEvent = {
   id: string;
@@ -21,15 +20,6 @@ type AttendanceEvent = {
   location: string | null;
   note: string | null;
 };
-type CorrectionRequest = {
-  id: string;
-  date: string;
-  requested_check_in: string | null;
-  requested_check_out: string | null;
-  reason: string;
-  status: "pending" | "approved" | "rejected";
-  review_note: string | null;
-};
 
 function mapLink(location: string | null) {
   if (!location) return null;
@@ -37,9 +27,13 @@ function mapLink(location: string | null) {
 }
 
 function groupByDay(events: AttendanceEvent[]) {
-  const byDay = new Map<string, { checkIn?: string; checkInLoc?: string | null; checkOut?: string; checkOutLoc?: string | null }>();
+  const byDay = new Map<string, { checkIn?: string; checkInLoc?: string | null; checkOut?: string; checkOutLoc?: string | null; checkOutAutoClosed?: boolean }>();
   for (const ev of events) {
-    const day = ev.occurred_at.slice(0, 10);
+    // IST calendar day, not the UTC slice. A punch between IST midnight
+    // and 5:30 AM falls on the previous UTC day, so slicing the
+    // timestamp filed it under the wrong date — the same skew
+    // src/lib/ist-date.ts exists to prevent.
+    const day = toISTDateString(new Date(ev.occurred_at));
     const entry = byDay.get(day) ?? {};
     if (ev.event_type === "check_in" && !entry.checkIn) {
       entry.checkIn = ev.occurred_at;
@@ -48,6 +42,10 @@ function groupByDay(events: AttendanceEvent[]) {
     if (ev.event_type === "check_out") {
       entry.checkOut = ev.occurred_at;
       entry.checkOutLoc = ev.location;
+      // A check-out the nightly job generated because none was recorded
+      // — the time is a documented assumption, not a real punch, so the
+      // row says so and points at the correction flow.
+      entry.checkOutAutoClosed = (ev.note ?? "").startsWith("auto-closed");
     }
     byDay.set(day, entry);
   }
@@ -76,24 +74,24 @@ function formatElapsed(ms: number) {
   return `${h}:${m}:${s}`;
 }
 
+type PendingCorrection = { id: string; date: string; requested_check_in: string | null; requested_check_out: string | null };
+
 export default function AttendancePage() {
   const [events, setEvents] = useState<AttendanceEvent[]>([]);
-  const [corrections, setCorrections] = useState<CorrectionRequest[]>([]);
+  const [pendingCorrections, setPendingCorrections] = useState<PendingCorrection[]>([]);
   const [loading, setLoading] = useState(true);
   const [clocking, setClocking] = useState(false);
   const { message, showSuccess, showError } = useActionMessage();
-  const [showCorrectionForm, setShowCorrectionForm] = useState(false);
-  const [corrDate, setCorrDate] = useState("");
-  const [corrIn, setCorrIn] = useState("");
-  const [corrOut, setCorrOut] = useState("");
-  const [corrReason, setCorrReason] = useState("");
   const [now, setNow] = useState(() => Date.now());
   const tickRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   async function load() {
-    const [eventsRes, correctionsRes] = await Promise.all([fetch("/api/attendance"), fetch("/api/attendance-corrections")]);
+    const [eventsRes, correctionsRes] = await Promise.all([fetch("/api/attendance"), fetch("/api/attendance-corrections?scope=mine")]);
     if (eventsRes.ok) setEvents((await eventsRes.json()).events);
-    if (correctionsRes.ok) setCorrections((await correctionsRes.json()).requests);
+    if (correctionsRes.ok) {
+      const { requests } = await correctionsRes.json();
+      setPendingCorrections((requests ?? []).filter((c: PendingCorrection & { status: string }) => c.status === "pending"));
+    }
     setLoading(false);
   }
 
@@ -139,32 +137,7 @@ export default function AttendancePage() {
     }
   }
 
-  async function handleCorrectionSubmit(e: React.FormEvent) {
-    e.preventDefault();
-    const res = await fetch("/api/attendance-corrections", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ date: corrDate, checkIn: corrIn || null, checkOut: corrOut || null, reason: corrReason }),
-    });
-    if (res.ok) {
-      setShowCorrectionForm(false);
-      setCorrDate("");
-      setCorrIn("");
-      setCorrOut("");
-      setCorrReason("");
-      await load();
-      showSuccess("Correction request submitted.");
-    } else {
-      const data = await res.json().catch(() => null);
-      showError(data?.error ?? "Failed to submit correction request.");
-    }
-  }
-
-  const inputClass = "w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]";
-
   const groupedDays = useMemo(() => groupByDay(events), [events]);
-  const dateFilter = useDateRangeFilter(groupedDays, ([day]) => day);
-  const { page, setPage, pageSize, setPageSize, pageItems: pagedDays, totalPages, total, start, end } = usePagination(dateFilter.filtered);
 
   if (loading) {
     return <LoadingBlock />;
@@ -172,7 +145,60 @@ export default function AttendancePage() {
 
   const elapsedMs = clockedIn && lastEvent ? now - new Date(lastEvent.occurred_at).getTime() : 0;
 
-  const pendingCorrections = corrections.filter((c) => c.status === "pending").length;
+  const columns: DataTableColumn<DayEntry>[] = [
+    { key: "date", header: "Date", render: ([day]) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{day}</span>, exportValue: ([day]) => day, sortValue: ([day]) => day },
+    {
+      key: "checkIn",
+      header: "Check In",
+      render: ([, entry]) => {
+        const link = mapLink(entry.checkInLoc ?? null);
+        return (
+          <>
+            {entry.checkIn ? new Date(entry.checkIn).toLocaleTimeString("en-IN") : "—"}
+            {link && (
+              <a href={link} target="_blank" rel="noopener noreferrer" className="ml-1.5 text-xs underline" style={{ color: "var(--color-action-dark)" }}>
+                📍
+              </a>
+            )}
+          </>
+        );
+      },
+      exportValue: ([, entry]) => (entry.checkIn ? new Date(entry.checkIn).toLocaleTimeString("en-IN") : ""),
+    },
+    {
+      key: "checkOut",
+      header: "Check Out",
+      render: ([, entry]) => {
+        const link = mapLink(entry.checkOutLoc ?? null);
+        return (
+          <>
+            {entry.checkOut ? new Date(entry.checkOut).toLocaleTimeString("en-IN") : "—"}
+            {entry.checkOutAutoClosed && (
+              <span
+                className="ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold"
+                style={{ backgroundColor: "#fff6d9", color: "#8a6700" }}
+                title="No check-out was recorded, so this time is an estimate. Request a correction to set the real one."
+              >
+                estimated
+              </span>
+            )}
+            {link && (
+              <a href={link} target="_blank" rel="noopener noreferrer" className="ml-1.5 text-xs underline" style={{ color: "var(--color-action-dark)" }}>
+                📍
+              </a>
+            )}
+          </>
+        );
+      },
+      exportValue: ([, entry]) => (entry.checkOut ? new Date(entry.checkOut).toLocaleTimeString("en-IN") : ""),
+    },
+    {
+      key: "hours",
+      header: "Hours",
+      render: ([, entry]) => (entry.checkIn && entry.checkOut ? formatHoursMinutes(new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime()) : "—"),
+      exportValue: ([, entry]) => (entry.checkIn && entry.checkOut ? formatHoursMinutes(new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime()) : ""),
+    },
+  ];
 
   return (
     <div>
@@ -180,7 +206,7 @@ export default function AttendancePage() {
         <div className="relative mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <HeroKpi icon={Clock3} label="Today" value={clockedIn ? "Clocked In" : "Not Clocked In"} />
           <HeroKpi icon={CalendarCheck} label="Days Logged" value={groupedDays.length} />
-          <HeroKpi icon={Hourglass} label="Pending Corrections" value={pendingCorrections} />
+          <HeroKpi icon={Hourglass} label="Pending Corrections" value={pendingCorrections.length} />
         </div>
       </DashboardPageHero>
 
@@ -224,124 +250,21 @@ export default function AttendancePage() {
       </div>
 
       <div className="mt-6 flex items-center justify-between">
-        <h2 className="text-lg font-semibold" style={{ color: "var(--color-ink)" }}>History</h2>
-        <button
-          type="button"
-          onClick={() => setShowCorrectionForm((v) => !v)}
-          className="text-sm font-medium"
-          style={{ color: "var(--color-action-dark)" }}
-        >
-          {showCorrectionForm ? "Cancel" : "Request a correction →"}
-        </button>
+        <h2 className="text-lg font-semibold" style={{ color: "var(--color-ink)" }}>Attendance Log</h2>
+        <Link href="/dashboard/attendance/corrections" className="text-sm font-medium" style={{ color: "var(--color-action-dark)" }}>
+          Attendance Correction Requests{pendingCorrections.length > 0 ? ` (${pendingCorrections.length} pending)` : ""} →
+        </Link>
       </div>
 
-      {showCorrectionForm && (
-        <form onSubmit={handleCorrectionSubmit} className="mt-3 grid gap-3 rounded-2xl border bg-white p-5 sm:grid-cols-2 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-          <input required type="date" value={corrDate} onChange={(e) => setCorrDate(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
-          <div />
-          <input type="time" placeholder="Check in" value={corrIn} onChange={(e) => setCorrIn(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
-          <input type="time" placeholder="Check out" value={corrOut} onChange={(e) => setCorrOut(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
-          <textarea required placeholder="Reason" value={corrReason} onChange={(e) => setCorrReason(e.target.value)} className={`${inputClass} sm:col-span-2`} style={{ borderColor: "var(--color-line)" }} />
-          <button type="submit" className="sm:col-span-2 rounded-full py-2.5 text-sm font-semibold text-white" style={{ backgroundColor: "var(--color-action)" }}>
-            Submit Request
-          </button>
-        </form>
-      )}
-
-      {corrections.length > 0 && (
-        <div className="mt-4 space-y-2">
-          {corrections.filter((c) => c.status === "pending").map((c) => (
-            <p key={c.id} className="rounded-lg px-3 py-2 text-xs" style={{ backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}>
-              Correction request for {c.date} — pending review.
-            </p>
-          ))}
-        </div>
-      )}
-
-      <DateRangeFilter
-        from={dateFilter.from}
-        to={dateFilter.to}
-        onFromChange={dateFilter.setFrom}
-        onToChange={dateFilter.setTo}
-        onClear={dateFilter.clear}
-        active={dateFilter.active}
-      />
-
-      <div className="mt-3 flex justify-end">
-        <ExportButton
-          filename="attendance"
-          headers={["Date", "Check In", "Check Out", "Hours"]}
-          rows={dateFilter.filtered.map(([day, entry]) => [
-            day,
-            entry.checkIn ? new Date(entry.checkIn).toLocaleTimeString("en-IN") : "",
-            entry.checkOut ? new Date(entry.checkOut).toLocaleTimeString("en-IN") : "",
-            entry.checkIn && entry.checkOut ? formatHoursMinutes(new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime()) : "",
-          ])}
-        />
-      </div>
-
-      <TablePagination
-        page={page}
-        totalPages={totalPages}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={setPageSize}
-        start={start}
-        end={end}
-        total={total}
+      <DataTable
+        columns={columns}
+        rows={groupedDays}
+        getRowKey={([day]) => day}
         itemLabel="days"
+        emptyMessage="No attendance recorded yet."
+        dateFilter={{ getDate: ([day]) => day }}
+        exportFilename="attendance"
       />
-
-      <div className="mt-3 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
-        <table className="dt-table w-full min-w-[520px] text-left text-sm">
-          <thead>
-            <tr style={{ backgroundColor: "var(--color-muted-tint)" }}>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>#</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Date</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Check In</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Check Out</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Hours</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
-            {pagedDays.map(([day, entry], i) => {
-              const hours = entry.checkIn && entry.checkOut
-                ? formatHoursMinutes(new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime())
-                : "—";
-              const inLink = mapLink(entry.checkInLoc ?? null);
-              const outLink = mapLink(entry.checkOutLoc ?? null);
-              return (
-                <tr key={day}>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                  <td className="px-4 py-3 font-medium" style={{ color: "var(--color-ink)" }}>{day}</td>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>
-                    {entry.checkIn ? new Date(entry.checkIn).toLocaleTimeString("en-IN") : "—"}
-                    {inLink && (
-                      <a href={inLink} target="_blank" rel="noopener noreferrer" className="ml-1.5 text-xs underline" style={{ color: "var(--color-action-dark)" }}>
-                        📍
-                      </a>
-                    )}
-                  </td>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>
-                    {entry.checkOut ? new Date(entry.checkOut).toLocaleTimeString("en-IN") : "—"}
-                    {outLink && (
-                      <a href={outLink} target="_blank" rel="noopener noreferrer" className="ml-1.5 text-xs underline" style={{ color: "var(--color-action-dark)" }}>
-                        📍
-                      </a>
-                    )}
-                  </td>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{hours}</td>
-                </tr>
-              );
-            })}
-            {events.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>No attendance recorded yet.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }

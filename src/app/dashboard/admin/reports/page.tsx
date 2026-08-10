@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { DashboardPageHero } from "@/components/crm/DashboardPageHero";
 
 const REPORTS = [
@@ -14,6 +14,22 @@ const REPORTS = [
 
 export default function ReportsPage() {
   const [month, setMonth] = useState("");
+  // Cheap way to tell whether this viewer is a platform_admin without a
+  // dedicated "who am I" endpoint — /api/team-members already pools every
+  // org's staff for one and stays scoped to just this org otherwise, so
+  // more than one distinct org name showing up means every export below
+  // will be cross-org too (the same canSeeAllOrgs check /api/reports uses).
+  const [spansMultipleOrgs, setSpansMultipleOrgs] = useState(false);
+
+  useEffect(() => {
+    const kickoff = setTimeout(async () => {
+      const res = await fetch("/api/team-members");
+      const data = await res.json();
+      const members = (data.members ?? []) as { organizationName?: string | null }[];
+      setSpansMultipleOrgs(new Set(members.map((m) => m.organizationName)).size > 1);
+    }, 0);
+    return () => clearTimeout(kickoff);
+  }, []);
 
   function reportHref(type: string) {
     const params = new URLSearchParams({ type });
@@ -32,7 +48,14 @@ export default function ReportsPage() {
 
   return (
     <div>
-      <DashboardPageHero title="Reports" subtitle="Export data as CSV — opens directly in Excel or Google Sheets." />
+      <DashboardPageHero
+        title="Data Exports"
+        subtitle={
+          spansMultipleOrgs
+            ? "Export data as CSV — opens directly in Excel or Google Sheets. Every export below pools every organization's data together, with an Organization column to tell rows apart."
+            : "Export data as CSV — opens directly in Excel or Google Sheets."
+        }
+      />
 
       <div className="mt-4">
         <label className="mb-1 block text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>

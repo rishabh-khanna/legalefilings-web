@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
-import { createRazorpayOrder } from "@/lib/razorpay";
+import { createRazorpayOrder, listCapturedPaymentsForOrder } from "@/lib/razorpay";
 import { generateTempPassword } from "@/lib/admin-actions";
 import { sendAccountCreatedEmail } from "@/lib/email";
 import { createOrderInvoice } from "@/lib/order-invoice";
@@ -103,6 +103,60 @@ export async function POST(request: Request) {
   if (reusableOrder && reusableInvoice) {
     orderId = reusableOrder.id;
     invoice = reusableInvoice;
+
+    // Same double-charge guard /api/payments/create-order already has,
+    // and checkout was missing entirely.
+    //
+    // Reusing an unpaid order is what stops duplicate "ghost" orders,
+    // but there is a window where the customer HAS paid and we don't
+    // know yet: Razorpay captured it, the browser closed before /verify
+    // ran, and the webhook hasn't landed. The invoice is still 'sent',
+    // so the reuse above matches it, and we would open a second
+    // Razorpay order for money already taken. Ask Razorpay directly
+    // rather than trusting our own not-yet-updated rows.
+    if (reusableInvoice.razorpay_order_id) {
+      const captured = await listCapturedPaymentsForOrder(reusableInvoice.razorpay_order_id as string).catch(() => []);
+      for (const payment of captured) {
+        const { data: already } = await supabase
+          .from("invoice_payments")
+          .select("id")
+          .eq("invoice_id", reusableInvoice.id)
+          .eq("transaction_id", payment.id)
+          .maybeSingle();
+        if (already) continue;
+        const amountPaid = payment.amount / 100;
+        const { data: existingPayments } = await supabase.from("invoice_payments").select("amount").eq("invoice_id", reusableInvoice.id);
+        const totalPaidSoFar = (existingPayments ?? []).reduce((sum, p) => sum + Number(p.amount), 0) + amountPaid;
+        const newStatus = totalPaidSoFar + 0.5 >= Number(reusableInvoice.total) ? "paid" : "partially_paid";
+        await supabase
+          .from("invoices")
+          .update({ status: newStatus, paid_at: newStatus === "paid" ? new Date().toISOString() : null, razorpay_payment_id: payment.id, payment_method: "razorpay" })
+          .eq("id", reusableInvoice.id);
+        const { error: insertError } = await supabase
+          .from("invoice_payments")
+          .insert({ invoice_id: reusableInvoice.id, payment_mode: "Razorpay", transaction_id: payment.id, amount: amountPaid });
+        // 23505 = /verify or the webhook recorded this same payment
+        // between our check and this insert — already handled, not an error.
+        if (insertError && insertError.code !== "23505") {
+          return NextResponse.json({ error: insertError.message }, { status: 500 });
+        }
+        await supabase.from("invoice_events").insert({
+          invoice_id: reusableInvoice.id,
+          event_type: "status_changed",
+          detail: `Payment reconciled at checkout — ₹${amountPaid.toLocaleString("en-IN")} (payment_id: ${payment.id})`,
+        });
+      }
+
+      // Re-read: if catching up settled it, this invoice must not be
+      // presented for payment again.
+      const { data: refreshed } = await supabase.from("invoices").select("status").eq("id", reusableInvoice.id).single();
+      if (refreshed?.status === "paid") {
+        return NextResponse.json(
+          { error: "This order has already been paid — check your email for the confirmation.", alreadyPaid: true },
+          { status: 409 }
+        );
+      }
+    }
   } else {
     const { data: order, error: orderError } = await supabase
       .from("orders")

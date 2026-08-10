@@ -1,3 +1,5 @@
+import { isWorkingDay, toDateKey } from "@/lib/working-days";
+import { professionalTaxFor } from "@/lib/professional-tax";
 // Payroll calculation — deliberately simple, documented defaults rather
 // than a full statutory compliance engine (real PF/ESI/PT/TDS rules vary
 // by state, wage ceiling, and individual tax situation). Admin sets the
@@ -16,7 +18,14 @@ export type SalaryStructureInput = {
   // defaults to 0 so every existing caller/behavior is unchanged unless
   // it actually passes attendance-derived numbers.
   lopDays?: number;
-  daysInMonth?: number;
+  // Working days in the period — the same universe lopDays is counted
+  // in. Named payableDays, not daysInMonth, because passing calendar
+  // days here is exactly the bug this replaced.
+  payableDays?: number;
+  // The employing organization's state (company_settings.state) —
+  // Professional Tax is a state levy with materially different slabs,
+  // and several states don't levy it at all.
+  state?: string | null;
 };
 
 export type PayrollCalculation = {
@@ -32,61 +41,82 @@ export type PayrollCalculation = {
 const PF_RATE = 0.12; // Employee PF contribution — standard 12% of basic.
 const ESI_RATE = 0.0075; // Employee ESI contribution — 0.75% of gross.
 const ESI_WAGE_CEILING = 21000; // ESI only applies below this gross monthly wage.
-const PROFESSIONAL_TAX_FLAT = 200; // Simplified flat slab — actual PT varies by state.
-const PROFESSIONAL_TAX_THRESHOLD = 15000;
+// PF is capped at the ₹15,000 statutory wage ceiling. Applying 12% to
+// the full basic above that over-deducted from every higher earner —
+// the ceiling is the whole reason the rule is written as a ceiling.
+const PF_WAGE_CEILING = 15000;
 
 export function calculatePayroll(input: SalaryStructureInput): PayrollCalculation {
   const overtime = input.overtime ?? 0;
   const grossSalary = input.basic + input.hra + input.specialAllowance + input.bonus + input.incentives + overtime;
 
-  const pfDeduction = Math.round(input.basic * PF_RATE);
-  const esiDeduction = grossSalary <= ESI_WAGE_CEILING ? Math.round(grossSalary * ESI_RATE) : 0;
-  const professionalTax = grossSalary > PROFESSIONAL_TAX_THRESHOLD ? PROFESSIONAL_TAX_FLAT : 0;
+  // Loss of Pay, on a WORKING-day basis.
+  //
+  // This used to divide gross by calendar days (31) while lopDays counted
+  // only working days (21) — two different day universes on either side
+  // of the same formula. Someone absent every single working day of a
+  // month was therefore docked 21/31 of their salary and still took home
+  // roughly a third of it for zero attendance. Dividing by the same
+  // working-day count the absence was measured in makes a full month of
+  // absence deduct a full month of pay, and it correctly makes each
+  // absent day cost more in a month with more holidays.
+  const lopDays = input.lopDays ?? 0;
+  const payableDays = input.payableDays && input.payableDays > 0 ? input.payableDays : 0;
+  const rawLop = lopDays > 0 && payableDays > 0 ? (grossSalary / payableDays) * lopDays : 0;
+  // Can't lose more than the whole salary, however the inputs arrive.
+  const lopDeduction = Math.round(Math.min(rawLop, grossSalary));
+
+  // Statutory deductions apply to what was actually EARNED, not to the
+  // full salary structure — you don't owe PF or Professional Tax on pay
+  // you never received. Computing them on the un-reduced gross while
+  // separately subtracting LOP could push net below zero and produce a
+  // payslip demanding money from the employee.
+  const earnedGross = Math.max(0, grossSalary - lopDeduction);
+  const earnedRatio = grossSalary > 0 ? earnedGross / grossSalary : 0;
+  const earnedBasic = input.basic * earnedRatio;
+
+  const pfDeduction = Math.round(Math.min(earnedBasic, PF_WAGE_CEILING) * PF_RATE);
+  const esiDeduction = earnedGross > 0 && earnedGross <= ESI_WAGE_CEILING ? Math.round(earnedGross * ESI_RATE) : 0;
+  const professionalTax = earnedGross > 0 ? professionalTaxFor(earnedGross, input.state) : 0;
   const tds = 0; // Left to manual entry — income tax withholding depends on the employee's full tax situation.
 
-  // Standard simplified LOP formula: gross ÷ days-in-month × days lost.
-  const lopDays = input.lopDays ?? 0;
-  const daysInMonth = input.daysInMonth ?? 30;
-  const lopDeduction = lopDays > 0 && daysInMonth > 0 ? Math.round((grossSalary / daysInMonth) * lopDays) : 0;
-
-  const netSalary = grossSalary - pfDeduction - esiDeduction - professionalTax - tds - lopDeduction;
+  const netSalary = Math.max(0, earnedGross - pfDeduction - esiDeduction - professionalTax - tds);
 
   return { grossSalary, pfDeduction, esiDeduction, professionalTax, tds, lopDeduction, netSalary };
 }
 
-// Working weekdays (Mon–Sun minus Sat/Sun) in a given month — the
-// baseline days someone is expected to be present or on approved leave
-// for. Deliberately doesn't exclude company holidays (see the holidays
-// table) — same "simple, documented default" tradeoff as the rest of
-// this module, not a full attendance-compliance engine.
-export function workingDaysInMonth(month: number, year: number): number {
-  const daysInMonth = new Date(year, month, 0).getDate();
-  let count = 0;
-  for (let day = 1; day <= daysInMonth; day++) {
-    const dow = new Date(year, month - 1, day).getDay();
-    if (dow !== 0 && dow !== 6) count++;
-  }
-  return count;
-}
-
-// LOP days for one staff member in one month: every working weekday
-// that has neither a check-in nor approved paid leave covering it.
-// Approved UNPAID leave counts as a working day with no coverage (i.e.
-// still LOP) — that's the point of unpaid leave; approved paid/sick/
-// casual leave counts as covered, same as actually being present.
+// LOP days for one staff member in one month: every working day that has
+// neither a check-in nor approved paid leave covering it. Approved UNPAID
+// leave counts as a working day with no coverage (i.e. still LOP) —
+// that's the point of unpaid leave; approved paid/sick/casual leave
+// counts as covered, same as actually being present.
+//
+// "Working day" now means the shared definition in lib/working-days —
+// not a weekend AND not a company holiday. Holidays were previously
+// ignored here, so anyone who (correctly) didn't clock in on a declared
+// holiday was counted as loss-of-pay and docked for it.
 export function computeLopDays(
   month: number,
   year: number,
   presentDates: Set<string>, // "YYYY-MM-DD" — has at least one check-in
-  paidLeaveDates: Set<string> // "YYYY-MM-DD" — covered by approved leave, leave_type != 'unpaid'
+  paidLeaveDates: Set<string>, // "YYYY-MM-DD" — covered by approved leave, leave_type != 'unpaid'
+  holidays: Set<string> = new Set(), // "YYYY-MM-DD" — declared company holidays
+  halfLeaveDates: Set<string> = new Set() // covered by a HALF day of paid leave
 ): number {
-  const daysInMonth = new Date(year, month, 0).getDate();
+  const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
   let lop = 0;
   for (let day = 1; day <= daysInMonth; day++) {
-    const date = new Date(year, month - 1, day);
-    if (date.getDay() === 0 || date.getDay() === 6) continue; // weekend, not a working day
-    const key = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
-    if (!presentDates.has(key) && !paidLeaveDates.has(key)) lop++;
+    const date = new Date(Date.UTC(year, month - 1, day));
+    const key = toDateKey(date);
+    if (!isWorkingDay(date, holidays)) continue;
+    if (presentDates.has(key)) continue;
+    if (paidLeaveDates.has(key)) {
+      // Half a day of leave leaves half a day uncovered — unless they
+      // also clocked in, which the check above already handled.
+      if (halfLeaveDates.has(key)) lop += 0.5;
+      continue;
+    }
+    lop++;
   }
   return lop;
 }

@@ -104,7 +104,7 @@ export default function FinanceSettingsPage() {
 
         {saved && <p className="text-sm" style={{ color: "#116a2c" }}>Settings saved.</p>}
 
-        <button type="submit" className="rounded-full px-6 py-2.5 text-sm font-semibold text-white" style={{ backgroundColor: "var(--color-action)" }}>
+        <button type="submit" className="rounded-full px-4 py-1.5 text-xs font-semibold text-white" style={{ backgroundColor: "var(--color-action)" }}>
           Save Settings
         </button>
       </form>

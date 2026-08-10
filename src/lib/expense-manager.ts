@@ -91,11 +91,14 @@ type TransactionBalanceInput = {
 // Only 'approved' transactions move money — a 'pending' one (once the
 // approval workflow phase turns status on for a business) shouldn't
 // touch balances until a manager actually approves it, and a 'rejected'
-// one never should. This is a read-then-write, not a single atomic SQL
-// statement — matches the level of rigor everywhere else in this app
-// (invoice totals, GST-registration defaults, etc. are all done the same
-// way); fine at this app's scale, but not safe against two concurrent
-// edits to the exact same account in the same instant.
+// one never should.
+//
+// Both balance moves go through a single atomic UPDATE (see
+// 20260902000000) rather than a SELECT-then-UPDATE from here. The old
+// read-then-write silently lost a transaction whenever two landed on the
+// same account close together — both would read the same starting
+// balance and the second write would overwrite the first, erasing that
+// amount from the ledger with no trace.
 export async function applyExpenseBalanceEffect(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   tx: TransactionBalanceInput,
@@ -107,31 +110,11 @@ export async function applyExpenseBalanceEffect(
   if (delta === 0) return;
 
   if (tx.payment_mode === "cash") {
-    const { data: profile } = await supabase
-      .from("expense_business_profiles")
-      .select("cash_balance")
-      .eq("customer_id", tx.customer_id)
-      .single();
-    if (profile) {
-      await supabase
-        .from("expense_business_profiles")
-        .update({ cash_balance: Number(profile.cash_balance) + delta })
-        .eq("customer_id", tx.customer_id);
-    }
+    await supabase.rpc("apply_expense_cash_delta", { p_customer_id: tx.customer_id, p_delta: delta });
     return;
   }
 
   if (tx.account_id) {
-    const { data: account } = await supabase
-      .from("expense_accounts")
-      .select("current_balance")
-      .eq("id", tx.account_id)
-      .single();
-    if (account) {
-      await supabase
-        .from("expense_accounts")
-        .update({ current_balance: Number(account.current_balance) + delta })
-        .eq("id", tx.account_id);
-    }
+    await supabase.rpc("apply_expense_account_delta", { p_account_id: tx.account_id, p_delta: delta });
   }
 }

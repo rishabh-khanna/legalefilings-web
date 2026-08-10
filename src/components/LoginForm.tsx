@@ -1,16 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { CONTACT_LINKS } from "@/config/site";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 
-type LoginMethod = "email" | "phone";
-
 export function LoginForm() {
-  const router = useRouter();
-  const [method, setMethod] = useState<LoginMethod>("email");
   const [showPassword, setShowPassword] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -34,76 +29,35 @@ export function LoginForm() {
       return;
     }
 
-    router.push("/dashboard");
-    router.refresh();
+    // A client-side router.push() here used to race proxy.ts's middleware:
+    // it fires an RSC navigation fetch to /dashboard immediately, and that
+    // fetch occasionally beat the just-written session cookie becoming
+    // visible to the request pipeline, so the middleware saw no session
+    // yet and bounced straight back to /login with no error shown (the
+    // sign-in itself had already succeeded). A hard navigation sidesteps
+    // this entirely — it's a fresh top-level request, guaranteed to carry
+    // whatever cookies are on the document at this point, not a soft
+    // client-side transition that can race the auth client's cookie write.
+    window.location.href = "/dashboard";
   }
-
-  const tabClass = (active: boolean) =>
-    `flex-1 rounded-md px-4 py-2 text-sm font-medium transition-colors ${active ? "text-white shadow-sm" : "hover:text-[var(--color-ink)]"}`;
 
   return (
     <form onSubmit={handleSubmit} className="mt-8 space-y-5" noValidate>
-      <div className="flex items-center gap-2 rounded-lg p-1.5" style={{ backgroundColor: "var(--color-paper)" }}>
-        <button
-          type="button"
-          onClick={() => setMethod("email")}
-          className={tabClass(method === "email")}
-          style={method === "email" ? { backgroundColor: "var(--color-action)" } : { color: "var(--color-ink-soft)" }}
-        >
+      <div>
+        <label htmlFor="login-email" className="block text-sm font-medium mb-1" style={{ color: "var(--color-ink)" }}>
           Email
-        </button>
-        <button
-          type="button"
-          onClick={() => setMethod("phone")}
-          className={tabClass(method === "phone")}
-          style={method === "phone" ? { backgroundColor: "var(--color-action)" } : { color: "var(--color-ink-soft)" }}
-        >
-          Phone
-        </button>
+        </label>
+        <input
+          id="login-email"
+          type="text"
+          autoComplete="username"
+          value={emailValue}
+          onChange={(e) => setEmailValue(e.target.value)}
+          placeholder="Enter your email"
+          className="w-full rounded-lg border px-4 py-2 text-sm outline-none focus:border-[var(--color-action)]"
+          style={{ borderColor: "var(--color-line)" }}
+        />
       </div>
-      <p className="text-center text-xs" style={{ color: "var(--color-ink-soft)" }}>
-        💡 You can log in with either your email or phone number once you have an account.
-      </p>
-      {method === "email" ? (
-        <div>
-          <label htmlFor="login-email" className="block text-sm font-medium mb-1" style={{ color: "var(--color-ink)" }}>
-            Email
-          </label>
-          <input
-            id="login-email"
-            type="text"
-            autoComplete="username"
-            value={emailValue}
-            onChange={(e) => setEmailValue(e.target.value)}
-            placeholder="Enter your email"
-            className="w-full rounded-lg border px-4 py-2 text-sm outline-none focus:border-[var(--color-action)]"
-            style={{ borderColor: "var(--color-line)" }}
-          />
-        </div>
-      ) : (
-        <div>
-          <label htmlFor="login-phone" className="block text-sm font-medium mb-1" style={{ color: "var(--color-ink)" }}>
-            Contact Number
-          </label>
-          <div className="flex">
-            <span
-              className="flex items-center rounded-l-lg border border-r-0 px-3 text-sm"
-              style={{ borderColor: "var(--color-line)", color: "var(--color-ink-soft)", backgroundColor: "var(--color-paper)" }}
-            >
-              +91
-            </span>
-            <input
-              id="login-phone"
-              type="tel"
-              inputMode="numeric"
-              maxLength={10}
-              placeholder="10-digit mobile number"
-              className="w-full rounded-r-lg border px-4 py-2 text-sm outline-none focus:border-[var(--color-action)]"
-              style={{ borderColor: "var(--color-line)" }}
-            />
-          </div>
-        </div>
-      )}
 
       <div>
         <label htmlFor="login-password" className="block text-sm font-medium mb-1" style={{ color: "var(--color-ink)" }}>
@@ -150,12 +104,13 @@ export function LoginForm() {
         </div>
       </div>
 
-      <div className="flex items-center justify-between">
-        <label className="flex items-center gap-2 text-sm" style={{ color: "var(--color-ink)" }}>
-          <input type="checkbox" className="h-4 w-4 rounded" style={{ accentColor: "var(--color-action)" }} />
-          Remember me
-        </label>
-        <Link href="/contact" className="text-sm font-medium" style={{ color: "var(--color-action-dark)" }}>
+      {/* The "Remember me" checkbox that used to sit here was wired to
+          nothing — no state, no handler, no effect on session lifetime.
+          Supabase already persists the session across restarts, so the
+          box was promising something that was both unimplemented and
+          already true by default. Removed rather than faked. */}
+      <div className="flex items-center justify-end">
+        <Link href="/forgot-password" className="text-sm font-medium" style={{ color: "var(--color-action-dark)" }}>
           Forgot your password?
         </Link>
       </div>

@@ -159,6 +159,31 @@ export function isTaxableInvoiceType(type: string): boolean {
   return type === "gst" || type === "credit_note" || type === "debit_note";
 }
 
+// Which direction a document moves the customer's balance.
+//
+//   +1  a receivable — the customer owes this (gst, non_gst, export,
+//       and debit_note, which exists precisely to bill MORE)
+//   -1  a credit note — the business owes the customer, so it REDUCES
+//       what they owe
+//    0  proforma — a quotation, not an accounting document. It is not a
+//       receivable and must never appear in an outstanding balance or be
+//       chased for payment.
+//
+// The statement ledger previously pushed every type as a debit, so a
+// credit note INCREASED what the customer owed instead of reducing it —
+// a ₹2,000 credit note moved a ₹10,000 balance to ₹12,000 rather than
+// ₹8,000, a ₹4,000 error in the wrong direction.
+export function invoiceBalanceSign(invoiceType: string): -1 | 0 | 1 {
+  if (invoiceType === "credit_note") return -1;
+  if (invoiceType === "proforma") return 0;
+  return 1;
+}
+
+/** Types that represent real money owed and can legitimately be chased for payment. */
+export function isCollectableInvoiceType(invoiceType: string): boolean {
+  return invoiceBalanceSign(invoiceType) === 1;
+}
+
 // Handles the fixed presets and any "N Days" string generically (covers
 // the "Custom" wizard option, which just lets the user type a day count
 // rather than being a fifth hardcoded case here).
@@ -171,11 +196,36 @@ export function resolveDueDate(issuedAt: Date, paymentTerms: string): Date {
   return due;
 }
 
-export function nextRunAfter(date: Date, frequency: string): Date {
+// Advances a recurring schedule by one period.
+//
+// setMonth/setFullYear roll over instead of clamping — 31 Jan + 1 month
+// lands on 3 Mar, which both skipped February's invoice and permanently
+// moved the series onto the 3rd. anchorDay (the day the series is meant
+// to bill on) is clamped to the target month's last day instead, so a
+// 31st series runs 31 Jan, 28 Feb, 31 Mar rather than drifting down.
+//
+// `date` must be the schedule's own due date, never "now" — advancing
+// from the moment the job happened to run means a late cron or a manual
+// "Run Now" silently moves every future billing date with it.
+// Everything here is UTC (setUTCDate/getUTCMonth, Date.UTC). The result
+// is serialised with toISOString() by every caller, so doing the
+// arithmetic in local time would shift the answer back a day for any
+// timezone ahead of UTC — in IST a schedule advanced to 31 Mar would be
+// stored as 30 Mar, and drift another day on every subsequent run.
+export function nextRunAfter(date: Date, frequency: string, anchorDay?: number | null): Date {
   const next = new Date(date);
-  if (frequency === "weekly") next.setDate(next.getDate() + 7);
-  else if (frequency === "quarterly") next.setMonth(next.getMonth() + 3);
-  else if (frequency === "yearly") next.setFullYear(next.getFullYear() + 1);
-  else next.setMonth(next.getMonth() + 1);
+  if (frequency === "weekly") {
+    next.setUTCDate(next.getUTCDate() + 7);
+    return next;
+  }
+
+  const monthsToAdd = frequency === "quarterly" ? 3 : frequency === "yearly" ? 12 : 1;
+  const day = anchorDay && anchorDay >= 1 && anchorDay <= 31 ? anchorDay : date.getUTCDate();
+  // Move to the 1st first so changing the month can't roll over on its
+  // own before the clamp below has a chance to apply.
+  next.setUTCDate(1);
+  next.setUTCMonth(next.getUTCMonth() + monthsToAdd);
+  const lastDayOfTargetMonth = new Date(Date.UTC(next.getUTCFullYear(), next.getUTCMonth() + 1, 0)).getUTCDate();
+  next.setUTCDate(Math.min(day, lastDayOfTargetMonth));
   return next;
 }

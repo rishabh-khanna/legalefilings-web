@@ -684,3 +684,272 @@ export async function sendInvoiceEmail(input: InvoiceEmailInput) {
     attachments: [{ filename: `${input.invoiceNumber}.pdf`, content: input.pdfBuffer }],
   });
 }
+
+type InvoiceReminderInput = {
+  customerName: string;
+  customerEmail: string;
+  invoiceNumber: string;
+  amountDue: number;
+  dueDate: string;
+  payUrl: string;
+  // Negative = still due in future (courtesy nudge), 0 = due today,
+  // positive = this many days late.
+  daysOverdue: number;
+  // The invoice's own issuing org — a tenant's customer shouldn't be
+  // chased by an email branded as Legal Efilings.
+  orgName?: string;
+};
+
+function renderInvoiceReminderHtml(input: InvoiceReminderInput) {
+  const orgName = input.orgName ?? SITE_NAME;
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://legalefilings-web.vercel.app";
+  const logoUrl = `${siteUrl}/images/logo.png`;
+  const ink = "#0f172a";
+  const inkSoft = "#5b6b81";
+  const paper = "#f6f8fb";
+  const late = input.daysOverdue > 0;
+  // Tone escalates with age, but never becomes threatening — the most
+  // common reason an invoice is unpaid is that it was genuinely missed.
+  const accent = late ? (input.daysOverdue >= 14 ? "#b42318" : "#e8a13a") : "#fdc500";
+  const headline = late
+    ? `Payment overdue — ${input.daysOverdue} day${input.daysOverdue === 1 ? "" : "s"}`
+    : input.daysOverdue === 0
+      ? "Payment due today"
+      : `Payment due in ${Math.abs(input.daysOverdue)} day${Math.abs(input.daysOverdue) === 1 ? "" : "s"}`;
+  const dueLabel = new Date(input.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" });
+
+  return `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:${paper};">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${paper};padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,0.06),0 24px 48px rgba(15,23,42,0.10);">
+            <tr>
+              <td style="background:${accent};padding:24px 32px;">
+                <img src="${logoUrl}" width="150" alt="${orgName}" style="display:block;border:0;" />
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px;">
+                <p style="margin:0;font:700 20px/1.3 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${ink};">${headline}</p>
+                <p style="margin:14px 0 0 0;font:14px/1.6 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${inkSoft};">
+                  Hi ${input.customerName.split(" ")[0]}, this is a reminder about invoice <strong>${input.invoiceNumber}</strong>${late ? ", which is now past its due date" : ""}. If you've already paid, please ignore this — payments can take a day or two to show up.
+                </p>
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:20px;background:${paper};border-radius:14px;overflow:hidden;">
+                  <tr>
+                    <td style="padding:14px 18px;font:13px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${inkSoft};">Invoice</td>
+                    <td style="padding:14px 18px;font:600 13px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${ink};text-align:right;">${input.invoiceNumber}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:0 18px 14px 18px;font:13px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${inkSoft};">Due date</td>
+                    <td style="padding:0 18px 14px 18px;font:600 13px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${ink};text-align:right;">${dueLabel}</td>
+                  </tr>
+                  <tr>
+                    <td style="padding:0 18px 14px 18px;border-top:1px solid #e8ecf2;font:700 14px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${ink};padding-top:14px;">Amount Due</td>
+                    <td style="padding:0 18px 14px 18px;border-top:1px solid #e8ecf2;font:700 16px/1.4 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${ink};text-align:right;padding-top:14px;">₹${input.amountDue.toLocaleString("en-IN")}</td>
+                  </tr>
+                </table>
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;">
+                  <tr>
+                    <td style="border-radius:10px;background:${ink};">
+                      <a href="${input.payUrl}" style="display:inline-block;padding:14px 28px;font:600 15px/1 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#ffffff;text-decoration:none;border-radius:10px;">Pay Now</a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 32px 32px 32px;">
+                <hr style="border:none;border-top:1px solid #e8ecf2;margin:0 0 20px 0;" />
+                <p style="margin:0;font:600 13px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${ink};">${orgName}</p>
+                <p style="margin:4px 0 0 0;font:12px/1.6 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${inkSoft};">Questions about this invoice? Just reply to this email.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+export async function sendInvoiceReminderEmail(input: InvoiceReminderInput) {
+  const fromAddress = process.env.EMAIL_FROM_ADDRESS;
+  const orgName = input.orgName ?? SITE_NAME;
+  const fromName = process.env.EMAIL_FROM_NAME ?? orgName;
+  if (!fromAddress) throw new Error("Missing EMAIL_FROM_ADDRESS env var");
+
+  const subject =
+    input.daysOverdue > 0
+      ? `Overdue: invoice ${input.invoiceNumber} — ₹${input.amountDue.toLocaleString("en-IN")}`
+      : `Reminder: invoice ${input.invoiceNumber} is due ${input.daysOverdue === 0 ? "today" : "soon"}`;
+
+  await getTransporter().sendMail({
+    from: `"${fromName}" <${fromAddress}>`,
+    to: input.customerEmail,
+    subject,
+    html: renderInvoiceReminderHtml(input),
+  });
+}
+
+// ── Order document exchange ───────────────────────────────────────────
+// The back-and-forth of collecting KYC/filing paperwork was the one core
+// loop in this app that emailed nobody, in either direction: a customer
+// was never told documents were needed, staff were never told something
+// had arrived to review, and a rejected document's reason only existed
+// on a screen the customer had no reason to revisit. Orders stalled
+// indefinitely with each side assuming the other had it.
+
+const DOC_SHELL_INK = "#0f172a";
+const DOC_SHELL_SOFT = "#5b6b81";
+const DOC_SHELL_PAPER = "#f6f8fb";
+
+function renderDocumentShell(opts: {
+  orgName: string;
+  bannerColor: string;
+  heading: string;
+  body: string;
+  ctaLabel: string;
+  ctaUrl: string;
+  extra?: string;
+}) {
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL ?? "https://legalefilings-web.vercel.app";
+  const logoUrl = `${siteUrl}/images/logo.png`;
+  return `<!doctype html>
+<html>
+  <body style="margin:0;padding:0;background:${DOC_SHELL_PAPER};">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="background:${DOC_SHELL_PAPER};padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="max-width:520px;background:#ffffff;border-radius:20px;overflow:hidden;box-shadow:0 1px 2px rgba(15,23,42,0.06),0 24px 48px rgba(15,23,42,0.10);">
+            <tr>
+              <td style="background:${opts.bannerColor};padding:24px 32px;">
+                <img src="${logoUrl}" width="150" alt="${opts.orgName}" style="display:block;border:0;" />
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:32px;">
+                <p style="margin:0;font:700 20px/1.3 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${DOC_SHELL_INK};">${opts.heading}</p>
+                <p style="margin:14px 0 0 0;font:14px/1.6 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${DOC_SHELL_SOFT};">${opts.body}</p>
+                ${opts.extra ?? ""}
+                <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:24px;">
+                  <tr>
+                    <td style="border-radius:10px;background:${DOC_SHELL_INK};">
+                      <a href="${opts.ctaUrl}" style="display:inline-block;padding:14px 28px;font:600 15px/1 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#ffffff;text-decoration:none;border-radius:10px;">${opts.ctaLabel}</a>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:0 32px 32px 32px;">
+                <hr style="border:none;border-top:1px solid #e8ecf2;margin:0 0 20px 0;" />
+                <p style="margin:0;font:600 13px/1.5 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${DOC_SHELL_INK};">${opts.orgName}</p>
+                <p style="margin:4px 0 0 0;font:12px/1.6 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:${DOC_SHELL_SOFT};">Questions? Just reply to this email.</p>
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+}
+
+async function sendDocumentMail(to: string, subject: string, html: string, orgName: string) {
+  const fromAddress = process.env.EMAIL_FROM_ADDRESS;
+  const fromName = process.env.EMAIL_FROM_NAME ?? orgName;
+  if (!fromAddress) throw new Error("Missing EMAIL_FROM_ADDRESS env var");
+  await getTransporter().sendMail({ from: `"${fromName}" <${fromAddress}>`, to, subject, html });
+}
+
+/** Staff asked the customer for paperwork — tell them what's needed and where to put it. */
+export async function sendDocumentsRequestedEmail(input: {
+  customerName: string;
+  customerEmail: string;
+  service: string;
+  orderUrl: string;
+  orgName?: string;
+}) {
+  const orgName = input.orgName ?? SITE_NAME;
+  await sendDocumentMail(
+    input.customerEmail,
+    `Documents needed for your ${input.service}`,
+    renderDocumentShell({
+      orgName,
+      bannerColor: "#fdc500",
+      heading: "We need a few documents from you",
+      body: `Hi ${input.customerName.split(" ")[0]}, to move your <strong>${input.service}</strong> forward we need some paperwork from you. Upload it from your order page — it takes a minute, and we'll review it as soon as it lands.`,
+      ctaLabel: "Upload documents",
+      ctaUrl: input.orderUrl,
+    }),
+    orgName
+  );
+}
+
+/** A customer uploaded something — tell the staff handling the order it's waiting on them. */
+export async function sendDocumentsSubmittedEmail(input: {
+  staffName: string;
+  staffEmail: string;
+  customerName: string;
+  service: string;
+  fileName: string;
+  orderUrl: string;
+  orgName?: string;
+}) {
+  const orgName = input.orgName ?? SITE_NAME;
+  await sendDocumentMail(
+    input.staffEmail,
+    `${input.customerName} uploaded a document for ${input.service}`,
+    renderDocumentShell({
+      orgName,
+      bannerColor: "#dbe7ff",
+      heading: "A document is waiting for review",
+      body: `${input.customerName} just uploaded <strong>${input.fileName}</strong> for their ${input.service}. It's sitting in the order's document drawer until someone verifies or rejects it.`,
+      ctaLabel: "Review it",
+      ctaUrl: input.orderUrl,
+    }),
+    orgName
+  );
+}
+
+/** A document was verified or rejected — tell the customer, and give the reason when rejected. */
+export async function sendDocumentReviewedEmail(input: {
+  customerName: string;
+  customerEmail: string;
+  service: string;
+  fileName: string;
+  status: "verified" | "rejected";
+  reviewNote?: string | null;
+  orderUrl: string;
+  orgName?: string;
+}) {
+  const orgName = input.orgName ?? SITE_NAME;
+  const rejected = input.status === "rejected";
+  // The reason is the entire point of the rejection email — it was
+  // previously only visible to a customer who happened to log in and
+  // open the drawer, so a rejected document just silently stalled.
+  const extra =
+    rejected && input.reviewNote
+      ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-top:18px;background:#fbeae8;border-radius:12px;">
+           <tr><td style="padding:14px 18px;font:13px/1.6 -apple-system,Segoe UI,Roboto,Arial,sans-serif;color:#8a1a13;"><strong>Why it was returned:</strong><br />${input.reviewNote}</td></tr>
+         </table>`
+      : "";
+  await sendDocumentMail(
+    input.customerEmail,
+    rejected ? `Action needed: ${input.fileName} was returned` : `${input.fileName} has been verified`,
+    renderDocumentShell({
+      orgName,
+      bannerColor: rejected ? "#fde2e2" : "#d0f4db",
+      heading: rejected ? "One of your documents needs redoing" : "Document verified",
+      body: rejected
+        ? `Hi ${input.customerName.split(" ")[0]}, we couldn't accept <strong>${input.fileName}</strong> for your ${input.service}. Please upload a replacement so we can carry on.`
+        : `Hi ${input.customerName.split(" ")[0]}, <strong>${input.fileName}</strong> for your ${input.service} has been checked and accepted. Nothing further needed on this one.`,
+      ctaLabel: rejected ? "Upload a replacement" : "View your order",
+      ctaUrl: input.orderUrl,
+      extra,
+    }),
+    orgName
+  );
+}

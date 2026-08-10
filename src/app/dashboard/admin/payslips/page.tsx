@@ -4,15 +4,13 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft, FileText, IndianRupee } from "lucide-react";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
-import { usePagination } from "@/lib/use-pagination";
-import { TablePagination } from "@/components/TablePagination";
-import { useDateRangeFilter } from "@/lib/use-date-range-filter";
-import { DateRangeFilter } from "@/components/DateRangeFilter";
 import { LoadingBlock } from "@/components/Spinner";
-import { ExportButton } from "@/components/ExportButton";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { MultiSelect } from "@/components/MultiSelect";
 
 type PayslipRow = {
   id: string;
+  staff_id: string;
   month: number;
   year: number;
   gross_salary: number;
@@ -29,6 +27,7 @@ type PayslipRow = {
 // payslips doesn't mean scrolling past a form every time.
 export default function AdminPayslipsPage() {
   const [payslips, setPayslips] = useState<PayslipRow[] | null>(null);
+  const [employeeFilter, setEmployeeFilter] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const kickoff = setTimeout(async () => {
@@ -40,8 +39,23 @@ export default function AdminPayslipsPage() {
   }, []);
 
   const payrollTotal = useMemo(() => (payslips ?? []).reduce((sum, p) => sum + Number(p.net_salary), 0), [payslips]);
-  const dateFilter = useDateRangeFilter(payslips ?? [], (p) => p.generated_at);
-  const { page, setPage, pageSize, setPageSize, pageItems: pagedPayslips, totalPages, total, start, end } = usePagination(dateFilter.filtered);
+
+  // Replaces the old group-by-employee clustering — one dropdown to narrow
+  // the table to a single person instead of the whole register visually
+  // reorganized around them. Built from whoever's actually in the current
+  // data (not a separate staff-list fetch), so it never lists someone with
+  // zero payslips to filter down to.
+  const employeeOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const p of payslips ?? []) {
+      if (!byId.has(p.staff_id)) byId.set(p.staff_id, p.profiles?.full_name ?? "Unknown");
+    }
+    return [...byId.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [payslips]);
+  const filteredPayslips = useMemo(
+    () => (employeeFilter.size === 0 ? (payslips ?? []) : (payslips ?? []).filter((p) => employeeFilter.has(p.staff_id))),
+    [payslips, employeeFilter]
+  );
 
   if (payslips === null) {
     return <LoadingBlock />;
@@ -52,11 +66,36 @@ export default function AdminPayslipsPage() {
   // it's actually ambiguous which org a row belongs to.
   const spansMultipleOrgs = new Set(payslips.map((p) => p.organization_id)).size > 1;
 
+  const columns: DataTableColumn<PayslipRow>[] = [
+    { key: "employee", header: "Employee", render: (p) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{p.profiles?.full_name ?? "—"}</span>, exportValue: (p) => p.profiles?.full_name ?? "", sortValue: (p) => p.profiles?.full_name },
+    {
+      key: "period",
+      header: "Period",
+      className: "w-[18%] whitespace-nowrap",
+      render: (p) => new Date(p.year, p.month - 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" }),
+      exportValue: (p) => new Date(p.year, p.month - 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" }),
+      sortValue: (p) => new Date(p.year, p.month - 1),
+    },
+    { key: "net", header: "Net Salary", className: "w-[14%] whitespace-nowrap", render: (p) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>₹{Number(p.net_salary).toLocaleString("en-IN")}</span>, exportValue: (p) => Number(p.net_salary), sortValue: (p) => Number(p.net_salary) },
+    ...(spansMultipleOrgs
+      ? [{ key: "org", header: "Organization", render: (p: PayslipRow) => p.organizations?.name ?? "—", exportValue: (p: PayslipRow) => p.organizations?.name ?? "Unknown organization" } as DataTableColumn<PayslipRow>]
+      : []),
+    {
+      key: "actions",
+      header: "",
+      render: (p) => (
+        <a href={`/api/payroll/payslips/${p.id}/download`} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>
+          Download PDF
+        </a>
+      ),
+    },
+  ];
+
   return (
     <div>
       <DashboardPageHero
         title="Payslips"
-        subtitle="Every payslip generated across the company."
+        subtitle={spansMultipleOrgs ? "Every payslip generated across every organization, pooled here for platform-level support." : "Every payslip generated across the company."}
         action={
           <Link
             href="/dashboard/admin/payroll"
@@ -73,79 +112,27 @@ export default function AdminPayslipsPage() {
         </div>
       </DashboardPageHero>
 
-      <div className="mt-5">
-        <DateRangeFilter
-          from={dateFilter.from}
-          to={dateFilter.to}
-          onFromChange={dateFilter.setFrom}
-          onToChange={dateFilter.setTo}
-          onClear={dateFilter.clear}
-          active={dateFilter.active}
-        />
-      </div>
-
-      <div className="mt-3 flex justify-end">
-        <ExportButton
-          filename="payslips"
-          headers={["Employee", "Period", "Net Salary", ...(spansMultipleOrgs ? ["Organization"] : [])]}
-          rows={dateFilter.filtered.map((p) => [
-            p.profiles?.full_name ?? "—",
-            new Date(p.year, p.month - 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" }),
-            Number(p.net_salary),
-            ...(spansMultipleOrgs ? [p.organizations?.name ?? "Unknown organization"] : []),
-          ])}
-        />
-      </div>
-
-      <TablePagination
-        page={page}
-        totalPages={totalPages}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={setPageSize}
-        start={start}
-        end={end}
-        total={total}
+      <DataTable
+        columns={columns}
+        fixedLayout
+        rows={filteredPayslips}
+        getRowKey={(p) => p.id}
         itemLabel="payslips"
+        emptyMessage="No payslips generated yet."
+        filteredEmptyMessage="No payslips for this employee in the selected range."
+        search={{ placeholder: "Search employee…", filter: (p, q) => (p.profiles?.full_name ?? "").toLowerCase().includes(q) }}
+        dateFilter={{ getDate: (p) => p.generated_at }}
+        exportFilename="payslips"
+        toolbar={
+          <MultiSelect
+            options={employeeOptions.map(([id, name]) => ({ value: id, label: name }))}
+            selected={employeeFilter}
+            onChange={setEmployeeFilter}
+            placeholder="All employees"
+            searchable
+          />
+        }
       />
-
-      <div className="mt-3 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
-        <table className="dt-table w-full min-w-[520px] text-left text-sm">
-          <thead>
-            <tr style={{ backgroundColor: "var(--color-muted-tint)" }}>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>#</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Employee</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Period</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Net Salary</th>
-              {spansMultipleOrgs && <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Organization</th>}
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
-            {pagedPayslips.map((p, i) => (
-              <tr key={p.id}>
-                <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                <td className="px-4 py-3 font-medium" style={{ color: "var(--color-ink)" }}>{p.profiles?.full_name ?? "—"}</td>
-                <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>
-                  {new Date(p.year, p.month - 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}
-                </td>
-                <td className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>₹{Number(p.net_salary).toLocaleString("en-IN")}</td>
-                {spansMultipleOrgs && <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{p.organizations?.name ?? "—"}</td>}
-                <td className="px-4 py-3">
-                  <a href={`/api/payroll/payslips/${p.id}/download`} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>
-                    Download PDF
-                  </a>
-                </td>
-              </tr>
-            ))}
-            {payslips.length === 0 && (
-              <tr>
-                <td colSpan={spansMultipleOrgs ? 6 : 5} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>No payslips generated yet.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }

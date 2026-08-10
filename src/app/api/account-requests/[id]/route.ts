@@ -60,6 +60,8 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       company: reqRow.company ?? undefined,
       city: reqRow.city ?? undefined,
       state: reqRow.state ?? undefined,
+      department: reqRow.department ?? undefined,
+      designation: reqRow.designation ?? undefined,
     });
     tempPassword = result.tempPassword;
   } catch (err) {

@@ -14,7 +14,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const supabase = getSupabaseAdmin();
   const { data: invoice, error } = await supabase
     .from("invoices")
-    .select("*, profiles!invoices_customer_id_fkey(full_name, company), invoice_line_items(*)")
+    .select("*, profiles!invoices_customer_id_fkey(full_name, company), invoice_line_items(*), invoice_payments(amount), organizations(name)")
     .eq("id", id)
     .single();
 
@@ -50,6 +50,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
     invoice: { ...invoice, related_invoice_number: relatedInvoiceNumber },
     company,
     items: (invoice.invoice_line_items as PdfLineItem[] | undefined) ?? [],
+    orgName: (invoice.organizations as unknown as { name: string | null } | null)?.name ?? null,
   });
 
   await supabase.from("invoice_events").insert({ invoice_id: id, event_type: "downloaded", actor_id: profile.id });

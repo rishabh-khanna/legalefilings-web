@@ -13,7 +13,7 @@ export async function POST(request: Request) {
   if (!isStaffOrAdmin(profile) || !profile) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json().catch(() => null);
-  const { fullName, email, phone, accountType, customerTier, staffLevel, company, city, state, message } = body ?? {};
+  const { fullName, email, phone, accountType, customerTier, staffLevel, company, city, state, message, department, designation } = body ?? {};
   if (!fullName || !email || !accountType) {
     return NextResponse.json({ error: "fullName, email, and accountType are required" }, { status: 400 });
   }
@@ -22,6 +22,14 @@ export async function POST(request: Request) {
   // admin submitter, so there's exactly one path to a new admin login.
   if (accountType !== "customer" && accountType !== "staff") {
     return NextResponse.json({ error: "accountType must be 'customer' or 'staff'" }, { status: 400 });
+  }
+  // Mirrors the client-side check in the "Request New User" form — the
+  // form already blocks submission without these for a staff request, but
+  // that's a UI convenience, not a guarantee; server-side is what actually
+  // stops a bare API call from creating the same gap this route used to
+  // have (see 20260910000000_account_request_department.sql).
+  if (accountType === "staff" && (!department || !designation)) {
+    return NextResponse.json({ error: "department and designation are required for a staff account" }, { status: 400 });
   }
 
   const supabase = getSupabaseAdmin();
@@ -48,6 +56,8 @@ export async function POST(request: Request) {
     company: company ? String(company) : null,
     city: city ? String(city) : null,
     state: state ? String(state) : null,
+    department: accountType === "staff" && department ? String(department) : null,
+    designation: accountType === "staff" && designation ? String(designation) : null,
     message: message ? String(message) : null,
     requested_by: profile.id,
     status: "pending" as const,

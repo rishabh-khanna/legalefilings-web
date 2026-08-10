@@ -11,7 +11,10 @@ test("Analytics page renders KPIs and all four charts from real data", async ({ 
   await page.goto("/dashboard/admin/analytics");
   await expect(page.getByRole("heading", { name: "Analytics" })).toBeVisible({ timeout: 15000 });
 
-  await expect(page.getByText("Total Revenue")).toBeVisible();
+  // "Collected" — deliberately not "Total Revenue" (money actually
+  // received, not invoiced) — plus "Outstanding" alongside it.
+  await expect(page.getByText("Collected")).toBeVisible();
+  await expect(page.getByText("Outstanding")).toBeVisible();
   await expect(page.getByText("Total Leads")).toBeVisible();
   await expect(page.getByText("Total Orders")).toBeVisible();
   await expect(page.getByText("Deals Won")).toBeVisible();

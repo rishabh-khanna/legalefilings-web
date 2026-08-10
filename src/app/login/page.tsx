@@ -147,6 +147,14 @@ export default function LoginPage() {
 
           <LoginForm />
 
+          <p className="mt-4 text-center text-xs" style={{ color: "var(--color-ink-soft)" }}>
+            New here?{" "}
+            <Link href="/manual" target="_blank" rel="noopener noreferrer" className="font-medium underline" style={{ color: "var(--color-action-dark)" }}>
+              Read the user manual
+            </Link>{" "}
+            to see what each account type can do.
+          </p>
+
           <DemoLoginCredentials />
         </div>
       </div>

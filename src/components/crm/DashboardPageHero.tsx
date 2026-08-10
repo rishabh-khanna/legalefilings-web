@@ -1,4 +1,6 @@
-import type { ReactNode } from "react";
+"use client";
+
+import { isValidElement, type ReactNode } from "react";
 import { PageHelpButton } from "@/components/dashboard/PageHelpButton";
 
 // A warm cream→gold gradient hero (with soft blurred glow orbs) — every
@@ -91,14 +93,40 @@ export function HeroAction({ icon: Icon, children, ...props }: { icon?: React.Co
   );
 }
 
-export function HeroKpi({ icon: Icon, label, value, suffix }: { icon: React.ComponentType<{ className?: string }>; label: string; value: React.ReactNode; suffix?: string }) {
+// A plain, non-interactive stat tile — icon, number, label. Used to open
+// a popup listing the underlying rows when clicked, but that affordance
+// wasn't discoverable (nothing about a stat card looks clickable) and
+// wasn't being used, so every call site now just shows the number.
+export function HeroKpi({
+  icon,
+  label,
+  value,
+  suffix,
+}: {
+  // A component reference (the common case — every client-component
+  // page passes e.g. `icon={Users}`) or an already-rendered element (the
+  // one Server Component call site, the Overview page, since a bare
+  // function reference can't cross the server→client boundary as a prop
+  // the way an already-rendered element can).
+  icon: React.ComponentType<{ className?: string }> | ReactNode;
+  label: string;
+  value: React.ReactNode;
+  suffix?: string;
+}) {
+  // Can't check `typeof icon === "function"` — lucide-react icons (the
+  // overwhelming majority of callers) are forwardRef objects, not plain
+  // functions, so that check silently misclassified every one of them
+  // as "already an element" and tried to render the un-instantiated
+  // component reference directly (React: "Objects are not valid as a
+  // React child"). isValidElement is the actual right test: true only
+  // for the output of JSX/createElement, never for a component
+  // reference itself, regardless of how that component was defined.
+  const Icon = isValidElement(icon) ? null : (icon as React.ComponentType<{ className?: string }>);
+
   return (
-    <div
-      className="rounded-2xl border bg-white/70 p-4 backdrop-blur-xl transition-transform hover:-translate-y-0.5"
-      style={{ borderColor: "var(--color-line)" }}
-    >
+    <div className="rounded-2xl border bg-white/70 p-4 backdrop-blur-xl transition-transform hover:-translate-y-0.5" style={{ borderColor: "var(--color-line)" }}>
       <span className="flex h-9 w-9 items-center justify-center rounded-full" style={{ backgroundColor: "var(--color-accent)", color: "var(--color-ink)" }}>
-        <Icon className="h-4 w-4" />
+        {Icon ? <Icon className="h-4 w-4" /> : (icon as ReactNode)}
       </span>
       <p className="mt-3 text-2xl font-extrabold" style={{ color: "var(--color-ink)" }}>
         {value}

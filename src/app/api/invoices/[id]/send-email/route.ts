@@ -17,7 +17,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { data: invoice, error } = await supabase
     .from("invoices")
-    .select("*, profiles!invoices_customer_id_fkey(full_name, company), invoice_line_items(*)")
+    .select("*, profiles!invoices_customer_id_fkey(full_name, company), invoice_line_items(*), invoice_payments(amount)")
     .eq("id", id)
     .single();
   if (error || !invoice) return NextResponse.json({ error: "Invoice not found" }, { status: 404 });
@@ -27,14 +27,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (!customerEmail) return NextResponse.json({ error: "Customer has no email on file" }, { status: 400 });
 
   const { data: company } = await supabase.from("company_settings").select("*").eq("organization_id", invoice.organization_id).single();
+  // Org fetched before the PDF, not inside the try below — the QR's
+  // payee label needs it, and emailing an invoice whose pay code is
+  // branded with the wrong company is worse than not emailing at all.
+  const { data: org } = await supabase.from("organizations").select("name").eq("id", invoice.organization_id).single();
   const buffer = await buildInvoicePdfBuffer({
     invoice,
     company,
     items: (invoice.invoice_line_items as PdfLineItem[] | undefined) ?? [],
+    orgName: org?.name ?? null,
   });
 
   try {
-    const { data: org } = await supabase.from("organizations").select("name").eq("id", invoice.organization_id).single();
     await sendInvoiceEmail({
       customerName: invoice.profiles?.full_name ?? "there",
       customerEmail,

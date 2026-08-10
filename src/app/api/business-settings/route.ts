@@ -14,10 +14,15 @@ import { hasToolAccess } from "@/lib/tool-grants";
 // every invoice/PDF code path that queries it for no user-visible gain.
 export async function GET() {
   const profile = await getCurrentProfile();
-  if (!isStaffOrAdmin(profile) || !profile) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const isCustomerOperator = profile?.account_type === "customer" && (await hasToolAccess(profile, "invoice_crm"));
+  if (!profile || (!isStaffOrAdmin(profile) && !isCustomerOperator)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const supabase = getSupabaseAdmin();
-  const { data, error } = await supabase.from("company_settings").select("*").eq("organization_id", profile.organization_id).single();
+  const { data, error } = await supabase
+    .from("company_settings")
+    .select("*, updater:profiles!company_settings_updated_by_fkey(full_name)")
+    .eq("organization_id", profile.organization_id)
+    .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ settings: data });
 }
@@ -37,7 +42,7 @@ export async function PATCH(request: Request) {
     address, gstNumber, panNumber, pfNumber, esicNumber, financialYearStartMonth, logoUrl, signatureUrl,
     state, stateCode, bankName, bankAccountNumber, bankIfsc, bankBranch, upiId, defaultInvoiceNotes, invoiceNumberPrefix,
   } = body as Record<string, unknown>;
-  const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
+  const patch: Record<string, unknown> = { updated_at: new Date().toISOString(), updated_by: profile.id };
   if (typeof address === "string") patch.address = address;
   if (typeof gstNumber === "string") patch.gst_number = gstNumber;
   if (typeof panNumber === "string") patch.pan_number = panNumber;

@@ -2,31 +2,21 @@
 
 import { useState } from "react";
 
-// Demo-only — for reviewing this build before real customer/staff accounts
+// Demo-only — for reviewing this build before real customer accounts
 // exist. Opt-IN via NEXT_PUBLIC_SHOW_DEMO_CREDENTIALS="true" — fails
 // closed by default (unset, misconfigured, or any other value all hide
-// it) rather than failing open, since this panel hands out the seeded
-// admin account's password to anyone who opens /login. Never set this
-// var to "true" in production once real accounts replace the seeded
-// demo ones from scripts/seed-database.mjs — better yet, delete this
-// component and its usage entirely before go-live.
+// it) rather than failing open, since this panel hands out a real
+// account's password to anyone who opens /login. Never set this var to
+// "true" in production — better yet, delete this component and its
+// usage entirely before go-live. The account below comes from
+// scripts/seed-crm-customer-demo.mjs.
 const DEMO_PASSWORD = "Demo@12345";
 const ACCOUNTS = [
-  { email: "admin@legalefilings.com", role: "Admin", group: "Legal Efilings (seed org)" },
-  { email: "groupleader@legalefilings.com", role: "Staff — Group Leader", group: "Legal Efilings (seed org)" },
-  { email: "leader@legalefilings.com", role: "Staff — Leader", group: "Legal Efilings (seed org)" },
-  { email: "rater@legalefilings.com", role: "Staff — Rater", group: "Legal Efilings (seed org)" },
-  { email: "customer.free@legalefilings.com", role: "Customer — Free", group: "Legal Efilings (seed org)" },
-  { email: "customer.paid@legalefilings.com", role: "Customer — Paid", group: "Legal Efilings (seed org)" },
-  { email: "platformadmin.e2e@legalefilings.com", role: "Platform Admin (superuser — all orgs)", group: "Platform" },
-  { email: "alpha.admin.1786114923966@example.com", role: "Admin", group: "Alpha Legal Consultants" },
-  { email: "alpha.staffer.1786114923966@example.com", role: "Staff — Rater", group: "Alpha Legal Consultants" },
-  { email: "alpha-legal-consultants-1786114923966.customer@example.com", role: "Customer — Paid", group: "Alpha Legal Consultants" },
-  { email: "convertible-lead-alpha-legal-consultants-1786114923966@example.com", role: "Customer (from lead conversion)", group: "Alpha Legal Consultants" },
-  { email: "beta.admin.1786114923966@example.com", role: "Admin", group: "Beta Compliance Partners" },
-  { email: "beta.staffer.1786114923966@example.com", role: "Staff — Rater", group: "Beta Compliance Partners" },
-  { email: "beta-compliance-partners-1786114923966.customer@example.com", role: "Customer — Paid", group: "Beta Compliance Partners" },
-  { email: "convertible-lead-beta-compliance-partners-1786114923966@example.com", role: "Customer (from lead conversion)", group: "Beta Compliance Partners" },
+  {
+    email: "crm.customer@legalefilings.com",
+    role: "Paid Customer — full CRM access (Leads, Invoice CRM, Team Attendance, Team Leave, Employees, Payroll) delegated without ever being promoted to admin",
+    group: "CRM Demo Workspace",
+  },
 ];
 
 function CopyButton({ value }: { value: string }) {

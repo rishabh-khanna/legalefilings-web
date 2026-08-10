@@ -104,7 +104,7 @@ export default function HrLettersPage() {
         <button
           type="submit"
           disabled={generating}
-          className="mt-4 rounded-full px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+          className="mt-4 rounded-full px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
           style={{ backgroundColor: "var(--color-action)" }}
         >
           {generating ? "Generating…" : "Generate PDF"}

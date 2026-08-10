@@ -40,9 +40,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   }
   if (profile.account_type !== "admin" && !canSeeAllOrgs(profile)) {
     const chain = await getReportingChainIds(profile.id);
-    const { data: chainProfiles } = chain.length ? await supabase.from("profiles").select("full_name").in("id", chain) : { data: [] };
-    const visibleNames = [profile.full_name, "Unassigned", ...(chainProfiles ?? []).map((p) => p.full_name)].filter(Boolean);
-    if (!visibleNames.includes(lead.assigned_to)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    // assigned_to is a profiles FK now (20260829000000). NULL means the
+    // lead is still in the shared unclaimed pool, which anyone who can
+    // see it may convert — same rule the list and claim paths use.
+    const visibleIds = [profile.id, ...chain];
+    if (lead.assigned_to && !visibleIds.includes(lead.assigned_to)) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
   }
   if (lead.converted_to_profile_id) {
     return NextResponse.json({ error: "This lead has already been converted." }, { status: 409 });

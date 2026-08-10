@@ -71,7 +71,11 @@ export async function GET(request: Request) {
   if (month) {
     const start = `${month}-01`;
     const [y, m] = month.split("-").map(Number);
-    const end = new Date(y, m, 1).toISOString().slice(0, 10);
+    // Date.UTC, not new Date(y, m, ...) — the latter is local time and
+  // toISOString() converts it back to UTC, which lands a day earlier for
+  // any timezone ahead of UTC. As an exclusive month-end bound in IST
+  // that silently dropped the last day of every month from the range.
+    const end = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
     query = query.gte("occurred_at", start).lt("occurred_at", end);
   }
   const { data, error } = await query;

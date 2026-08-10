@@ -20,6 +20,18 @@ export const DELEGABLE_TOOLS = [
   { key: "email_failures", label: "Email Failures", path: "/dashboard/admin/email-failures" },
   { key: "analytics", label: "Analytics", path: "/dashboard/admin/analytics" },
   { key: "leave_types", label: "Leave Types", path: "/dashboard/admin/leave-types" },
+  // These four exist specifically so a CUSTOMER can be delegated real CRM
+  // capability without ever being promoted to admin/staff — the org's
+  // actual "operator" tools (Leads, Invoice CRM, and managing their own
+  // team's attendance/leave), previously only reachable by account_type,
+  // never by grant. Everywhere else DELEGABLE_TOOLS is used assumes the
+  // grantee is staff; these four are the exception, and every call site
+  // that checks them has a matching customer+grant branch (see
+  // src/proxy.ts, src/lib/reporting-chain.ts, and each backing API route).
+  { key: "leads_crm", label: "Leads CRM (Pipeline)", path: "/dashboard/admin/leads" },
+  { key: "invoice_crm", label: "Invoice CRM", path: "/dashboard/invoice-crm" },
+  { key: "team_attendance", label: "Team Attendance", path: "/dashboard/admin/attendance" },
+  { key: "team_leave", label: "Team Leave Requests", path: "/dashboard/admin/leave-requests" },
 ] as const;
 
 export type ToolKey = (typeof DELEGABLE_TOOLS)[number]["key"];

@@ -1,13 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { Clock, CheckCircle2, XCircle } from "lucide-react";
 import { STAFF_LEVEL_LABELS, type AccountType, type CustomerTier, type StaffLevel } from "@/lib/roles";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
-import { usePagination } from "@/lib/use-pagination";
-import { TablePagination } from "@/components/TablePagination";
-import { ExportButton } from "@/components/ExportButton";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
 
 type RequestRow = {
   id: string;
@@ -47,8 +46,6 @@ const STATUS_STYLE: Record<"approved" | "rejected", { bg: string; fg: string }> 
 export default function ReviewedAccountRequestsPage() {
   const [requests, setRequests] = useState<RequestRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
 
   useEffect(() => {
     const kickoff = setTimeout(async () => {
@@ -63,11 +60,6 @@ export default function ReviewedAccountRequestsPage() {
     return () => clearTimeout(kickoff);
   }, []);
 
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedSearch(search), 300);
-    return () => clearTimeout(t);
-  }, [search]);
-
   const stats = useMemo(() => {
     const all = requests ?? [];
     return {
@@ -79,25 +71,74 @@ export default function ReviewedAccountRequestsPage() {
 
   const reviewedRequests = useMemo(() => (requests ?? []).filter((r) => r.status !== "pending"), [requests]);
 
-  const filteredRequests = useMemo(() => {
-    const q = debouncedSearch.trim().toLowerCase();
-    if (!q) return reviewedRequests;
-    return reviewedRequests.filter((r) =>
-      [r.full_name, r.email, r.phone, describeRequest(r), r.status].some((f) => f?.toLowerCase().includes(q))
-    );
-  }, [reviewedRequests, debouncedSearch]);
-
-  const { page, setPage, pageSize, setPageSize, pageItems: pagedRequests, totalPages, total, start, end } = usePagination(filteredRequests);
-
   if (requests === null && !error) {
     return <LoadingBlock />;
   }
+
+  const columns: DataTableColumn<RequestRow>[] = [
+    {
+      key: "name",
+      header: "Name",
+      render: (r) => (
+        <>
+          <p className="font-semibold" style={{ color: "var(--color-ink)" }}>{r.full_name}</p>
+          {r.message && <p className="mt-0.5 max-w-xs text-xs italic" style={{ color: "var(--color-ink-soft)" }}>&ldquo;{r.message}&rdquo;</p>}
+        </>
+      ),
+      exportValue: (r) => r.full_name,
+      sortValue: (r) => r.full_name,
+    },
+    {
+      key: "contact",
+      header: "Contact",
+      render: (r) => <>{r.email}<br />{r.phone || "no phone"}</>,
+      exportValue: (r) => `${r.email} / ${r.phone || "no phone"}`,
+      sortValue: (r) => r.email,
+    },
+    {
+      key: "requested",
+      header: "Requested",
+      render: (r) => <>{describeRequest(r)}<br />{r.requested_by ? `via ${r.profiles?.full_name ?? "a staff member"}` : "self-submitted"}</>,
+      exportValue: (r) => describeRequest(r),
+      sortValue: (r) => r.created_at,
+    },
+    {
+      key: "status",
+      header: "Status",
+      className: "w-[16%] whitespace-nowrap",
+      render: (r) => {
+        const style = STATUS_STYLE[r.status as "approved" | "rejected"];
+        return (
+          <>
+            <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: style.bg, color: style.fg }}>
+              {r.status}
+            </span>
+            {r.status === "rejected" && r.review_note && (
+              <p className="mt-1.5 max-w-[200px] whitespace-normal rounded-lg px-2 py-1 text-xs" style={{ backgroundColor: "#fde2e2", color: "#b42318" }}>
+                {r.review_note}
+              </p>
+            )}
+          </>
+        );
+      },
+      exportValue: (r) => r.status,
+      sortValue: (r) => r.status,
+    },
+  ];
 
   return (
     <div>
       <DashboardPageHero title="Reviewed Account Requests" subtitle="Account requests your team has already approved or rejected.">
         <div className="relative mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <HeroKpi icon={Clock} label="Pending" value={stats.pending} />
+          {/* Not a popup like the other two tiles — a pending request
+              can't be approved/rejected from this read-only history
+              page at all (that only happens on the pending queue), so
+              a dead-end list here was exactly what made it look like
+              there was no way to act on them. Links straight to where
+              you actually can. */}
+          <Link href="/dashboard/admin/account-requests">
+            <HeroKpi icon={Clock} label="Pending" value={stats.pending} />
+          </Link>
           <HeroKpi icon={CheckCircle2} label="Approved" value={stats.approved} />
           <HeroKpi icon={XCircle} label="Rejected" value={stats.rejected} />
         </div>
@@ -105,98 +146,17 @@ export default function ReviewedAccountRequestsPage() {
 
       {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
 
-      {reviewedRequests.length > 0 && (
-        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search by name, email, phone, status…"
-            className="w-full max-w-sm rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]"
-            style={{ borderColor: "var(--color-line)" }}
-          />
-          <ExportButton
-            filename="reviewed-account-requests"
-            headers={["Name", "Email", "Phone", "Requested", "Status", "Note"]}
-            rows={filteredRequests.map((r) => [
-              r.full_name ?? "",
-              r.email ?? "",
-              r.phone ?? "",
-              describeRequest(r),
-              r.status,
-              r.status === "rejected" ? (r.review_note ?? "") : "",
-            ])}
-          />
-        </div>
-      )}
-
-      {requests === null ? (
-        <LoadingBlock className="mt-6" />
-      ) : reviewedRequests.length === 0 ? (
-        <p className="mt-6 text-sm" style={{ color: "var(--color-ink-soft)" }}>No reviewed requests yet.</p>
-      ) : filteredRequests.length === 0 ? (
-        <p className="mt-6 text-sm" style={{ color: "var(--color-ink-soft)" }}>No requests match this search.</p>
-      ) : (
-        <>
-          <TablePagination
-            page={page}
-            totalPages={totalPages}
-            pageSize={pageSize}
-            onPageChange={setPage}
-            onPageSizeChange={setPageSize}
-            start={start}
-            end={end}
-            total={total}
-            itemLabel="requests"
-          />
-          <div className="mt-3 overflow-x-auto rounded-2xl border bg-white dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-            <table className="dt-table w-full min-w-[760px]">
-              <thead>
-                <tr className="text-left">
-                  <th>#</th>
-                  <th>Name</th>
-                  <th>Contact</th>
-                  <th>Requested</th>
-                  <th>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pagedRequests.map((r, i) => {
-                  const style = STATUS_STYLE[r.status as "approved" | "rejected"];
-                  return (
-                    <tr key={r.id}>
-                      <td style={{ color: "var(--color-ink-soft)" }}>{start + i}</td>
-                      <td>
-                        <p className="font-semibold" style={{ color: "var(--color-ink)" }}>{r.full_name}</p>
-                        {r.message && <p className="mt-0.5 max-w-xs text-xs italic" style={{ color: "var(--color-ink-soft)" }}>&ldquo;{r.message}&rdquo;</p>}
-                      </td>
-                      <td style={{ color: "var(--color-ink-soft)" }}>
-                        {r.email}
-                        <br />
-                        {r.phone || "no phone"}
-                      </td>
-                      <td style={{ color: "var(--color-ink-soft)" }}>
-                        {describeRequest(r)}
-                        <br />
-                        {r.requested_by ? `via ${r.profiles?.full_name ?? "a staff member"}` : "self-submitted"}
-                      </td>
-                      <td>
-                        <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: style.bg, color: style.fg }}>
-                          {r.status}
-                        </span>
-                        {r.status === "rejected" && r.review_note && (
-                          <p className="mt-1.5 max-w-[200px] rounded-lg px-2 py-1 text-xs" style={{ backgroundColor: "#fde2e2", color: "#b42318" }}>
-                            {r.review_note}
-                          </p>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+      <DataTable
+        columns={columns}
+        fixedLayout
+        rows={reviewedRequests}
+        getRowKey={(r) => r.id}
+        itemLabel="requests"
+        emptyMessage="No reviewed requests yet."
+        search={{ placeholder: "Search by name, email, phone, status…", filter: (r, q) => [r.full_name, r.email, r.phone, describeRequest(r), r.status].some((f) => f?.toLowerCase().includes(q)) }}
+        exportFilename="reviewed-account-requests"
+        minWidth={760}
+      />
     </div>
   );
 }

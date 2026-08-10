@@ -20,9 +20,14 @@ export async function GET() {
       // No email column on profiles (it lives in Supabase Auth, not
       // here — same reason getCurrentProfile() attaches it manually
       // from the session user rather than selecting it).
+      // "customer" is included so an org admin can delegate real CRM
+      // tool access (Leads/Invoice CRM/Team Attendance/Team Leave) to a
+      // paid customer without ever promoting their account_type —
+      // hasToolAccess() and every route gate already treat a granted
+      // customer as fully capable within that one tool's scope.
       .select("id, full_name, account_type, staff_level")
       .eq("organization_id", profile.organization_id)
-      .in("account_type", ["staff", "admin"])
+      .in("account_type", ["staff", "admin", "customer"])
       .order("full_name"),
     supabase.from("staff_tool_grants").select("*").eq("organization_id", profile.organization_id),
   ]);
@@ -53,8 +58,8 @@ export async function POST(request: Request) {
   if (!target || target.organization_id !== profile.organization_id) {
     return NextResponse.json({ error: "Not a staff member in your organization" }, { status: 400 });
   }
-  if (target.account_type !== "staff") {
-    return NextResponse.json({ error: "Only staff accounts can be delegated a tool (admins already have full access)" }, { status: 400 });
+  if (target.account_type !== "staff" && target.account_type !== "customer") {
+    return NextResponse.json({ error: "Only staff or customer accounts can be delegated a tool (admins already have full access)" }, { status: 400 });
   }
 
   const { data, error } = await supabase

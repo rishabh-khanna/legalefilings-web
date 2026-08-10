@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-import Link from "next/link";
-import { Wallet, Landmark, TrendingDown, TrendingUp, IndianRupee, FileText, Plus, Users, History, Repeat, Target, Settings, AlertTriangle, Check, X, MoreHorizontal } from "lucide-react";
+import { useRouter } from "next/navigation";
+import { Wallet, Landmark, TrendingDown, TrendingUp, IndianRupee, FileText, Plus, Users, History, Repeat, Target, Settings, AlertTriangle, Check, X } from "lucide-react";
 import { DashboardPageHero, HeroAction, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { RequiredMark } from "@/components/RequiredMark";
 import { FinanceSetupWizard } from "@/components/finance/FinanceSetupWizard";
@@ -12,11 +12,7 @@ import { BookSwitcher } from "@/components/finance/BookSwitcher";
 import { FinanceCharts } from "@/components/finance/FinanceCharts";
 import { formatMoney } from "@/lib/currency";
 import { LoadingBlock } from "@/components/Spinner";
-import { usePagination } from "@/lib/use-pagination";
-import { TablePagination } from "@/components/TablePagination";
-import { useDateRangeFilter } from "@/lib/use-date-range-filter";
-import { DateRangeFilter } from "@/components/DateRangeFilter";
-import { ExportButton } from "@/components/ExportButton";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
 
 type Account = { id: string; bank_name: string; account_name: string; current_balance: number; opening_balance: number; is_active: boolean };
 type Transaction = EditableTransaction & {
@@ -52,6 +48,7 @@ type Summary = {
 };
 
 export default function FinancePage() {
+  const router = useRouter();
   const [bookOwnerId, setBookOwnerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [summary, setSummary] = useState<Summary | null>(null);
@@ -63,11 +60,9 @@ export default function FinancePage() {
   const [newBank, setNewBank] = useState({ bankName: "", accountName: "", openingBalance: "", openingDate: new Date().toISOString().slice(0, 10) });
   const [activeDocTransaction, setActiveDocTransaction] = useState<Transaction | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
-  const [search, setSearch] = useState("");
   const [chartData, setChartData] = useState<ChartData | null>(null);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [accountEditName, setAccountEditName] = useState({ bankName: "", accountName: "" });
-  const [showMoreMenu, setShowMoreMenu] = useState(false);
 
   const loadSummary = useCallback(async (ownerId: string) => {
     const res = await fetch(`/api/expense-manager/summary?bookOwnerId=${ownerId}`);
@@ -213,16 +208,78 @@ export default function FinancePage() {
   // number). The full Reports page does the same search server-side
   // over a much larger export window; this is the quick day-to-day
   // filter on the dashboard's own recent-transactions view.
-  const filteredTransactions = (transactions ?? []).filter((t) => {
-    if (!search.trim()) return true;
-    const haystack = [
+  function transactionSearchText(t: Transaction) {
+    return [
       t.party_name, t.description, t.reference_number, t.document_number,
       t.expense_categories?.name, t.payment_mode, t.transaction_date, String(t.amount),
-    ].filter(Boolean).join(" ").toLowerCase();
-    return haystack.includes(search.trim().toLowerCase());
-  });
-  const dateFilter = useDateRangeFilter(filteredTransactions, (t) => t.transaction_date);
-  const { page, setPage, pageSize, setPageSize, pageItems: pagedTransactions, totalPages, total, start, end } = usePagination(dateFilter.filtered);
+    ].filter(Boolean).join(" ");
+  }
+
+  const transactionColumns: DataTableColumn<Transaction>[] = [
+    { key: "date", header: "Date", className: "w-[10%] whitespace-nowrap", render: (t) => new Date(t.transaction_date).toLocaleDateString("en-IN"), exportValue: (t) => new Date(t.transaction_date).toLocaleDateString("en-IN"), sortValue: (t) => t.transaction_date },
+    { key: "category", header: "Category", render: (t) => <span style={{ color: "var(--color-ink)" }}>{t.expense_categories?.name ?? "—"}</span>, exportValue: (t) => t.expense_categories?.name ?? "", sortValue: (t) => t.expense_categories?.name },
+    { key: "party", header: "Party", render: (t) => t.party_name ?? "—", exportValue: (t) => t.party_name ?? "", sortValue: (t) => t.party_name },
+    { key: "mode", header: "Mode", className: "w-[10%] whitespace-nowrap", render: (t) => <span className="capitalize">{t.payment_mode}</span>, exportValue: (t) => t.payment_mode, sortValue: (t) => t.payment_mode },
+    {
+      key: "amount",
+      header: "Amount",
+      className: "w-[12%] whitespace-nowrap",
+      render: (t) => (
+        <span className="font-semibold" style={{ color: t.transaction_type === "income" ? "#116a2c" : "#b42318" }}>
+          {t.transaction_type === "income" ? "+" : "-"}{money(t.amount)}
+        </span>
+      ),
+      exportValue: (t) => `${t.transaction_type === "income" ? "+" : "-"}${money(t.amount)}`,
+      sortValue: (t) => Number(t.amount),
+    },
+    {
+      key: "status",
+      header: "Status",
+      className: "w-[10%] whitespace-nowrap",
+      render: (t) =>
+        t.status === "pending" ? (
+          <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "#fff6d9", color: "#8a6700" }}>Pending</span>
+        ) : t.status === "rejected" ? (
+          <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "#fde2e2", color: "#b42318" }}>Rejected</span>
+        ) : (
+          <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "#d0f4db", color: "#116a2c" }}>Approved</span>
+        ),
+      exportValue: (t) => t.status,
+      sortValue: (t) => t.status,
+    },
+    {
+      key: "actions",
+      header: "",
+      className: "text-right",
+      render: (t) => (
+        <div className="flex items-center justify-end gap-2">
+          {t.status === "pending" && can("delete_expense") && (
+            <>
+              <button type="button" onClick={() => handleReview(t.id, "approve")} aria-label="Approve" className="rounded-full p-1 transition-colors hover:bg-[var(--color-accent-tint)]">
+                <Check className="h-3.5 w-3.5" style={{ color: "#116a2c" }} />
+              </button>
+              <button type="button" onClick={() => handleReview(t.id, "reject")} aria-label="Reject" className="rounded-full p-1 transition-colors hover:bg-[var(--color-accent-tint)]">
+                <X className="h-3.5 w-3.5" style={{ color: "#b42318" }} />
+              </button>
+            </>
+          )}
+          {can("delete_expense") && (
+            <>
+              <button type="button" onClick={() => setEditingTransaction(t)} className="text-xs font-medium" style={{ color: "var(--color-action-dark)" }}>
+                Edit
+              </button>
+              <button type="button" onClick={() => handleDeleteTransaction(t.id)} className="text-xs font-medium" style={{ color: "#b42318" }}>
+                Delete
+              </button>
+            </>
+          )}
+          <button type="button" onClick={() => setActiveDocTransaction(t)} className="inline-flex items-center gap-1 text-xs font-medium" style={{ color: "var(--color-action-dark)" }}>
+            <FileText className="h-3.5 w-3.5" /> Docs
+          </button>
+        </div>
+      ),
+    },
+  ];
 
   if (loading) {
     return <LoadingBlock />;
@@ -244,7 +301,10 @@ export default function FinancePage() {
         subtitle="Your expenses, income, bank balances, and cash book."
         action={
           can("add_expense") || can("manage_accounts") || can("manage_users") ? (
-            <div className="flex gap-2">
+            // flex-wrap: up to 8 buttons can be visible at once now that
+            // they're no longer collapsed behind "More" — wraps onto a
+            // second row on narrower viewports instead of overflowing.
+            <div className="flex flex-wrap gap-2">
               {can("add_expense") && (
                 <>
                   <button
@@ -263,54 +323,38 @@ export default function FinancePage() {
               {/* Reports moved into the sidebar nav (view_reports is the
                   one permission every book role has, so it's always
                   reachable there). Everything else here needs a
-                  permission at least one role lacks — collapsed into one
-                  menu instead of a wall of individually-gated buttons,
-                  each item still checked against `can(...)` so a Viewer
-                  simply doesn't see options they can't use. */}
-              {(can("add_expense") || can("manage_accounts") || can("manage_users")) && (
-                <div className="relative">
-                  <HeroAction icon={MoreHorizontal} onClick={() => setShowMoreMenu((v) => !v)}>
-                    More
+                  permission at least one role lacks — every item its own
+                  button, each still gated on `can(...)` so a Viewer simply
+                  doesn't see options they can't use, rather than
+                  collapsed behind a "More" menu that hid what was
+                  actually available. */}
+              {can("add_expense") && (
+                <HeroAction icon={FileText} onClick={() => router.push("/dashboard/finance/import")}>
+                  Import from Invoices
+                </HeroAction>
+              )}
+              {can("manage_accounts") && (
+                <>
+                  <HeroAction icon={Repeat} onClick={() => router.push("/dashboard/finance/recurring")}>
+                    Recurring
                   </HeroAction>
-                  {showMoreMenu && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setShowMoreMenu(false)} />
-                      <div
-                        className="absolute right-0 top-full z-50 mt-2 w-56 rounded-2xl border bg-white p-1.5 shadow-xl dark:bg-[var(--color-paper-raised)]"
-                        style={{ borderColor: "var(--color-line)" }}
-                      >
-                        {can("add_expense") && (
-                          <Link href="/dashboard/finance/import" onClick={() => setShowMoreMenu(false)} className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors hover:bg-[var(--color-muted-tint)]" style={{ color: "var(--color-ink)" }}>
-                            <FileText className="h-4 w-4" style={{ color: "var(--color-ink-soft)" }} /> Import from Invoices
-                          </Link>
-                        )}
-                        {can("manage_accounts") && (
-                          <>
-                            <Link href="/dashboard/finance/recurring" onClick={() => setShowMoreMenu(false)} className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors hover:bg-[var(--color-muted-tint)]" style={{ color: "var(--color-ink)" }}>
-                              <Repeat className="h-4 w-4" style={{ color: "var(--color-ink-soft)" }} /> Recurring
-                            </Link>
-                            <Link href="/dashboard/finance/budgets" onClick={() => setShowMoreMenu(false)} className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors hover:bg-[var(--color-muted-tint)]" style={{ color: "var(--color-ink)" }}>
-                              <Target className="h-4 w-4" style={{ color: "var(--color-ink-soft)" }} /> Budgets
-                            </Link>
-                          </>
-                        )}
-                        {can("manage_users") && (
-                          <>
-                            <Link href="/dashboard/finance/team" onClick={() => setShowMoreMenu(false)} className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors hover:bg-[var(--color-muted-tint)]" style={{ color: "var(--color-ink)" }}>
-                              <Users className="h-4 w-4" style={{ color: "var(--color-ink-soft)" }} /> Team
-                            </Link>
-                            <Link href="/dashboard/finance/activity" onClick={() => setShowMoreMenu(false)} className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors hover:bg-[var(--color-muted-tint)]" style={{ color: "var(--color-ink)" }}>
-                              <History className="h-4 w-4" style={{ color: "var(--color-ink-soft)" }} /> Activity
-                            </Link>
-                            <Link href="/dashboard/finance/settings" onClick={() => setShowMoreMenu(false)} className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors hover:bg-[var(--color-muted-tint)]" style={{ color: "var(--color-ink)" }}>
-                              <Settings className="h-4 w-4" style={{ color: "var(--color-ink-soft)" }} /> Settings
-                            </Link>
-                          </>
-                        )}
-                      </div>
-                    </>
-                  )}
-                </div>
+                  <HeroAction icon={Target} onClick={() => router.push("/dashboard/finance/budgets")}>
+                    Budgets
+                  </HeroAction>
+                </>
+              )}
+              {can("manage_users") && (
+                <>
+                  <HeroAction icon={Users} onClick={() => router.push("/dashboard/finance/team")}>
+                    Team
+                  </HeroAction>
+                  <HeroAction icon={History} onClick={() => router.push("/dashboard/finance/activity")}>
+                    Activity
+                  </HeroAction>
+                  <HeroAction icon={Settings} onClick={() => router.push("/dashboard/finance/settings")}>
+                    Settings
+                  </HeroAction>
+                </>
               )}
             </div>
           ) : undefined
@@ -330,7 +374,7 @@ export default function FinancePage() {
       {summary.alerts && summary.alerts.length > 0 && (
         <div className="mb-4 space-y-2">
           {summary.alerts.map((a, i) => (
-            <div key={i} className="flex items-start gap-2 rounded-xl px-4 py-3 text-sm" style={{ backgroundColor: "#fff6d9", color: "#8a6700" }}>
+            <div key={i} className="flex items-start gap-2 rounded-xl px-4 py-3 text-sm" style={{ backgroundColor: "#fde2e2", color: "#b42318" }}>
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{a}</span>
             </div>
@@ -355,7 +399,17 @@ export default function FinancePage() {
               <input required placeholder="Account Name" value={newBank.accountName} onChange={(e) => setNewBank((p) => ({ ...p, accountName: e.target.value }))} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
               <input type="number" min={0} step="0.01" placeholder="Opening Balance" value={newBank.openingBalance} onChange={(e) => setNewBank((p) => ({ ...p, openingBalance: e.target.value }))} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
               <input type="date" value={newBank.openingDate} onChange={(e) => setNewBank((p) => ({ ...p, openingDate: e.target.value }))} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
-              <button type="submit" className="sm:col-span-2 rounded-full py-2 text-sm font-semibold text-white" style={{ backgroundColor: "var(--color-action)" }}>Save Bank</button>
+              <div className="flex gap-2 sm:col-span-2">
+                <button type="submit" className="rounded-full px-4 py-1.5 text-xs font-semibold text-white" style={{ backgroundColor: "var(--color-action)" }}>Save Bank</button>
+                <button
+                  type="button"
+                  onClick={() => setShowAddBank(false)}
+                  className="rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors hover:bg-[var(--color-accent-tint)]"
+                  style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
+                >
+                  Cancel
+                </button>
+              </div>
             </form>
           )}
 
@@ -413,8 +467,8 @@ export default function FinancePage() {
                 </div>
               </div>
               <div className="mt-5 flex gap-2">
-                <button type="submit" className="rounded-full px-6 py-2 text-sm font-semibold text-white" style={{ backgroundColor: "var(--color-action)" }}>Save</button>
-                <button type="button" onClick={() => setEditingAccount(null)} className="rounded-full border px-6 py-2 text-sm font-semibold" style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}>Cancel</button>
+                <button type="submit" className="rounded-full px-4 py-1.5 text-xs font-semibold text-white" style={{ backgroundColor: "var(--color-action)" }}>Save</button>
+                <button type="button" onClick={() => setEditingAccount(null)} className="rounded-full border px-4 py-1.5 text-xs font-semibold" style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}>Cancel</button>
               </div>
             </form>
           </div>
@@ -443,13 +497,6 @@ export default function FinancePage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="font-semibold" style={{ color: "var(--color-ink)" }}>Transactions</h2>
           <div className="flex flex-wrap items-center gap-2">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Search vendor, amount, category…"
-              className="rounded-full border px-3 py-1.5 text-xs outline-none focus:border-[var(--color-action)]"
-              style={{ borderColor: "var(--color-line)" }}
-            />
             <div className="flex gap-1 rounded-full border p-1" style={{ borderColor: "var(--color-line)" }}>
               {(["all", "expense", "income"] as const).map((t) => (
                 <button
@@ -476,117 +523,19 @@ export default function FinancePage() {
           </div>
         </div>
 
-        <div className="mt-3">
-          <DateRangeFilter
-            from={dateFilter.from}
-            to={dateFilter.to}
-            onFromChange={dateFilter.setFrom}
-            onToChange={dateFilter.setTo}
-            onClear={dateFilter.clear}
-            active={dateFilter.active}
-          />
-        </div>
-
-        <div className="mt-3 flex justify-end">
-          <ExportButton
-            filename="finance-transactions"
-            headers={["Date", "Category", "Party", "Mode", "Amount", "Status"]}
-            rows={dateFilter.filtered.map((t) => [
-              new Date(t.transaction_date).toLocaleDateString("en-IN"),
-              t.expense_categories?.name ?? "",
-              t.party_name ?? "",
-              t.payment_mode,
-              `${t.transaction_type === "income" ? "+" : "-"}${money(t.amount)}`,
-              t.status,
-            ])}
-          />
-        </div>
-
-        <TablePagination
-          page={page}
-          totalPages={totalPages}
-          pageSize={pageSize}
-          onPageChange={setPage}
-          onPageSizeChange={setPageSize}
-          start={start}
-          end={end}
-          total={total}
+        <DataTable
+          columns={transactionColumns}
+          fixedLayout
+          rows={transactions ?? []}
+          getRowKey={(t) => t.id}
           itemLabel="transactions"
+          emptyMessage="No transactions yet."
+          filteredEmptyMessage="No transactions match your filters."
+          search={{ placeholder: "Search vendor, amount, category…", filter: (t, q) => transactionSearchText(t).toLowerCase().includes(q) }}
+          dateFilter={{ getDate: (t) => t.transaction_date }}
+          exportFilename="finance-transactions"
+          minWidth={720}
         />
-
-        <div className="mt-3 overflow-x-auto">
-          <table className="dt-table w-full min-w-[720px] text-left text-sm">
-            <thead>
-              <tr style={{ backgroundColor: "var(--color-muted-tint)" }}>
-                <th className="px-3 py-2 font-semibold" style={{ color: "var(--color-ink)" }}>#</th>
-                <th className="px-3 py-2 font-semibold" style={{ color: "var(--color-ink)" }}>Date</th>
-                <th className="px-3 py-2 font-semibold" style={{ color: "var(--color-ink)" }}>Category</th>
-                <th className="px-3 py-2 font-semibold" style={{ color: "var(--color-ink)" }}>Party</th>
-                <th className="px-3 py-2 font-semibold" style={{ color: "var(--color-ink)" }}>Mode</th>
-                <th className="px-3 py-2 font-semibold" style={{ color: "var(--color-ink)" }}>Amount</th>
-                <th className="px-3 py-2 font-semibold" style={{ color: "var(--color-ink)" }}>Status</th>
-                <th className="px-3 py-2 font-semibold" style={{ color: "var(--color-ink)" }}></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
-              {pagedTransactions.map((t, i) => (
-                <tr key={t.id}>
-                  <td className="px-3 py-2" style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                  <td className="px-3 py-2" style={{ color: "var(--color-ink-soft)" }}>{new Date(t.transaction_date).toLocaleDateString("en-IN")}</td>
-                  <td className="px-3 py-2" style={{ color: "var(--color-ink)" }}>{t.expense_categories?.name ?? "—"}</td>
-                  <td className="px-3 py-2" style={{ color: "var(--color-ink-soft)" }}>{t.party_name ?? "—"}</td>
-                  <td className="px-3 py-2 capitalize" style={{ color: "var(--color-ink-soft)" }}>{t.payment_mode}</td>
-                  <td className="px-3 py-2 font-semibold" style={{ color: t.transaction_type === "income" ? "#116a2c" : "#b42318" }}>
-                    {t.transaction_type === "income" ? "+" : "-"}{money(t.amount)}
-                  </td>
-                  <td className="px-3 py-2">
-                    {t.status === "pending" ? (
-                      <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "#fff6d9", color: "#8a6700" }}>Pending</span>
-                    ) : t.status === "rejected" ? (
-                      <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "#fde2e2", color: "#b42318" }}>Rejected</span>
-                    ) : (
-                      <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "#d0f4db", color: "#116a2c" }}>Approved</span>
-                    )}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <div className="flex items-center justify-end gap-2">
-                      {t.status === "pending" && can("delete_expense") && (
-                        <>
-                          <button type="button" onClick={() => handleReview(t.id, "approve")} aria-label="Approve" className="rounded-full p-1 transition-colors hover:bg-[var(--color-accent-tint)]">
-                            <Check className="h-3.5 w-3.5" style={{ color: "#116a2c" }} />
-                          </button>
-                          <button type="button" onClick={() => handleReview(t.id, "reject")} aria-label="Reject" className="rounded-full p-1 transition-colors hover:bg-[var(--color-accent-tint)]">
-                            <X className="h-3.5 w-3.5" style={{ color: "#b42318" }} />
-                          </button>
-                        </>
-                      )}
-                      {can("delete_expense") && (
-                        <>
-                          <button type="button" onClick={() => setEditingTransaction(t)} className="text-xs font-medium" style={{ color: "var(--color-action-dark)" }}>
-                            Edit
-                          </button>
-                          <button type="button" onClick={() => handleDeleteTransaction(t.id)} className="text-xs font-medium" style={{ color: "#b42318" }}>
-                            Delete
-                          </button>
-                        </>
-                      )}
-                      <button type="button" onClick={() => setActiveDocTransaction(t)} className="inline-flex items-center gap-1 text-xs font-medium" style={{ color: "var(--color-action-dark)" }}>
-                        <FileText className="h-3.5 w-3.5" /> Docs
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-              {dateFilter.filtered.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="px-3 py-8 text-center" style={{ color: "var(--color-ink-soft)" }}>
-                    {search.trim() || dateFilter.active ? "No transactions match your filters." : "No transactions yet."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
       </div>
 
       {addModal && bookOwnerId && (

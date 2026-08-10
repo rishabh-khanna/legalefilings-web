@@ -81,6 +81,25 @@ test("recording a real expense transaction shows up in the ledger", async ({ pag
   const modal = page.locator("text=Amount").locator("xpath=ancestor::div[contains(@class,'fixed')][1]");
   await expect(modal).toBeVisible();
 
+  // Category is now a required field, driven by a DetailPickerModal (a
+  // custom button + overlay, not a native <select>) — rather than pick
+  // whatever existing category happens to be first (ambiguous, and this
+  // book's category list isn't test-owned), create a fresh one via its
+  // own "+ Add new category…" row, which is deterministic regardless of
+  // what already exists.
+  await modal.getByText("Select a category").click();
+  // The option lives in the picker overlay (rendered at the page level,
+  // above the modal); the resulting inline input + Add button render
+  // back inside the modal itself once picked.
+  await page.getByRole("button", { name: "+ Add new category…" }).click();
+  const categoryName = `Playwright Category ${Date.now()}`;
+  await modal.getByPlaceholder("New category").fill(categoryName);
+  await modal.getByRole("button", { name: "Add", exact: true }).click();
+  // handleAddCategory's POST is async — wait for the trigger to actually
+  // show the new category (proof categoryId is set) before continuing,
+  // or Save can fire while it's still "", tripping "Choose a category."
+  await expect(modal.getByRole("button", { name: categoryName })).toBeVisible({ timeout: 10000 });
+
   await modal.locator("text=Amount").locator("xpath=following-sibling::input[1]").fill("450");
   // "Cash" avoids needing a bank account selected — the default mode is "Bank".
   await modal.locator("text=Payment Mode").locator("xpath=following-sibling::select[1]").selectOption("cash");

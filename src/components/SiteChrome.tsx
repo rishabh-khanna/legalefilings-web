@@ -15,7 +15,17 @@ import type { SearchEntry } from "@/lib/content";
 // This client boundary lets the root layout stay a server component while
 // still being able to check the current route and skip the site chrome
 // for pages that shouldn't have it.
-const BARE_ROUTES = ["/login"];
+// /manual is a fully self-contained reference document with its own
+// masthead, sidebar nav, and typography — the marketing header/promo
+// banner/footer above and below it were pure noise on a page meant to
+// be read start to finish, same reasoning as /login below.
+// /forgot-password and /reset-password are the same auth flow as
+// /login — a centered card, not a page meant to be browsed alongside a
+// "Claim My Offer" countdown banner and mega-nav. They were left off
+// this list when it was first written, so the offer banner and full
+// marketing header still rendered above the reset-password card even
+// though /login right next to it already didn't have that problem.
+const BARE_ROUTES = ["/login", "/manual", "/forgot-password", "/reset-password"];
 
 // /dashboard used to deliberately keep the full public header/promo
 // banner/mega-nav/footer around it, on the theory that a signed-in

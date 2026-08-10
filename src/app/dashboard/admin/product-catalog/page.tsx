@@ -6,9 +6,8 @@ import { useActionMessage } from "@/lib/use-action-message";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroAction, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
-import { usePagination } from "@/lib/use-pagination";
-import { TablePagination } from "@/components/TablePagination";
-import { ExportButton } from "@/components/ExportButton";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { MultiSelect } from "@/components/MultiSelect";
 
 type CatalogItem = {
   id: string;
@@ -104,21 +103,10 @@ export default function ProductCatalogPage() {
   const inputClass = "w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]";
   const labelClass = "block text-xs font-medium mb-1";
 
-  const [typeFilter, setTypeFilter] = useState<"all" | "product" | "service">("all");
-  const [search, setSearch] = useState("");
-  const filteredItems = useMemo(() => {
-    return (items ?? []).filter((item) => {
-      if (typeFilter !== "all" && item.type !== typeFilter) return false;
-      if (search.trim()) {
-        const q = search.trim().toLowerCase();
-        const hay = `${item.name} ${item.hsn_sac_code ?? ""}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [items, typeFilter, search]);
-
-  const { page, setPage, pageSize, setPageSize, pageItems: pagedItems, totalPages, total, start, end } = usePagination(filteredItems);
+  const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set());
+  const typeFilteredItems = useMemo(() => {
+    return (items ?? []).filter((item) => typeFilter.size === 0 || typeFilter.has(item.type));
+  }, [items, typeFilter]);
 
   if (items === null) {
     return <LoadingBlock />;
@@ -129,23 +117,51 @@ export default function ProductCatalogPage() {
   // it's actually ambiguous which org an item belongs to.
   const spansMultipleOrgs = new Set(items.map((i) => i.organization_id)).size > 1;
 
-  const productCount = items.filter((i) => i.type === "product").length;
-  const serviceCount = items.filter((i) => i.type === "service").length;
+  const productItems = items.filter((i) => i.type === "product");
+  const serviceItems = items.filter((i) => i.type === "service");
+
+  const columns: DataTableColumn<CatalogItem>[] = [
+    { key: "name", header: "Name", render: (item) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{item.name}</span>, exportValue: (item) => item.name, sortValue: (item) => item.name },
+    { key: "type", header: "Type", className: "w-[10%] whitespace-nowrap", render: (item) => <span className="capitalize">{item.type}</span>, exportValue: (item) => item.type, sortValue: (item) => item.type },
+    { key: "hsnSac", header: "HSN/SAC", className: "w-[12%] whitespace-nowrap", render: (item) => item.hsn_sac_code ?? "—", exportValue: (item) => item.hsn_sac_code ?? "" },
+    { key: "gst", header: "GST %", className: "w-[8%] whitespace-nowrap", render: (item) => `${item.gst_rate}%`, exportValue: (item) => item.gst_rate, sortValue: (item) => item.gst_rate },
+    { key: "unit", header: "Unit", className: "w-[8%] whitespace-nowrap", render: (item) => item.unit, exportValue: (item) => item.unit },
+    { key: "rate", header: "Rate", className: "w-[12%] whitespace-nowrap", render: (item) => (item.default_rate != null ? `₹${Number(item.default_rate).toLocaleString("en-IN")}` : "—"), exportValue: (item) => (item.default_rate != null ? Number(item.default_rate) : ""), sortValue: (item) => item.default_rate },
+    ...(spansMultipleOrgs
+      ? [{ key: "org", header: "Organization", render: (item: CatalogItem) => item.organizations?.name ?? "—", exportValue: (item: CatalogItem) => item.organizations?.name ?? "Unknown organization" } as DataTableColumn<CatalogItem>]
+      : []),
+    {
+      key: "actions",
+      header: "",
+      render: (item) => (
+        <div className="whitespace-nowrap">
+          <button type="button" onClick={() => startEdit(item)} className="mr-3 text-xs font-semibold" style={{ color: "var(--color-action-dark)" }}>Edit</button>
+          <button type="button" onClick={() => handleRemove(item.id)} className="text-xs font-semibold" style={{ color: "#b42318" }}>Remove</button>
+        </div>
+      ),
+    },
+  ];
 
   return (
     <div>
       <DashboardPageHero
         title="Invoice Item Catalog"
-        subtitle="Auto-fills HSN/SAC codes, GST rate, and unit when staff pick an item on an ad-hoc invoice line — separate from your public pricing pages. Editing a price here only changes the autofill default on new invoice lines; it never changes what a customer pays when buying a plan through checkout or Buy Plan for Customer."
+        subtitle={
+          spansMultipleOrgs
+            ? "Every organization's invoice item catalog, pooled here for platform-level support — each company still manages its own from its own Administration → Invoice Item Catalog page. Adding a new item here has no single company to attach it to; open a specific organization's own page to add one for them."
+            : "Auto-fills HSN/SAC codes, GST rate, and unit when staff pick an item on an ad-hoc invoice line — separate from your public pricing pages. Editing a price here only changes the autofill default on new invoice lines; it never changes what a customer pays when buying a plan through checkout or Buy Plan for Customer."
+        }
         action={
-          <HeroAction icon={showForm ? undefined : Plus} onClick={() => (showForm ? setShowForm(false) : startNew())}>
-            {showForm ? "Cancel" : "Add Item"}
-          </HeroAction>
+          spansMultipleOrgs ? undefined : (
+            <HeroAction icon={showForm ? undefined : Plus} onClick={() => (showForm ? setShowForm(false) : startNew())}>
+              {showForm ? "Cancel" : "Add Item"}
+            </HeroAction>
+          )
         }
       >
         <div className="relative mt-6 grid grid-cols-2 gap-4 sm:max-w-md">
-          <HeroKpi icon={Package} label="Products" value={productCount} />
-          <HeroKpi icon={Wrench} label="Services" value={serviceCount} />
+          <HeroKpi icon={Package} label="Products" value={productItems.length} />
+          <HeroKpi icon={Wrench} label="Services" value={serviceItems.length} />
         </div>
       </DashboardPageHero>
 
@@ -188,118 +204,44 @@ export default function ProductCatalogPage() {
               <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
             </div>
           </div>
-          <button type="submit" disabled={saving} className="mt-4 rounded-full px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60" style={{ backgroundColor: "var(--color-action)" }}>
-            {saving ? "Saving…" : editingId ? "Save Changes" : "Add Item"}
-          </button>
+          <div className="mt-4 flex gap-2">
+            <button type="submit" disabled={saving} className="rounded-full px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ backgroundColor: "var(--color-action)" }}>
+              {saving ? "Saving…" : editingId ? "Save Changes" : "Add Item"}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors hover:bg-[var(--color-accent-tint)]"
+              style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
+            >
+              Cancel
+            </button>
+          </div>
         </form>
       )}
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search name, HSN/SAC…"
-            className="w-full max-w-xs rounded-lg border px-3 py-1.5 text-sm outline-none focus:border-[var(--color-action)]"
-            style={{ borderColor: "var(--color-line)" }}
-          />
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value as "all" | "product" | "service")}
-            className="rounded-lg border px-2.5 py-1.5 text-sm outline-none"
-            style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
-          >
-            <option value="all">All types</option>
-            <option value="product">Product</option>
-            <option value="service">Service</option>
-          </select>
-          {(search.trim() || typeFilter !== "all") && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearch("");
-                setTypeFilter("all");
-              }}
-              className="text-xs font-semibold"
-              style={{ color: "var(--color-action-dark)" }}
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
-        <ExportButton
-          filename="product-catalog"
-          headers={["Name", "Type", "HSN/SAC", "GST %", "Unit", "Rate", ...(spansMultipleOrgs ? ["Organization"] : [])]}
-          rows={filteredItems.map((item) => [
-            item.name,
-            item.type,
-            item.hsn_sac_code ?? "",
-            item.gst_rate,
-            item.unit,
-            item.default_rate != null ? Number(item.default_rate) : "",
-            ...(spansMultipleOrgs ? [item.organizations?.name ?? "Unknown organization"] : []),
-          ])}
-        />
-      </div>
-
-      <TablePagination
-        page={page}
-        totalPages={totalPages}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={setPageSize}
-        start={start}
-        end={end}
-        total={total}
+      <DataTable
+        columns={columns}
+        fixedLayout
+        rows={typeFilteredItems}
+        getRowKey={(item) => item.id}
         itemLabel="items"
+        emptyMessage={items.length === 0 ? "No catalog items yet — add your first product or service above." : "No items match this filter."}
+        filteredEmptyMessage="No items match this filter."
+        search={{ placeholder: "Search name, HSN/SAC…", filter: (item, q) => `${item.name} ${item.hsn_sac_code ?? ""}`.toLowerCase().includes(q) }}
+        exportFilename="product-catalog"
+        toolbar={
+          <MultiSelect
+            options={[
+              { value: "product", label: "Product" },
+              { value: "service", label: "Service" },
+            ]}
+            selected={typeFilter}
+            onChange={setTypeFilter}
+            placeholder="All types"
+          />
+        }
       />
-
-      <div className="mt-3 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
-        <table className="dt-table w-full min-w-[640px] text-left text-sm">
-          <thead>
-            <tr style={{ backgroundColor: "var(--color-muted-tint)" }}>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>#</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Name</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Type</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>HSN/SAC</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>GST %</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Unit</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Rate</th>
-              {spansMultipleOrgs && <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Organization</th>}
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
-            {pagedItems.map((item, i) => (
-              <tr key={item.id}>
-                <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                <td className="px-4 py-3 font-medium" style={{ color: "var(--color-ink)" }}>{item.name}</td>
-                <td className="px-4 py-3 capitalize" style={{ color: "var(--color-ink-soft)" }}>{item.type}</td>
-                <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{item.hsn_sac_code ?? "—"}</td>
-                <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{item.gst_rate}%</td>
-                <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{item.unit}</td>
-                <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{item.default_rate != null ? `₹${Number(item.default_rate).toLocaleString("en-IN")}` : "—"}</td>
-                {spansMultipleOrgs && <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{item.organizations?.name ?? "—"}</td>}
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <button type="button" onClick={() => startEdit(item)} className="mr-3 text-xs font-semibold" style={{ color: "var(--color-action-dark)" }}>Edit</button>
-                  <button type="button" onClick={() => handleRemove(item.id)} className="text-xs font-semibold" style={{ color: "#b42318" }}>Remove</button>
-                </td>
-              </tr>
-            ))}
-            {items.length === 0 && (
-              <tr>
-                <td colSpan={spansMultipleOrgs ? 9 : 8} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>No catalog items yet — add your first product or service above.</td>
-              </tr>
-            )}
-            {items.length !== 0 && filteredItems.length === 0 && (
-              <tr>
-                <td colSpan={spansMultipleOrgs ? 9 : 8} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>No items match this filter.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }

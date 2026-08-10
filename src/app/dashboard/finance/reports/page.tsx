@@ -8,6 +8,7 @@ import { BookSwitcher } from "@/components/finance/BookSwitcher";
 import { LoadingBlock } from "@/components/Spinner";
 import { usePagination } from "@/lib/use-pagination";
 import { TablePagination } from "@/components/TablePagination";
+import { currentFinancialYearStart, financialYearOptions, financialYearRange } from "@/lib/financial-year";
 
 type Account = { id: string; bank_name: string; account_name: string };
 type ReportShape = { title: string; headers: string[]; rows: (string | number)[][]; totals?: (string | number)[] };
@@ -32,7 +33,7 @@ const REPORT_OPTIONS: { value: string; label: string; transactionType?: "expense
 
 type DatePreset = "today" | "yesterday" | "this_week" | "last_week" | "this_month" | "last_month" | "financial_year" | "custom";
 
-function computeRange(preset: DatePreset): { from: string; to: string } {
+function computeRange(preset: DatePreset, fyStartYear: number): { from: string; to: string } {
   const fmt = (d: Date) => d.toISOString().slice(0, 10);
   const now = new Date();
   const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
@@ -66,10 +67,8 @@ function computeRange(preset: DatePreset): { from: string; to: string } {
       const end = new Date(now.getFullYear(), now.getMonth(), 0);
       return { from: fmt(start), to: fmt(end) };
     }
-    case "financial_year": {
-      const fyStartYear = now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1;
-      return { from: fmt(new Date(fyStartYear, 3, 1)), to: fmt(startOfDay(now)) };
-    }
+    case "financial_year":
+      return financialYearRange(fyStartYear);
     default:
       return { from: "", to: "" };
   }
@@ -83,12 +82,13 @@ export default function FinanceReportsPage() {
   const [preset, setPreset] = useState<DatePreset>("this_month");
   const [customFrom, setCustomFrom] = useState("");
   const [customTo, setCustomTo] = useState("");
+  const [fyStartYear, setFyStartYear] = useState(currentFinancialYearStart());
   const [search, setSearch] = useState("");
   const [report, setReport] = useState<ReportShape | null>(null);
   const [loading, setLoading] = useState(false);
 
   const selected = REPORT_OPTIONS[reportIndex];
-  const range = preset === "custom" ? { from: customFrom, to: customTo } : computeRange(preset);
+  const range = preset === "custom" ? { from: customFrom, to: customTo } : computeRange(preset, fyStartYear);
 
   useEffect(() => {
     const kickoff = setTimeout(async () => {
@@ -159,7 +159,7 @@ export default function FinanceReportsPage() {
 
   return (
     <div>
-      <DashboardPageHero title="Reports" subtitle="Every report over your recorded expenses and income — export as PDF or CSV (opens directly in Excel).">
+      <DashboardPageHero title="Finance Reports" subtitle="Every report over your recorded expenses and income — export as PDF or CSV (opens directly in Excel).">
         <Link href="/dashboard/finance" className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium" style={{ color: "var(--color-action-dark)" }}>
           <ArrowLeft className="h-3.5 w-3.5" /> Back to Business Finance
         </Link>
@@ -196,7 +196,7 @@ export default function FinanceReportsPage() {
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap items-center gap-2">
           {presets.map((p) => (
             <button
               key={p.value}
@@ -208,6 +208,18 @@ export default function FinanceReportsPage() {
               {p.label}
             </button>
           ))}
+          {preset === "financial_year" && (
+            <select
+              value={fyStartYear}
+              onChange={(e) => setFyStartYear(Number(e.target.value))}
+              className="rounded-lg border px-2.5 py-1.5 text-xs font-semibold outline-none"
+              style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
+            >
+              {financialYearOptions().map((fy) => (
+                <option key={fy.startYear} value={fy.startYear}>{fy.label}</option>
+              ))}
+            </select>
+          )}
           {preset === "custom" && (
             <div className="flex items-center gap-2">
               <input type="date" value={customFrom} onChange={(e) => setCustomFrom(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
@@ -215,15 +227,22 @@ export default function FinanceReportsPage() {
               <input type="date" value={customTo} onChange={(e) => setCustomTo(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
             </div>
           )}
-        </div>
-
-        <div className="mt-4 flex gap-3">
-          <a href={buildQuery("pdf")} className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold" style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}>
-            <FileDown className="h-4 w-4" /> Download PDF
-          </a>
-          <a href={buildQuery("csv")} className="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm font-semibold" style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}>
-            <Download className="h-4 w-4" /> Download CSV
-          </a>
+          <div className="ml-auto flex gap-2">
+            <a
+              href={buildQuery("pdf")}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border bg-white/70 px-3 py-2 text-sm font-semibold backdrop-blur transition-colors hover:bg-white"
+              style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
+            >
+              <FileDown className="h-4 w-4" /> PDF
+            </a>
+            <a
+              href={buildQuery("csv")}
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-full border bg-white/70 px-3 py-2 text-sm font-semibold backdrop-blur transition-colors hover:bg-white"
+              style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
+            >
+              <Download className="h-4 w-4" /> CSV
+            </a>
+          </div>
         </div>
       </div>
 

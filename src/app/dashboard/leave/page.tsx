@@ -7,6 +7,9 @@ import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroAction, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
 import { DetailPickerModal, BalanceSummary } from "@/components/DetailPickerModal";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { MultiSelect } from "@/components/MultiSelect";
+import { countWorkingDays } from "@/lib/working-days";
 
 type LeaveRequest = {
   id: string;
@@ -16,7 +19,7 @@ type LeaveRequest = {
   start_date: string;
   end_date: string;
   reason: string | null;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "cancelled";
   review_note: string | null;
   created_at: string;
 };
@@ -28,7 +31,18 @@ const STATUS_STYLE: Record<LeaveRequest["status"], { bg: string; fg: string }> =
   pending: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
   approved: { bg: "#d0f4db", fg: "#116a2c" },
   rejected: { bg: "#fde2e2", fg: "#b42318" },
+  // Deliberately neutral, not red — a withdrawn request isn't a refusal
+  // and shouldn't read like one next to a genuine rejection.
+  cancelled: { bg: "var(--color-paper)", fg: "var(--color-ink-soft)" },
 };
+
+// Only future-dated leave can be withdrawn: once it has started the
+// person was actually absent, so handing the balance back would pay
+// them for days they genuinely took.
+function canCancel(r: LeaveRequest): boolean {
+  if (r.status !== "pending" && r.status !== "approved") return false;
+  return r.start_date > new Date().toISOString().slice(0, 10);
+}
 
 function requestLabel(r: LeaveRequest): string {
   if (r.leave_types) return r.leave_types.name;
@@ -46,15 +60,24 @@ export default function LeavePage() {
   const [endDate, setEndDate] = useState("");
   const [reason, setReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [cancellingId, setCancellingId] = useState<string | null>(null);
+  const [holidayDates, setHolidayDates] = useState<Set<string>>(new Set());
+  const [halfDay, setHalfDay] = useState(false);
+  const [halfDayPeriod, setHalfDayPeriod] = useState<"first_half" | "second_half">("first_half");
   const { message, showSuccess, showError } = useActionMessage();
 
   async function load() {
-    const [reqRes, balancesRes] = await Promise.all([
+    const [reqRes, balancesRes, holidaysRes] = await Promise.all([
       fetch("/api/leave-requests?scope=mine"),
       fetch("/api/leave-balances"),
+      fetch("/api/holidays"),
     ]);
     if (reqRes.ok) setRequests((await reqRes.json()).requests);
     if (balancesRes.ok) setBalances((await balancesRes.json()).balances);
+    if (holidaysRes.ok) {
+      const { holidays } = await holidaysRes.json();
+      setHolidayDates(new Set((holidays ?? []).map((h: { date: string }) => String(h.date).slice(0, 10))));
+    }
     setLoading(false);
   }
 
@@ -64,10 +87,35 @@ export default function LeavePage() {
   }, []);
 
   const selectedBalance = balances.find((b) => b.leaveType.id === leaveTypeId);
+  // Must match the server exactly (working days x fraction, holidays
+  // excluded) — a preview counting raw calendar days would tell someone
+  // a Friday-to-Monday request costs 4 days while the API charges 2.
   const requestedDays =
-    startDate && endDate
-      ? Math.round((new Date(`${endDate}T00:00:00Z`).getTime() - new Date(`${startDate}T00:00:00Z`).getTime()) / 86400000) + 1
-      : 0;
+    startDate && endDate ? countWorkingDays(startDate, endDate, holidayDates) * (halfDay ? 0.5 : 1) : 0;
+
+  async function handleCancel(r: LeaveRequest) {
+    const isPending = r.status === "pending";
+    const confirmText = isPending
+      ? "Withdraw this leave request?"
+      : "Cancel this approved leave? The days go back to your balance.";
+    if (!window.confirm(confirmText)) return;
+    setCancellingId(r.id);
+    const res = await fetch(`/api/leave-requests/${r.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision: "cancel" }),
+    });
+    setCancellingId(null);
+    if (res.ok) {
+      showSuccess(isPending ? "Request withdrawn." : "Leave cancelled — the days are back in your balance.");
+      // Reload rather than patch in place: cancelling an approved
+      // request changes the balance cards above the table too.
+      await load();
+    } else {
+      const data = await res.json().catch(() => ({}));
+      showError(data.error ?? "Could not cancel this request.");
+    }
+  }
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -83,7 +131,7 @@ export default function LeavePage() {
     const res = await fetch("/api/leave-requests", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ leaveTypeId: leaveTypeId || null, startDate, endDate, reason }),
+      body: JSON.stringify({ leaveTypeId: leaveTypeId || null, startDate, endDate, reason, halfDay, halfDayPeriod }),
     });
     setSubmitting(false);
     if (res.ok) {
@@ -92,6 +140,8 @@ export default function LeavePage() {
       setStartDate("");
       setEndDate("");
       setReason("");
+      setHalfDay(false);
+      setHalfDayPeriod("first_half");
       await load();
       showSuccess("Leave request submitted.");
     } else {
@@ -102,21 +152,67 @@ export default function LeavePage() {
 
   const inputClass = "w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]";
 
-  const leaveStats = useMemo(() => {
-    const pending = requests.filter((r) => r.status === "pending").length;
-    const approved = requests.filter((r) => r.status === "approved").length;
-    const rejected = requests.filter((r) => r.status === "rejected").length;
-    return { total: requests.length, pending, approved, rejected };
+  const leaveByStatus = useMemo(() => {
+    return {
+      pending: requests.filter((r) => r.status === "pending"),
+      approved: requests.filter((r) => r.status === "approved"),
+      rejected: requests.filter((r) => r.status === "rejected"),
+    };
   }, [requests]);
 
-  const [statusFilter, setStatusFilter] = useState<LeaveRequest["status"] | "all">("all");
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
   const filteredRequests = useMemo(() => {
-    return requests.filter((r) => statusFilter === "all" || r.status === statusFilter);
+    return requests.filter((r) => statusFilter.size === 0 || statusFilter.has(r.status));
   }, [requests, statusFilter]);
 
   if (loading) {
     return <LoadingBlock />;
   }
+
+  const columns: DataTableColumn<LeaveRequest>[] = [
+    { key: "type", header: "Leave Type", className: "w-[14%] whitespace-nowrap", render: (r) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>{requestLabel(r)}</span>, exportValue: (r) => requestLabel(r), sortValue: (r) => requestLabel(r) },
+    { key: "dates", header: "Dates", className: "w-[18%] whitespace-nowrap", render: (r) => `${r.start_date} → ${r.end_date}`, exportValue: (r) => `${r.start_date} to ${r.end_date}`, sortValue: (r) => r.start_date },
+    { key: "reason", header: "Reason", render: (r) => <span className="max-w-xs italic" style={{ color: "var(--color-ink-soft)" }}>{r.reason ? `“${r.reason}”` : "—"}</span>, exportValue: (r) => r.reason ?? "" },
+    {
+      key: "status",
+      header: "Status",
+      className: "w-[10%] whitespace-nowrap",
+      render: (r) => (
+        <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: STATUS_STYLE[r.status].bg, color: STATUS_STYLE[r.status].fg }}>
+          {r.status}
+        </span>
+      ),
+      exportValue: (r) => r.status,
+      sortValue: (r) => r.status,
+    },
+    {
+      key: "note",
+      header: "Note",
+      render: (r) => (
+        <span className="max-w-xs" style={{ color: r.status === "rejected" && r.review_note ? "#b42318" : "var(--color-ink-soft)" }}>
+          {r.status === "rejected" && r.review_note ? r.review_note : "—"}
+        </span>
+      ),
+      exportValue: (r) => (r.status === "rejected" ? r.review_note ?? "" : ""),
+    },
+    {
+      key: "actions",
+      header: "",
+      className: "w-[12%] whitespace-nowrap",
+      render: (r) =>
+        canCancel(r) ? (
+          <button
+            type="button"
+            onClick={() => handleCancel(r)}
+            disabled={cancellingId === r.id}
+            className="rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-red-50 disabled:opacity-60"
+            style={{ borderColor: "var(--color-line)", color: "#b42318" }}
+          >
+            {cancellingId === r.id ? "Cancelling…" : r.status === "pending" ? "Withdraw" : "Cancel"}
+          </button>
+        ) : null,
+    },
+  ];
 
   return (
     <div>
@@ -130,10 +226,10 @@ export default function LeavePage() {
         }
       >
         <div className="relative mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <HeroKpi icon={CalendarDays} label="Total" value={leaveStats.total} />
-          <HeroKpi icon={Clock} label="Pending" value={leaveStats.pending} />
-          <HeroKpi icon={CheckCircle2} label="Approved" value={leaveStats.approved} />
-          <HeroKpi icon={XCircle} label="Rejected" value={leaveStats.rejected} />
+          <HeroKpi icon={CalendarDays} label="Total" value={requests.length} />
+          <HeroKpi icon={Clock} label="Pending" value={leaveByStatus.pending.length} />
+          <HeroKpi icon={CheckCircle2} label="Approved" value={leaveByStatus.approved.length} />
+          <HeroKpi icon={XCircle} label="Rejected" value={leaveByStatus.rejected.length} />
         </div>
       </DashboardPageHero>
 
@@ -183,8 +279,55 @@ export default function LeavePage() {
                 emptyOptionLabel={{ value: "", label: "Unpaid Leave", detail: "No balance limit" }}
               />
             </div>
-            <input required type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
-            <input required type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+            <input
+              required
+              type="date"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                if (halfDay) setEndDate(e.target.value);
+              }}
+              className={inputClass}
+              style={{ borderColor: "var(--color-line)" }}
+            />
+            <input
+              required
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              disabled={halfDay}
+              className={inputClass}
+              style={{ borderColor: "var(--color-line)" }}
+            />
+            <div className="sm:col-span-2 flex flex-wrap items-center gap-3">
+              <label className="flex items-center gap-2 text-sm" style={{ color: "var(--color-ink)" }}>
+                <input
+                  type="checkbox"
+                  checked={halfDay}
+                  onChange={(e) => {
+                    setHalfDay(e.target.checked);
+                    // A half day is always one date — mirror start into
+                    // end so the form can't submit a range the API and
+                    // the DB constraint would both reject.
+                    if (e.target.checked) setEndDate(startDate);
+                  }}
+                  className="h-4 w-4 rounded"
+                  style={{ accentColor: "var(--color-action)" }}
+                />
+                Half day
+              </label>
+              {halfDay && (
+                <select
+                  value={halfDayPeriod}
+                  onChange={(e) => setHalfDayPeriod(e.target.value as "first_half" | "second_half")}
+                  className="rounded-lg border px-2.5 py-1.5 text-sm outline-none"
+                  style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
+                >
+                  <option value="first_half">First half</option>
+                  <option value="second_half">Second half</option>
+                </select>
+              )}
+            </div>
             {requestedDays > 0 && (
               <div className="sm:col-span-2">
                 {selectedBalance ? (
@@ -221,73 +364,40 @@ export default function LeavePage() {
         </div>
       )}
 
-      {requests.length !== 0 && (
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as LeaveRequest["status"] | "all")}
-            className="rounded-lg border px-2.5 py-1.5 text-sm outline-none"
-            style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
-          >
-            <option value="all">All statuses</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-          </select>
-          {statusFilter !== "all" && (
-            <button
-              type="button"
-              onClick={() => setStatusFilter("all")}
-              className="text-xs font-semibold"
-              style={{ color: "var(--color-action-dark)" }}
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
-      )}
-
-      {requests.length === 0 ? (
-        <p className="mt-5 text-sm" style={{ color: "var(--color-ink-soft)" }}>No leave requests yet.</p>
-      ) : filteredRequests.length === 0 ? (
-        <p className="mt-5 text-sm" style={{ color: "var(--color-ink-soft)" }}>No requests match this filter.</p>
-      ) : (
-        <div className="mt-5 overflow-x-auto rounded-2xl border bg-white dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-          <table className="dt-table w-full min-w-[640px]">
-            <thead>
-              <tr className="text-left">
-                <th>#</th>
-                <th>Leave Type</th>
-                <th>Dates</th>
-                <th>Reason</th>
-                <th>Status</th>
-                <th>Note</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRequests.map((r, i) => {
-                const style = STATUS_STYLE[r.status];
-                return (
-                  <tr key={r.id}>
-                    <td style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                    <td className="font-semibold" style={{ color: "var(--color-ink)" }}>{requestLabel(r)}</td>
-                    <td style={{ color: "var(--color-ink-soft)" }}>{r.start_date} → {r.end_date}</td>
-                    <td className="max-w-xs italic" style={{ color: "var(--color-ink-soft)" }}>{r.reason ? `“${r.reason}”` : "—"}</td>
-                    <td>
-                      <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: style.bg, color: style.fg }}>
-                        {r.status}
-                      </span>
-                    </td>
-                    <td className="max-w-xs" style={{ color: r.status === "rejected" && r.review_note ? "#b42318" : "var(--color-ink-soft)" }}>
-                      {r.status === "rejected" && r.review_note ? r.review_note : "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable
+        columns={columns}
+        fixedLayout
+        rows={filteredRequests}
+        getRowKey={(r) => r.id}
+        itemLabel="requests"
+        emptyMessage={requests.length === 0 ? "No leave requests yet." : "No requests match this filter."}
+        exportFilename="my-leave-requests"
+        toolbar={
+          <>
+            <MultiSelect
+              options={[
+                { value: "pending", label: "Pending" },
+                { value: "approved", label: "Approved" },
+                { value: "rejected", label: "Rejected" },
+                { value: "cancelled", label: "Cancelled" },
+              ]}
+              selected={statusFilter}
+              onChange={setStatusFilter}
+              placeholder="All statuses"
+            />
+            {statusFilter.size > 0 && (
+              <button
+                type="button"
+                onClick={() => setStatusFilter(new Set())}
+                className="text-xs font-semibold"
+                style={{ color: "var(--color-action-dark)" }}
+              >
+                Clear filters
+              </button>
+            )}
+          </>
+        }
+      />
     </div>
   );
 }

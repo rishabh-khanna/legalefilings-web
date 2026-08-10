@@ -4,6 +4,8 @@ import { getCurrentProfile } from "@/lib/current-profile";
 import { sendLeadAcknowledgementEmail } from "@/lib/email";
 import { getReportingChainIds } from "@/lib/reporting-chain";
 import { canSeeAllOrgs } from "@/lib/organization";
+import { isRateLimited, getClientIp } from "@/lib/rate-limit";
+import { hasToolAccess } from "@/lib/tool-grants";
 import { LEAD_STAGES, type Lead, type LeadStage } from "@/lib/leads";
 
 // DB rows are snake_case; the frontend (admin CRM board, consultation form)
@@ -25,8 +27,14 @@ type LeadRow = {
   notes: string;
   created_at: string;
   converted_to_profile_id: string | null;
+  assignee?: { full_name: string | null } | null;
 };
 
+// assigned_to is a profiles FK (see 20260829000000) — NULL is the one
+// and only representation of "unclaimed". "Unassigned" is a display
+// label applied here for the UI and never a stored value; the earlier
+// text-column design had both, and rows written under one convention
+// were unreachable by code written against the other.
 function toLead(row: LeadRow): Lead {
   return {
     id: row.id,
@@ -41,41 +49,41 @@ function toLead(row: LeadRow): Lead {
     message: row.message ?? undefined,
     createdAt: row.created_at,
     stage: row.status,
-    assignedTo: row.assigned_to ?? "Unassigned",
+    assignedToId: row.assigned_to ?? undefined,
+    assignedTo: row.assignee?.full_name ?? "Unassigned",
     notes: row.notes,
     convertedToProfileId: row.converted_to_profile_id ?? undefined,
   };
 }
 
-// The names a viewer is allowed to see leads for: themselves, their
-// reporting chain, and the shared "Unassigned" pool — new leads have to
-// be visible to everyone relevant so anyone can claim one, not just
-// whoever an admin happens to assign it to.
-async function visibleAssigneeNames(profile: { id: string; full_name: string | null }): Promise<string[]> {
-  const supabase = getSupabaseAdmin();
-  const chainIds = await getReportingChainIds(profile.id);
-  const namesResult = chainIds.length > 0
-    ? await supabase.from("profiles").select("full_name").in("id", chainIds)
-    : { data: [] as { full_name: string | null }[] };
-  return [profile.full_name, "Unassigned", ...(namesResult.data ?? []).map((p) => p.full_name)].filter(
-    (n): n is string => Boolean(n)
-  );
+const LEAD_SELECT = "*, assignee:profiles!leads_assigned_to_fkey(full_name)";
+
+// The staff a viewer is allowed to see leads for: themselves plus their
+// reporting chain. Returned as ids — scoping used to compare display
+// names, which broke the moment anyone renamed themselves and would
+// have leaked leads between two staff who happened to share a name.
+async function visibleAssigneeIds(profile: { id: string }): Promise<string[]> {
+  return [profile.id, ...(await getReportingChainIds(profile.id))];
 }
 
 // GET — staff/admin only. A rater sees leads assigned to them plus the
 // shared unclaimed pool; a leader/group_leader additionally sees their
-// reporting chain's; admin sees everything. leads.assigned_to is a
-// free-text staff name (see migration 20260730195500 — no real staff
-// accounts existed when that column was first used), so scoping matches
-// by name, not id.
+// reporting chain's; admin sees everything. Scoping is by profile id
+// (leads.assigned_to is a profiles FK again as of 20260829000000) — it
+// compared display names before, which silently orphaned a staff
+// member's whole pipeline the moment they renamed themselves.
 export async function GET() {
   const profile = await getCurrentProfile();
-  if (!profile || profile.account_type === "customer") {
+  // A customer delegated the leads_crm tool (see staff_tool_grants) is
+  // the one exception to "customer never sees this" — they're operating
+  // their own org's pipeline, not just their own purchases.
+  const isCustomerOperator = profile?.account_type === "customer" && (await hasToolAccess(profile, "leads_crm"));
+  if (!profile || (profile.account_type === "customer" && !isCustomerOperator)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const supabase = getSupabaseAdmin();
-  let query = supabase.from("leads").select("*").order("created_at", { ascending: false });
+  let query = supabase.from("leads").select(LEAD_SELECT).order("created_at", { ascending: false });
 
   if (!canSeeAllOrgs(profile)) {
     query = query.eq("organization_id", profile.organization_id);
@@ -84,9 +92,19 @@ export async function GET() {
   // assignee-narrowing below — independent axis from account_type, so a
   // platform_admin without account_type "admin" would otherwise pass the
   // org filter above (every org) and then get wrongly narrowed straight
-  // back down to their own name/chain here.
-  if (profile.account_type !== "admin" && !canSeeAllOrgs(profile)) {
-    query = query.in("assigned_to", await visibleAssigneeNames(profile));
+  // back down to their own name/chain here. A customer-operator has no
+  // reporting chain of their own either (customers are never in anyone's
+  // reports_to), so they get the same unrestricted org-wide view admin
+  // gets, not narrowed down to an empty chain.
+  if (profile.account_type !== "admin" && !canSeeAllOrgs(profile) && !isCustomerOperator) {
+    // assigned_to.is.null is what surfaces the shared unclaimed pool.
+    // Postgres IN never matches NULL, so the previous `.in(...)` alone
+    // hid every unclaimed lead from exactly the raters and leaders the
+    // claim flow exists for — only admins (who skip this filter) could
+    // see them. Same NULL-vs-IN bug already fixed in the orders and
+    // invoices lists.
+    const ids = await visibleAssigneeIds(profile);
+    query = query.or(`assigned_to.is.null,assigned_to.in.(${ids.join(",")})`);
   }
 
   const { data, error } = await query;
@@ -104,6 +122,18 @@ export async function GET() {
 //   - Signed-in staff/admin: manually adding a lead from their own CRM
 //     (see /dashboard/crm) — lands in their own org, pre-assigned to them.
 export async function POST(request: Request) {
+  // Unauthenticated on the public path: this inserts a lead AND emails
+  // the address supplied in the body. Without a limit that is both a
+  // way to flood every staff member's CRM with junk and, worse, an open
+  // relay — an attacker could have this domain send mail to any address
+  // they like, burning the sending reputation and the Brevo quota.
+  // Signed-in staff adding leads by hand are exempt; the abuse case is
+  // the anonymous one.
+  const profile = await getCurrentProfile();
+  if (!profile && isRateLimited(`lead:${getClientIp(request)}`, 5, 10 * 60 * 1000)) {
+    return NextResponse.json({ error: "Too many submissions. Please try again in a few minutes." }, { status: 429 });
+  }
+
   const body = await request.json().catch(() => null);
 
   if (!body || typeof body !== "object") {
@@ -120,15 +150,15 @@ export async function POST(request: Request) {
   }
 
   const supabase = getSupabaseAdmin();
-  const profile = await getCurrentProfile();
 
   let organizationId: string | undefined;
   let assignedTo: string | null = null;
   let source: string | undefined;
   let orgName: string | undefined;
-  if (profile && profile.account_type !== "customer") {
+  const isCustomerOperator = profile?.account_type === "customer" && (await hasToolAccess(profile, "leads_crm"));
+  if (profile && (profile.account_type !== "customer" || isCustomerOperator)) {
     organizationId = profile.organization_id;
-    assignedTo = profile.full_name;
+    assignedTo = profile.id;
     source = "crm_manual";
   } else {
     // A tenant org's own public lead-capture page (/org/[slug]) passes its
@@ -166,7 +196,7 @@ export async function POST(request: Request) {
       ...(assignedTo ? { assigned_to: assignedTo } : {}),
       ...(source ? { source } : {}),
     })
-    .select()
+    .select(LEAD_SELECT)
     .single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -197,7 +227,8 @@ export async function POST(request: Request) {
 // so two people racing to grab the same lead can't both end up owning it.
 export async function PATCH(request: Request) {
   const profile = await getCurrentProfile();
-  if (!profile || profile.account_type === "customer") {
+  const isCustomerOperator = profile?.account_type === "customer" && (await hasToolAccess(profile, "leads_crm"));
+  if (!profile || (profile.account_type === "customer" && !isCustomerOperator)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -215,13 +246,16 @@ export async function PATCH(request: Request) {
   }
 
   if (body.claim === true) {
-    if (!profile.full_name) return NextResponse.json({ error: "Your profile has no name set" }, { status: 400 });
+    // NULL is the only "unclaimed" state now (see 20260829000000), so
+    // this is a straight atomic first-to-ask-wins: the update only
+    // matches while the lead is still unclaimed, and a loser gets zero
+    // rows rather than silently stealing an owned lead.
     const { data, error } = await supabase
       .from("leads")
-      .update({ assigned_to: profile.full_name })
+      .update({ assigned_to: profile.id })
       .eq("id", body.id)
-      .eq("assigned_to", "Unassigned")
-      .select()
+      .is("assigned_to", null)
+      .select(LEAD_SELECT)
       .single();
     if (error || !data) {
       return NextResponse.json({ error: "This lead was already claimed by someone else" }, { status: 409 });
@@ -229,16 +263,19 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: true, lead: toLead(data as LeadRow) });
   }
 
-  if (profile.account_type !== "admin" && !canSeeAllOrgs(profile)) {
+  if (profile.account_type !== "admin" && !canSeeAllOrgs(profile) && !isCustomerOperator) {
     const { data: existing } = await supabase.from("leads").select("assigned_to").eq("id", body.id).single();
     if (!existing) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
-    const visibleNames = await visibleAssigneeNames(profile);
-    if (!existing.assigned_to || !visibleNames.includes(existing.assigned_to)) {
+    // An unclaimed lead (NULL) is editable by anyone who can see the
+    // shared pool — claiming it is the normal path, but stage/notes
+    // edits on it shouldn't 403 either.
+    const visibleIds = await visibleAssigneeIds(profile);
+    if (existing.assigned_to && !visibleIds.includes(existing.assigned_to)) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
   }
 
-  const { stage, assignedTo, notes } = body as Record<string, unknown>;
+  const { stage, assignedToId, notes } = body as Record<string, unknown>;
   const patch: Record<string, unknown> = {};
   let previousStage: string | null = null;
   if (typeof stage === "string" && (LEAD_STAGES as readonly string[]).includes(stage)) {
@@ -246,31 +283,34 @@ export async function PATCH(request: Request) {
     previousStage = existing?.status ?? null;
     patch.status = stage;
   }
-  if (typeof assignedTo === "string") {
-    // Previously accepted any free-text string with no check that it's
-    // actually a staff member's name — a rater could reassign a lead
-    // they own to an arbitrary name (not a real access grant, since
-    // assigned_to is just a display label, but it could misdirect a
-    // lead to someone who'll never see it, or spoof who's working it).
-    let validNames: string[];
-    if (profile.account_type === "admin" || canSeeAllOrgs(profile)) {
-      let namesQuery = supabase.from("profiles").select("full_name").in("account_type", ["staff", "admin"]);
-      if (!canSeeAllOrgs(profile)) namesQuery = namesQuery.eq("organization_id", profile.organization_id);
-      const { data: staffProfiles } = await namesQuery;
-      validNames = ["Unassigned", ...(staffProfiles ?? []).map((p) => p.full_name).filter((n): n is string => Boolean(n))];
+  // assignedToId is a profile id, or null to return the lead to the
+  // shared unclaimed pool. Validated against who the caller is actually
+  // allowed to hand work to — an admin can pick anyone in their own org,
+  // anyone else only themselves or their reporting chain.
+  if (assignedToId === null || typeof assignedToId === "string") {
+    if (assignedToId === null) {
+      patch.assigned_to = null;
     } else {
-      validNames = await visibleAssigneeNames(profile);
+      let validIds: string[];
+      if (profile.account_type === "admin" || canSeeAllOrgs(profile) || isCustomerOperator) {
+        let staffQuery = supabase.from("profiles").select("id").in("account_type", ["staff", "admin"]);
+        if (!canSeeAllOrgs(profile)) staffQuery = staffQuery.eq("organization_id", leadForOrgCheck.organization_id);
+        const { data: staffProfiles } = await staffQuery;
+        validIds = (staffProfiles ?? []).map((p) => p.id);
+      } else {
+        validIds = await visibleAssigneeIds(profile);
+      }
+      if (!validIds.includes(assignedToId)) {
+        return NextResponse.json({ error: "Not a valid staff member to assign this lead to" }, { status: 400 });
+      }
+      patch.assigned_to = assignedToId;
     }
-    if (!validNames.includes(assignedTo)) {
-      return NextResponse.json({ error: "Not a valid staff member to assign this lead to" }, { status: 400 });
-    }
-    patch.assigned_to = assignedTo;
   }
   if (typeof notes === "string") {
     patch.notes = notes;
   }
 
-  const { data, error } = await supabase.from("leads").update(patch).eq("id", body.id).select().single();
+  const { data, error } = await supabase.from("leads").update(patch).eq("id", body.id).select(LEAD_SELECT).single();
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   if (!data) return NextResponse.json({ error: "Lead not found" }, { status: 404 });

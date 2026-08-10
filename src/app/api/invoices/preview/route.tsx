@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { isStaffOrAdmin } from "@/lib/roles";
+import { canSeeAllOrgs } from "@/lib/organization";
 import { computeInvoiceTotals, isTaxableInvoiceType, type LineItemDraft } from "@/lib/invoice-calc";
 import { buildInvoicePdfBuffer } from "@/lib/invoice-pdf";
 
@@ -30,14 +31,23 @@ export async function POST(request: Request) {
   const invoiceType = isSelfServePaidCustomer ? "non_gst" : ((b.invoiceType as string | undefined) ?? "gst");
 
   const supabase = getSupabaseAdmin();
-  const [{ data: customer }, { data: company }] = await Promise.all([
-    supabase.from("profiles").select("full_name, company, gstin, pan_number, state, state_code, billing_address, shipping_address, organization_id").eq("id", customerId).single(),
-    supabase.from("company_settings").select("*").eq("organization_id", profile.organization_id).single(),
-  ]);
+  const { data: customer } = await supabase
+    .from("profiles")
+    .select("full_name, company, gstin, pan_number, state, state_code, billing_address, shipping_address, organization_id")
+    .eq("id", customerId)
+    .single();
   if (!customer) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
-  if (customer.organization_id !== profile.organization_id) {
+  if (!isSelfServePaidCustomer && !canSeeAllOrgs(profile) && customer.organization_id !== profile.organization_id) {
     return NextResponse.json({ error: "Customer not found" }, { status: 404 });
   }
+  // The preview has to reflect whichever org will actually issue this
+  // invoice — the customer's own org, same as the real creation route —
+  // not the viewer's, or a platform_admin previewing a tenant's invoice
+  // would see the wrong company header/GST state entirely.
+  const { data: company } = await supabase.from("company_settings").select("*").eq("organization_id", customer.organization_id).single();
+  // The preview must show the same payee label the issued PDF will, or
+  // it isn't a preview of anything.
+  const { data: previewOrg } = await supabase.from("organizations").select("name").eq("id", customer.organization_id).single();
 
   const taxable = isTaxableInvoiceType(invoiceType);
   const isIntraState = !!company?.state_code && company.state_code === ((b.customerStateCode as string | undefined) ?? customer.state_code ?? "");
@@ -83,6 +93,7 @@ export async function POST(request: Request) {
   }));
 
   const buffer = await buildInvoicePdfBuffer({
+    orgName: previewOrg?.name ?? null,
     invoice: {
       invoice_number: "PREVIEW",
       invoice_type: invoiceType,

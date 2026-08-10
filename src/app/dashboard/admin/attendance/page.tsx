@@ -1,29 +1,37 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Users, CalendarCheck, ClipboardList } from "lucide-react";
+import { Users, CalendarCheck, ClipboardList, Check, X } from "lucide-react";
 import { formatHoursMinutes } from "@/lib/format-duration";
 import { useActionMessage } from "@/lib/use-action-message";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
-import { usePagination } from "@/lib/use-pagination";
-import { TablePagination } from "@/components/TablePagination";
-import { useDateRangeFilter } from "@/lib/use-date-range-filter";
-import { DateRangeFilter } from "@/components/DateRangeFilter";
-import { ExportButton } from "@/components/ExportButton";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { MultiSelect } from "@/components/MultiSelect";
+import { toISTDateString } from "@/lib/ist-date";
+
+const CORRECTION_STATUS_STYLE: Record<CorrectionRow["status"], { bg: string; fg: string }> = {
+  pending: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
+  approved: { bg: "#d0f4db", fg: "#116a2c" },
+  rejected: { bg: "#fde2e2", fg: "#b42318" },
+};
 
 type StaffOption = { id: string; name: string };
 type AttendanceEvent = { event_type: "check_in" | "check_out"; occurred_at: string; location: string | null };
+type DayEntry = [string, { checkIn?: string; checkInLoc?: string | null; checkOut?: string; checkOutLoc?: string | null }];
 type CorrectionRow = {
   id: string;
+  staff_id: string;
   date: string;
   requested_check_in: string | null;
   requested_check_out: string | null;
   reason: string;
   status: "pending" | "approved" | "rejected";
   organization_id: string;
+  updated_at: string;
   profiles?: { full_name: string | null } | null;
   organizations?: { name: string | null } | null;
+  reviewer?: { full_name: string | null } | null;
 };
 
 function currentMonth() {
@@ -38,7 +46,11 @@ function mapLink(location: string | null) {
 function groupByDay(events: AttendanceEvent[]) {
   const byDay = new Map<string, { checkIn?: string; checkInLoc?: string | null; checkOut?: string; checkOutLoc?: string | null }>();
   for (const ev of events) {
-    const day = ev.occurred_at.slice(0, 10);
+    // IST calendar day, not the UTC slice. A punch between IST midnight
+    // and 5:30 AM falls on the previous UTC day, so slicing the
+    // timestamp filed it under the wrong date — the same skew
+    // src/lib/ist-date.ts exists to prevent.
+    const day = toISTDateString(new Date(ev.occurred_at));
     const entry = byDay.get(day) ?? {};
     if (ev.event_type === "check_in" && !entry.checkIn) {
       entry.checkIn = ev.occurred_at;
@@ -55,11 +67,13 @@ function groupByDay(events: AttendanceEvent[]) {
 
 export default function AdminAttendancePage() {
   const { message, showSuccess, showError } = useActionMessage();
+  const [view, setView] = useState<"log" | "corrections">("log");
   const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
   const [staffId, setStaffId] = useState("");
   const [month, setMonth] = useState(currentMonth());
   const [events, setEvents] = useState<AttendanceEvent[]>([]);
   const [corrections, setCorrections] = useState<CorrectionRow[]>([]);
+  const [correctionsEmployeeFilter, setCorrectionsEmployeeFilter] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     const kickoff = setTimeout(async () => {
@@ -122,8 +136,117 @@ export default function AdminAttendancePage() {
   // showing once it's actually ambiguous which org a row belongs to.
   const correctionsSpanMultipleOrgs = new Set(corrections.map((c) => c.organization_id)).size > 1;
   const groupedDays = useMemo(() => groupByDay(events), [events]);
-  const dateFilter = useDateRangeFilter(groupedDays, ([day]) => day);
-  const { page, setPage, pageSize, setPageSize, pageItems: pagedDays, totalPages, total, start, end } = usePagination(dateFilter.filtered);
+
+  // Replaces the old group-by-employee clustering on the corrections table
+  // — one dropdown to narrow the queue to a single person instead of the
+  // whole list visually reorganized around them. Built from whoever
+  // actually has a correction request, not the full team roster.
+  const correctionsEmployeeOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const c of corrections) {
+      if (!byId.has(c.staff_id)) byId.set(c.staff_id, c.profiles?.full_name ?? "Staff");
+    }
+    return [...byId.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [corrections]);
+  const filteredCorrections = useMemo(
+    () => (correctionsEmployeeFilter.size === 0 ? corrections : corrections.filter((c) => correctionsEmployeeFilter.has(c.staff_id))),
+    [corrections, correctionsEmployeeFilter]
+  );
+
+  const dayColumns: DataTableColumn<DayEntry>[] = [
+    { key: "date", header: "Date", render: ([day]) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{day}</span>, exportValue: ([day]) => day, sortValue: ([day]) => day },
+    {
+      key: "checkIn",
+      header: "Check In",
+      render: ([, entry]) => {
+        const link = mapLink(entry.checkInLoc ?? null);
+        return (
+          <>
+            {entry.checkIn ? new Date(entry.checkIn).toLocaleTimeString("en-IN") : "—"}
+            {link && <a href={link} target="_blank" rel="noopener noreferrer" className="ml-1.5 text-xs">📍</a>}
+          </>
+        );
+      },
+      exportValue: ([, entry]) => (entry.checkIn ? new Date(entry.checkIn).toLocaleTimeString("en-IN") : ""),
+    },
+    {
+      key: "checkOut",
+      header: "Check Out",
+      render: ([, entry]) => {
+        const link = mapLink(entry.checkOutLoc ?? null);
+        return (
+          <>
+            {entry.checkOut ? new Date(entry.checkOut).toLocaleTimeString("en-IN") : "—"}
+            {link && <a href={link} target="_blank" rel="noopener noreferrer" className="ml-1.5 text-xs">📍</a>}
+          </>
+        );
+      },
+      exportValue: ([, entry]) => (entry.checkOut ? new Date(entry.checkOut).toLocaleTimeString("en-IN") : ""),
+    },
+    {
+      key: "hours",
+      header: "Hours",
+      render: ([, entry]) => (entry.checkIn && entry.checkOut ? formatHoursMinutes(new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime()) : "—"),
+      exportValue: ([, entry]) => (entry.checkIn && entry.checkOut ? formatHoursMinutes(new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime()) : ""),
+    },
+  ];
+
+  // Every column here except Actions is shown for every status, not
+  // just pending — the old version only ever rendered pending rows in
+  // a plain stacked list, so an approved/rejected correction had no
+  // record on this page at all once decided.
+  const correctionColumns: DataTableColumn<CorrectionRow>[] = [
+    { key: "employee", header: "Employee", render: (c) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>{c.profiles?.full_name ?? "Staff"}</span>, exportValue: (c) => c.profiles?.full_name ?? "", sortValue: (c) => c.profiles?.full_name },
+    { key: "date", header: "Date", className: "w-[8%] whitespace-nowrap", render: (c) => c.date, exportValue: (c) => c.date, sortValue: (c) => c.date },
+    { key: "checkIn", header: "Requested Check In", className: "w-[12%]", render: (c) => c.requested_check_in ?? "—", exportValue: (c) => c.requested_check_in ?? "" },
+    { key: "checkOut", header: "Requested Check Out", className: "w-[12%]", render: (c) => c.requested_check_out ?? "—", exportValue: (c) => c.requested_check_out ?? "" },
+    { key: "reason", header: "Reason", render: (c) => <span className="max-w-xs italic" style={{ color: "var(--color-ink-soft)" }}>&ldquo;{c.reason}&rdquo;</span>, exportValue: (c) => c.reason },
+    ...(correctionsSpanMultipleOrgs
+      ? [{ key: "org", header: "Organization", render: (c: CorrectionRow) => c.organizations?.name ?? "—", exportValue: (c: CorrectionRow) => c.organizations?.name ?? "Unknown organization" } as DataTableColumn<CorrectionRow>]
+      : []),
+    {
+      key: "status",
+      header: "Status",
+      className: "w-[10%] whitespace-nowrap",
+      render: (c) => (
+        <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: CORRECTION_STATUS_STYLE[c.status].bg, color: CORRECTION_STATUS_STYLE[c.status].fg }}>
+          {c.status}
+        </span>
+      ),
+      exportValue: (c) => c.status,
+      sortValue: (c) => c.status,
+    },
+    {
+      key: "reviewedBy",
+      header: "Reviewed By",
+      render: (c) => (c.status === "pending" ? <span style={{ color: "var(--color-ink-soft)" }}>—</span> : c.reviewer?.full_name ?? "—"),
+      exportValue: (c) => (c.status === "pending" ? "" : c.reviewer?.full_name ?? ""),
+    },
+    {
+      key: "reviewedOn",
+      header: "Reviewed On",
+      className: "w-[10%] whitespace-nowrap",
+      render: (c) => (c.status === "pending" ? "—" : new Date(c.updated_at).toLocaleDateString("en-IN")),
+      exportValue: (c) => (c.status === "pending" ? "" : new Date(c.updated_at).toLocaleDateString("en-IN")),
+    },
+    {
+      key: "actions",
+      header: "",
+      render: (c) =>
+        c.status === "pending" ? (
+          <div className="flex shrink-0 gap-2">
+            <button type="button" onClick={() => decideCorrection(c.id, "approve")} aria-label="Approve" className="rounded-full p-1.5 transition-colors hover:bg-[var(--color-accent-tint)]">
+              <Check className="h-4 w-4" style={{ color: "#116a2c" }} />
+            </button>
+            <button type="button" onClick={() => decideCorrection(c.id, "reject")} aria-label="Reject" className="rounded-full p-1.5 transition-colors hover:bg-[var(--color-accent-tint)]">
+              <X className="h-4 w-4" style={{ color: "#b42318" }} />
+            </button>
+          </div>
+        ) : (
+          "—"
+        ),
+    },
+  ];
 
   return (
     <div>
@@ -139,131 +262,80 @@ export default function AdminAttendancePage() {
         <ActionMessage message={message} />
       </div>
 
-      <div className="mt-4 flex flex-wrap items-end gap-3">
-        <div>
-          <label className="block text-xs font-medium mb-1" style={{ color: "var(--color-ink-soft)" }}>Staff</label>
-          <select value={staffId} onChange={(e) => setStaffId(e.target.value)} className="rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--color-line)" }}>
-            {staffOptions.map((s) => (
-              <option key={s.id} value={s.id}>{s.name}</option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-xs font-medium mb-1" style={{ color: "var(--color-ink-soft)" }}>Month</label>
-          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--color-line)" }} />
-        </div>
-        {staffId && (
-          <a
-            href={`/api/admin/reports/attendance?staffId=${staffId}&month=${month}`}
-            className="rounded-full px-4 py-2 text-sm font-semibold text-white"
-            style={{ backgroundColor: "var(--color-action)" }}
+      <div className="mt-4 flex items-center gap-1 rounded-full border p-1" style={{ borderColor: "var(--color-line)" }}>
+        {([["log", "Attendance Log"], ["corrections", `Correction Requests${pendingCorrections.length > 0 ? ` (${pendingCorrections.length})` : ""}`]] as const).map(([value, label]) => (
+          <button
+            key={value}
+            type="button"
+            onClick={() => setView(value)}
+            className="rounded-full px-4 py-2 text-sm font-semibold transition-colors"
+            style={view === value ? { backgroundColor: "var(--color-accent)", color: "var(--color-ink)" } : { color: "var(--color-ink-soft)" }}
           >
-            Download PDF
-          </a>
-        )}
-      </div>
-
-      <DateRangeFilter
-        from={dateFilter.from}
-        to={dateFilter.to}
-        onFromChange={dateFilter.setFrom}
-        onToChange={dateFilter.setTo}
-        onClear={dateFilter.clear}
-        active={dateFilter.active}
-      />
-
-      <div className="mt-3 flex justify-end">
-        <ExportButton
-          filename="attendance"
-          headers={["Date", "Check In", "Check Out", "Hours"]}
-          rows={dateFilter.filtered.map(([day, entry]) => [
-            day,
-            entry.checkIn ? new Date(entry.checkIn).toLocaleTimeString("en-IN") : "",
-            entry.checkOut ? new Date(entry.checkOut).toLocaleTimeString("en-IN") : "",
-            entry.checkIn && entry.checkOut ? formatHoursMinutes(new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime()) : "",
-          ])}
-        />
-      </div>
-
-      <TablePagination
-        page={page}
-        totalPages={totalPages}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={setPageSize}
-        start={start}
-        end={end}
-        total={total}
-        itemLabel="days"
-      />
-
-      <div className="mt-3 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
-        <table className="dt-table w-full min-w-[420px] text-left text-sm">
-          <thead>
-            <tr style={{ backgroundColor: "var(--color-muted-tint)" }}>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>#</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Date</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Check In</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Check Out</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Hours</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
-            {pagedDays.map(([day, entry], i) => {
-              const hours = entry.checkIn && entry.checkOut
-                ? formatHoursMinutes(new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime())
-                : "—";
-              const inLink = mapLink(entry.checkInLoc ?? null);
-              const outLink = mapLink(entry.checkOutLoc ?? null);
-              return (
-                <tr key={day}>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                  <td className="px-4 py-3 font-medium" style={{ color: "var(--color-ink)" }}>{day}</td>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>
-                    {entry.checkIn ? new Date(entry.checkIn).toLocaleTimeString("en-IN") : "—"}
-                    {inLink && <a href={inLink} target="_blank" rel="noopener noreferrer" className="ml-1.5 text-xs">📍</a>}
-                  </td>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>
-                    {entry.checkOut ? new Date(entry.checkOut).toLocaleTimeString("en-IN") : "—"}
-                    {outLink && <a href={outLink} target="_blank" rel="noopener noreferrer" className="ml-1.5 text-xs">📍</a>}
-                  </td>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{hours}</td>
-                </tr>
-              );
-            })}
-            {events.length === 0 && (
-              <tr><td colSpan={5} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>No attendance for this month.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      <h3 className="mt-8 text-lg font-semibold" style={{ color: "var(--color-ink)" }}>Correction Requests</h3>
-      <div className="mt-3 space-y-2">
-        {pendingCorrections.map((c) => (
-          <div key={c.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-white px-4 py-2.5 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-            <div className="min-w-0">
-              <p className="text-sm" style={{ color: "var(--color-ink)" }}>
-                <span className="font-semibold">{c.profiles?.full_name ?? "Staff"}</span>
-                {correctionsSpanMultipleOrgs && (
-                  <span className="ml-1.5 text-xs" style={{ color: "var(--color-ink-soft)" }}>({c.organizations?.name ?? "Unknown organization"})</span>
-                )}
-                {" "}— {c.date} · {c.requested_check_in ?? "—"} → {c.requested_check_out ?? "—"}
-              </p>
-              <p className="text-xs italic" style={{ color: "var(--color-ink-soft)" }}>&ldquo;{c.reason}&rdquo;</p>
-            </div>
-            <div className="flex shrink-0 gap-2">
-              <button type="button" onClick={() => decideCorrection(c.id, "approve")} className="rounded-full px-4 py-1.5 text-xs font-semibold text-white" style={{ backgroundColor: "var(--color-action)" }}>
-                Approve
-              </button>
-              <button type="button" onClick={() => decideCorrection(c.id, "reject")} className="rounded-full border px-4 py-1.5 text-xs font-semibold" style={{ borderColor: "#b42318", color: "#b42318" }}>
-                Reject
-              </button>
-            </div>
-          </div>
+            {label}
+          </button>
         ))}
-        {pendingCorrections.length === 0 && <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>No pending correction requests.</p>}
       </div>
+
+      {view === "log" && (
+        <>
+          <div className="mt-4 flex flex-wrap items-end gap-3">
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: "var(--color-ink-soft)" }}>Staff</label>
+              <select value={staffId} onChange={(e) => setStaffId(e.target.value)} className="rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--color-line)" }}>
+                {staffOptions.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium mb-1" style={{ color: "var(--color-ink-soft)" }}>Month</label>
+              <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--color-line)" }} />
+            </div>
+            {staffId && (
+              <a
+                href={`/api/admin/reports/attendance?staffId=${staffId}&month=${month}`}
+                className="rounded-full px-4 py-2 text-sm font-semibold text-white"
+                style={{ backgroundColor: "var(--color-action)" }}
+              >
+                Download PDF
+              </a>
+            )}
+          </div>
+
+          <DataTable
+            columns={dayColumns}
+            rows={groupedDays}
+            getRowKey={([day]) => day}
+            itemLabel="days"
+            emptyMessage="No attendance for this month."
+            dateFilter={{ getDate: ([day]) => day }}
+            exportFilename="attendance"
+          />
+        </>
+      )}
+
+      {view === "corrections" && (
+        <DataTable
+          columns={correctionColumns}
+          fixedLayout
+          rows={filteredCorrections}
+          getRowKey={(c) => c.id}
+          itemLabel="requests"
+          emptyMessage="No correction requests yet."
+          filteredEmptyMessage="No correction requests for this employee."
+          search={{ placeholder: "Search employee…", filter: (c, q) => (c.profiles?.full_name ?? "").toLowerCase().includes(q) }}
+          exportFilename="correction-requests"
+          toolbar={
+            <MultiSelect
+              options={correctionsEmployeeOptions.map(([id, name]) => ({ value: id, label: name }))}
+              selected={correctionsEmployeeFilter}
+              onChange={setCorrectionsEmployeeFilter}
+              placeholder="All employees"
+              searchable
+            />
+          }
+        />
+      )}
     </div>
   );
 }

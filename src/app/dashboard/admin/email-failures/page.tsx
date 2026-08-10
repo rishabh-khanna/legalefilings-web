@@ -6,6 +6,8 @@ import { useActionMessage } from "@/lib/use-action-message";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { MultiSelect } from "@/components/MultiSelect";
 
 type EmailFailure = {
   id: string;
@@ -15,6 +17,8 @@ type EmailFailure = {
   error_message: string | null;
   resolved: boolean;
   created_at: string;
+  organization_id: string;
+  organizations?: { name: string | null } | null;
 };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -22,6 +26,11 @@ const TYPE_LABEL: Record<string, string> = {
   payment_confirmation: "Payment Confirmation",
   payment_request: "Payment Request",
   bill_reminder: "Bill Reminder",
+  payment_reminder: "Payment Reminder (overdue invoice)",
+  order_completed: "Order Completed",
+  documents_requested: "Documents Requested",
+  documents_submitted: "Documents Submitted (staff alert)",
+  document_reviewed: "Document Verified / Returned",
 };
 
 // Admin-only. Every transactional email in the app used to just
@@ -45,19 +54,21 @@ export default function EmailFailuresPage() {
     return () => clearTimeout(kickoff);
   }, []);
 
-  const [typeFilter, setTypeFilter] = useState("all");
-  const [search, setSearch] = useState("");
-  const filteredFailures = useMemo(() => {
-    return (failures ?? []).filter((f) => {
-      if (typeFilter !== "all" && f.email_type !== typeFilter) return false;
-      if (search.trim()) {
-        const q = search.trim().toLowerCase();
-        const hay = `${f.recipient_email} ${f.related_entity ?? ""}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [failures, typeFilter, search]);
+  const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set());
+  const [recipientFilter, setRecipientFilter] = useState<Set<string>>(new Set());
+  const typeFilteredFailures = useMemo(() => {
+    return (failures ?? []).filter((f) => typeFilter.size === 0 || typeFilter.has(f.email_type));
+  }, [failures, typeFilter]);
+  // Replaces the old group-by-recipient clustering — one dropdown to
+  // narrow the list to a single address instead of the whole table
+  // visually reorganized around it.
+  const recipientOptions = useMemo(() => {
+    return [...new Set((failures ?? []).map((f) => f.recipient_email))].sort();
+  }, [failures]);
+  const filteredFailures = useMemo(
+    () => (recipientFilter.size === 0 ? typeFilteredFailures : typeFilteredFailures.filter((f) => recipientFilter.has(f.recipient_email))),
+    [typeFilteredFailures, recipientFilter]
+  );
 
   async function handleResolve(id: string) {
     setResolvingId(id);
@@ -72,11 +83,46 @@ export default function EmailFailuresPage() {
     }
   }
 
+  // Only a platform_admin's request ever returns more than one org's
+  // failures pooled together — the column is only worth showing once
+  // it's actually ambiguous which org a row belongs to.
+  const spansMultipleOrgs = new Set((failures ?? []).map((f) => f.organization_id)).size > 1;
+
+  const columns: DataTableColumn<EmailFailure>[] = [
+    { key: "type", header: "Type", render: (f) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>{TYPE_LABEL[f.email_type] ?? f.email_type}</span>, exportValue: (f) => TYPE_LABEL[f.email_type] ?? f.email_type, sortValue: (f) => TYPE_LABEL[f.email_type] ?? f.email_type },
+    { key: "recipient", header: "Recipient", render: (f) => f.recipient_email, exportValue: (f) => f.recipient_email, sortValue: (f) => f.recipient_email },
+    { key: "related", header: "Related To", render: (f) => f.related_entity ?? "—", exportValue: (f) => f.related_entity ?? "" },
+    { key: "error", header: "Error", render: (f) => <span className="max-w-xs" style={{ color: "#b42318" }}>{f.error_message ?? "—"}</span>, exportValue: (f) => f.error_message ?? "" },
+    { key: "sentAt", header: "Sent At", className: "w-[14%] whitespace-nowrap", render: (f) => new Date(f.created_at).toLocaleString("en-IN"), exportValue: (f) => new Date(f.created_at).toLocaleString("en-IN"), sortValue: (f) => f.created_at },
+    ...(spansMultipleOrgs
+      ? [{ key: "org", header: "Organization", className: "w-[14%]", render: (f: EmailFailure) => f.organizations?.name ?? "—", exportValue: (f: EmailFailure) => f.organizations?.name ?? "Unknown organization" } as DataTableColumn<EmailFailure>]
+      : []),
+    {
+      key: "actions",
+      header: "",
+      render: (f) => (
+        <button
+          type="button"
+          onClick={() => handleResolve(f.id)}
+          disabled={resolvingId === f.id}
+          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-[var(--color-accent-tint)] disabled:opacity-60"
+          style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
+        >
+          <CheckCircle2 className="h-3.5 w-3.5" /> Resolve
+        </button>
+      ),
+    },
+  ];
+
   return (
     <div>
       <DashboardPageHero
         title="Email Failures"
-        subtitle="Transactional emails that didn't go out — account passwords, payment confirmations, reminders. Follow up manually, then mark resolved."
+        subtitle={
+          spansMultipleOrgs
+            ? "Transactional emails that didn't go out, pooled across every organization for platform-level support — account passwords, payment confirmations, reminders."
+            : "Transactional emails that didn't go out — account passwords, payment confirmations, reminders. Follow up manually, then mark resolved."
+        }
       >
         <div className="relative mt-6 grid grid-cols-1 gap-4 sm:max-w-xs">
           <HeroKpi icon={MailWarning} label="Unresolved" value={failures?.length ?? 0} />
@@ -87,88 +133,38 @@ export default function EmailFailuresPage() {
         <ActionMessage message={message} />
       </div>
 
-      {failures !== null && failures.length !== 0 && (
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search recipient, related to…"
-            className="w-full max-w-xs rounded-lg border px-3 py-1.5 text-sm outline-none focus:border-[var(--color-action)]"
-            style={{ borderColor: "var(--color-line)" }}
-          />
-          <select
-            value={typeFilter}
-            onChange={(e) => setTypeFilter(e.target.value)}
-            className="rounded-lg border px-2.5 py-1.5 text-sm outline-none"
-            style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
-          >
-            <option value="all">All types</option>
-            {Object.entries(TYPE_LABEL).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-          {(search.trim() || typeFilter !== "all") && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearch("");
-                setTypeFilter("all");
-              }}
-              className="text-xs font-semibold"
-              style={{ color: "var(--color-action-dark)" }}
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
-      )}
-
       {failures === null ? (
         <LoadingBlock className="mt-6" />
-      ) : failures.length === 0 ? (
-        <p className="mt-6 text-sm" style={{ color: "var(--color-ink-soft)" }}>No unresolved email failures — everything&apos;s gone out cleanly.</p>
-      ) : filteredFailures.length === 0 ? (
-        <p className="mt-6 text-sm" style={{ color: "var(--color-ink-soft)" }}>No failures match this filter.</p>
       ) : (
-        <div className="mt-5 overflow-x-auto rounded-2xl border bg-white dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-          <table className="dt-table w-full min-w-[720px]">
-            <thead>
-              <tr className="text-left">
-                <th>#</th>
-                <th>Type</th>
-                <th>Recipient</th>
-                <th>Related To</th>
-                <th>Error</th>
-                <th>Sent At</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredFailures.map((f, i) => (
-                <tr key={f.id}>
-                  <td style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                  <td className="font-semibold" style={{ color: "var(--color-ink)" }}>{TYPE_LABEL[f.email_type] ?? f.email_type}</td>
-                  <td style={{ color: "var(--color-ink-soft)" }}>{f.recipient_email}</td>
-                  <td style={{ color: "var(--color-ink-soft)" }}>{f.related_entity ?? "—"}</td>
-                  <td className="max-w-xs" style={{ color: "#b42318" }}>{f.error_message ?? "—"}</td>
-                  <td style={{ color: "var(--color-ink-soft)" }}>{new Date(f.created_at).toLocaleString("en-IN")}</td>
-                  <td>
-                    <button
-                      type="button"
-                      onClick={() => handleResolve(f.id)}
-                      disabled={resolvingId === f.id}
-                      className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-[var(--color-accent-tint)] disabled:opacity-60"
-                      style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
-                    >
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Resolve
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={columns}
+          fixedLayout
+          rows={filteredFailures}
+          getRowKey={(f) => f.id}
+          itemLabel="failures"
+          emptyMessage={failures.length === 0 ? "No unresolved email failures — everything's gone out cleanly." : "No failures match this filter."}
+          filteredEmptyMessage="No failures match this filter."
+          search={{ placeholder: "Search recipient, related to…", filter: (f, q) => `${f.recipient_email} ${f.related_entity ?? ""}`.toLowerCase().includes(q) }}
+          exportFilename="email-failures"
+          minWidth={720}
+          toolbar={
+            <>
+              <MultiSelect
+                options={Object.entries(TYPE_LABEL).map(([value, label]) => ({ value, label }))}
+                selected={typeFilter}
+                onChange={setTypeFilter}
+                placeholder="All types"
+              />
+              <MultiSelect
+                options={recipientOptions.map((email) => ({ value: email, label: email }))}
+                selected={recipientFilter}
+                onChange={setRecipientFilter}
+                placeholder="All recipients"
+                searchable
+              />
+            </>
+          }
+        />
       )}
     </div>
   );

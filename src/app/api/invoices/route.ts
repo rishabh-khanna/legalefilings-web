@@ -6,6 +6,7 @@ import { isStaffOrAdmin } from "@/lib/roles";
 import { canSeeAllOrgs } from "@/lib/organization";
 import { createBilledInvoice, type CreateBilledInvoiceInput } from "@/lib/create-billed-invoice";
 import { getMissingBusinessSettingsFields } from "@/lib/business-settings-completeness";
+import { hasToolAccess } from "@/lib/tool-grants";
 
 // GET /api/invoices — a customer sees their own; a rater sees only
 // invoices they created; a leader/group_leader sees their own plus their
@@ -17,9 +18,12 @@ export async function GET() {
   if (!profile) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const supabase = getSupabaseAdmin();
+  // organizations(name) only actually matters for a platform_admin, who
+  // sees every org's invoices pooled together here — without it, there'd
+  // be no way to tell which tenant issued a given row.
   let query = supabase
     .from("invoices")
-    .select("*, profiles!invoices_customer_id_fkey(full_name, company), invoice_payments(*)")
+    .select("*, profiles!invoices_customer_id_fkey(full_name, company), invoice_payments(*), organizations(name)")
     .order("created_at", { ascending: false });
 
   if (profile.account_type === "customer") {
@@ -57,21 +61,10 @@ export async function GET() {
 // relatedInvoiceId pointing at the original.
 export async function POST(request: Request) {
   const profile = await getCurrentProfile();
-  if (!profile || !isStaffOrAdmin(profile)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-
-  const supabase = getSupabaseAdmin();
-  const { data: businessSettings } = await supabase
-    .from("company_settings")
-    .select("address, gst_number, pan_number, state, bank_name, bank_account_number, bank_ifsc, upi_id")
-    .eq("organization_id", profile.organization_id)
-    .maybeSingle();
-  const missingSettings = getMissingBusinessSettingsFields(businessSettings);
-  if (missingSettings.length > 0) {
-    return NextResponse.json(
-      { error: `Business Settings is incomplete — missing ${missingSettings.join(", ")}. Complete it before generating invoices.` },
-      { status: 400 }
-    );
-  }
+  // A customer delegated the invoice_crm tool operates this exact same
+  // route as their org's own staff would — see the comment above.
+  const isCustomerOperator = profile?.account_type === "customer" && (await hasToolAccess(profile, "invoice_crm"));
+  if (!profile || (!isStaffOrAdmin(profile) && !isCustomerOperator)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") {
@@ -81,10 +74,37 @@ export async function POST(request: Request) {
   const b = body as Record<string, unknown> & Partial<CreateBilledInvoiceInput>;
   if (!b.customerId) return NextResponse.json({ error: "customerId is required" }, { status: 400 });
 
+  const supabase = getSupabaseAdmin();
+  // The invoice belongs to whichever org actually owns this customer, not
+  // necessarily the caller's own — same reasoning as buy-for-customer:
+  // a platform_admin invoicing a tenant's customer needs the invoice (and
+  // the Business Settings check below) attributed to that tenant, not to
+  // the platform admin's own org, or the invoice/prefix/GST registration
+  // would come out branded wrong and the completeness check would be
+  // validating the wrong org's settings entirely.
+  const { data: customer } = await supabase.from("profiles").select("organization_id").eq("id", b.customerId).eq("account_type", "customer").single();
+  if (!customer) return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+  if (!canSeeAllOrgs(profile) && customer.organization_id !== profile.organization_id) {
+    return NextResponse.json({ error: "Customer not found" }, { status: 404 });
+  }
+
+  const { data: businessSettings } = await supabase
+    .from("company_settings")
+    .select("address, gst_number, pan_number, state, bank_name, bank_account_number, bank_ifsc, upi_id")
+    .eq("organization_id", customer.organization_id)
+    .maybeSingle();
+  const missingSettings = getMissingBusinessSettingsFields(businessSettings);
+  if (missingSettings.length > 0) {
+    return NextResponse.json(
+      { error: `Business Settings is incomplete — missing ${missingSettings.join(", ")}. Complete it before generating invoices.` },
+      { status: 400 }
+    );
+  }
+
   try {
     const invoice = await createBilledInvoice({
       ...b,
-      organizationId: profile.organization_id,
+      organizationId: customer.organization_id,
       customerId: b.customerId,
       items: b.items ?? [],
       createdBy: profile.id,

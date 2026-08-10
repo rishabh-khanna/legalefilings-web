@@ -17,8 +17,11 @@ test.describe("Leave requests", () => {
     await expect(staffPage.getByRole("heading", { name: "Leave" })).toBeVisible();
     await staffPage.getByRole("button", { name: "Apply for Leave" }).click();
 
+    // Offset derived from Date.now(), not a fixed day count — a fixed
+    // "+30 days" collides with a still-pending request from an earlier
+    // run today the moment this suite runs more than once in a day.
     const start = new Date();
-    start.setDate(start.getDate() + 30);
+    start.setDate(start.getDate() + 30 + (Date.now() % 500));
     const end = new Date(start);
     end.setDate(end.getDate() + 1);
     const startStr = start.toISOString().slice(0, 10);
@@ -42,6 +45,9 @@ test.describe("Leave requests", () => {
 
     await adminPage.goto("/dashboard/admin/leave-requests");
     await expect(adminPage.getByRole("heading", { name: "Leave Requests" })).toBeVisible();
+    // DataTable paginates and groups by staff now — search narrows
+    // straight to this request instead of assuming it's on page 1.
+    await adminPage.getByPlaceholder("Search staff, leave type, reason…").fill(tag);
     const adminRow = adminPage.locator("tr", { hasText: tag });
     await expect(adminRow).toBeVisible({ timeout: 10000 });
     await adminRow.getByRole("button", { name: "Approve" }).click();
@@ -65,8 +71,11 @@ test.describe("Leave requests", () => {
     await staffPage.goto("/dashboard/leave");
     await staffPage.getByRole("button", { name: "Apply for Leave" }).click();
 
+    // Same reasoning as the approve-path test above — a randomized offset
+    // avoids colliding with a still-pending request from an earlier run
+    // today.
     const start = new Date();
-    start.setDate(start.getDate() + 40);
+    start.setDate(start.getDate() + 540 + (Date.now() % 500));
     const startStr = start.toISOString().slice(0, 10);
 
     await staffPage.locator('input[type="date"]').first().fill(startStr);
@@ -76,6 +85,9 @@ test.describe("Leave requests", () => {
     await expect(staffPage.getByText("Leave request submitted.")).toBeVisible({ timeout: 10000 });
 
     await adminPage.goto("/dashboard/admin/leave-requests");
+    // DataTable paginates and groups by staff now — search narrows
+    // straight to this request instead of assuming it's on page 1.
+    await adminPage.getByPlaceholder("Search staff, leave type, reason…").fill(tag);
     const adminRow = adminPage.locator("tr", { hasText: tag });
     await expect(adminRow).toBeVisible({ timeout: 10000 });
     await adminRow.getByRole("button", { name: "Reject", exact: true }).click();
@@ -103,8 +115,14 @@ test.describe("Leave requests", () => {
     // leaveTypeId: null — explicit Unpaid Leave, which needs no balance
     // lookup and isn't what's under test here; the self-approval guard
     // applies regardless of leave type.
+    // Randomized far-future date, not a fixed one — a fixed date collides
+    // with a still-pending request from an earlier run of this same test.
+    const guardStart = new Date();
+    guardStart.setDate(guardStart.getDate() + 1080 + (Date.now() % 500));
+    const guardEnd = new Date(guardStart);
+    guardEnd.setDate(guardEnd.getDate() + 1);
     const submitRes = await api.post("/api/leave-requests", {
-      data: { leaveTypeId: null, startDate: "2094-02-01", endDate: "2094-02-02", reason: "self-approve guard" },
+      data: { leaveTypeId: null, startDate: guardStart.toISOString().slice(0, 10), endDate: guardEnd.toISOString().slice(0, 10), reason: "self-approve guard" },
     });
     expect(submitRes.ok(), await submitRes.text()).toBeTruthy();
     const { requests: created } = await submitRes.json();
@@ -133,7 +151,9 @@ test.describe("Attendance", () => {
     }
 
     await page.goto("/dashboard/attendance");
-    await expect(page.getByRole("heading", { name: "Attendance" })).toBeVisible();
+    // exact:true — the page also has an "Attendance Log" section
+    // heading, which substring-matches "Attendance" too.
+    await expect(page.getByRole("heading", { name: "Attendance", exact: true })).toBeVisible();
     await expect(page.getByText("Not clocked in", { exact: true })).toBeVisible();
 
     await page.getByRole("button", { name: "Clock In" }).click();
@@ -171,38 +191,41 @@ test.describe("Attendance", () => {
     pastDate.setDate(pastDate.getDate() - 10);
     const dateStr = pastDate.toISOString().slice(0, 10);
 
-    await page.goto("/dashboard/attendance");
-    await page.getByRole("button", { name: "Request a correction →" }).click();
-    // Scoped to the correction <form> — the page also gained a
-    // DateRangeFilter (From/To) for the history table since this test
-    // was written, which added two more unscoped type="date" inputs.
+    // Split out from /dashboard/attendance onto its own page/nav item —
+    // see src/app/dashboard/attendance/corrections/page.tsx.
+    await page.goto("/dashboard/attendance/corrections");
+    await page.getByRole("button", { name: "Request a Correction" }).click();
     await page.locator('form input[type="date"]').fill(dateStr);
     await page.locator('input[type="time"]').first().fill("09:15");
     await page.locator('input[type="time"]').nth(1).fill("18:30");
     await page.locator("textarea").fill(tag);
     await page.getByRole("button", { name: "Submit Request" }).click();
     await expect(page.getByText("Correction request submitted.")).toBeVisible({ timeout: 10000 });
-    // .first(): the pending-correction banner only ever shows the date,
-    // not which request it is — repeated runs of this test on the same
-    // day all compute the same "10 days ago" date, so several pending
-    // banners with byte-identical text can legitimately coexist. This
-    // assertion only needs to confirm ours is among them, not that it's
-    // the page's only one.
-    await expect(page.getByText(`Correction request for ${dateStr} — pending review.`).first()).toBeVisible();
+
+    // Request list is a real <table> now — one <tr> per request.
+    const ownRow = page.locator("tr", { hasText: tag });
+    await expect(ownRow).toBeVisible({ timeout: 10000 });
+    await expect(ownRow.getByText("pending", { exact: true })).toBeVisible();
 
     const adminCtx = await browser.newContext({ storageState: "tests/e2e/.auth/admin.json" });
     const adminPage = await adminCtx.newPage();
     await adminPage.goto("/dashboard/admin/attendance");
     await expect(adminPage.getByRole("heading", { name: "Team Attendance" })).toBeVisible();
+    // Attendance Log is the default tab — Correction Requests is a
+    // separate tab and its table isn't in the DOM until selected.
+    await adminPage.getByRole("button", { name: "Correction Requests", exact: false }).click();
 
-    const correctionCard = adminPage.locator(`text=${tag}`).locator("xpath=ancestor::div[contains(@class,'rounded-xl')][1]");
-    await expect(correctionCard).toBeVisible({ timeout: 10000 });
-    await correctionCard.getByRole("button", { name: "Approve" }).click();
-    // Assert on the durable outcome (card drops out of the pending list),
-    // not the 4s-auto-dismissing toast — under full-suite load the toast
-    // can come and go before this assertion's next poll, which is a
-    // timing flake in the test, not evidence the approval didn't happen.
-    await expect(correctionCard).toHaveCount(0, { timeout: 10000 });
+    // Corrections review is also a real <table> now, not stacked cards.
+    const correctionRow = adminPage.locator("tr", { hasText: tag });
+    await expect(correctionRow).toBeVisible({ timeout: 10000 });
+    await correctionRow.getByRole("button", { name: "Approve" }).click();
+    // The row itself never disappears (approved/rejected corrections stay
+    // listed for the record) — only its status badge and Approve/Reject
+    // buttons change. Assert on that durable outcome, not the
+    // 4s-auto-dismissing toast, which can come and go before this
+    // assertion's next poll under full-suite load.
+    await expect(correctionRow.getByText("approved", { exact: true })).toBeVisible({ timeout: 10000 });
+    await expect(correctionRow.getByRole("button", { name: "Approve" })).toHaveCount(0);
 
     const check = await request.get(`/api/attendance?month=${dateStr.slice(0, 7)}`);
     const { events } = await check.json();
@@ -218,11 +241,8 @@ test.describe("Attendance", () => {
     pastDate.setDate(pastDate.getDate() - 11);
     const dateStr = pastDate.toISOString().slice(0, 10);
 
-    await page.goto("/dashboard/attendance");
-    await page.getByRole("button", { name: "Request a correction →" }).click();
-    // Scoped to the correction <form> — the page also gained a
-    // DateRangeFilter (From/To) for the history table since this test
-    // was written, which added two more unscoped type="date" inputs.
+    await page.goto("/dashboard/attendance/corrections");
+    await page.getByRole("button", { name: "Request a Correction" }).click();
     await page.locator('form input[type="date"]').fill(dateStr);
     await page.locator('input[type="time"]').first().fill("09:00");
     await page.locator("textarea").fill(tag);
@@ -233,11 +253,15 @@ test.describe("Attendance", () => {
     const adminPage = await adminCtx.newPage();
     adminPage.on("dialog", (dialog) => dialog.accept("Not enough detail provided"));
     await adminPage.goto("/dashboard/admin/attendance");
+    await adminPage.getByRole("button", { name: "Correction Requests", exact: false }).click();
 
-    const correctionCard = adminPage.locator(`text=${tag}`).locator("xpath=ancestor::div[contains(@class,'rounded-xl')][1]");
-    await expect(correctionCard).toBeVisible({ timeout: 10000 });
-    await correctionCard.getByRole("button", { name: "Reject" }).click();
-    await expect(correctionCard).toHaveCount(0, { timeout: 10000 });
+    const correctionRow = adminPage.locator("tr", { hasText: tag });
+    await expect(correctionRow).toBeVisible({ timeout: 10000 });
+    await correctionRow.getByRole("button", { name: "Reject" }).click();
+    // Same as the approve case above — the row stays, just with its
+    // status/actions updated.
+    await expect(correctionRow.getByText("rejected", { exact: true })).toBeVisible({ timeout: 10000 });
+    await expect(correctionRow.getByRole("button", { name: "Reject" })).toHaveCount(0);
 
     await adminCtx.close();
   });

@@ -3,13 +3,22 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { isStaffOrAdmin } from "@/lib/roles";
 import { canSeeAllOrgs } from "@/lib/organization";
+import { hasToolAccess } from "@/lib/tool-grants";
 
 export async function GET() {
   const profile = await getCurrentProfile();
-  if (!isStaffOrAdmin(profile) || !profile) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const isCustomerOperator = profile?.account_type === "customer" && (await hasToolAccess(profile, "invoice_crm"));
+  if (!profile || (!isStaffOrAdmin(profile) && !isCustomerOperator)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const supabase = getSupabaseAdmin();
-  let query = supabase.from("company_gst_registrations").select("*").eq("active", true).order("label");
+  // organizations(name) only actually matters for a platform_admin, who
+  // sees every org's registrations pooled together here — without it,
+  // there'd be no way to tell whose GSTIN is whose.
+  let query = supabase
+    .from("company_gst_registrations")
+    .select("*, organizations(name), creator:profiles!company_gst_registrations_created_by_fkey(full_name)")
+    .eq("active", true)
+    .order("label");
   if (!canSeeAllOrgs(profile)) query = query.eq("organization_id", profile.organization_id);
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
@@ -44,6 +53,7 @@ export async function POST(request: Request) {
       state: state || null,
       state_code: stateCode || null,
       is_default: !!isDefault,
+      created_by: profile.id,
     })
     .select()
     .single();

@@ -76,8 +76,8 @@ test("admin runs a report and can export it as CSV/PDF", async ({ page }) => {
   await page.getByRole("button", { name: "This Month" }).click();
   await expect(page.locator("table.dt-table").or(page.getByText("No data for this selection."))).toBeVisible({ timeout: 10000 });
 
-  const csvLink = page.getByRole("link", { name: "Download CSV" });
-  const pdfLink = page.getByRole("link", { name: "Download PDF" });
+  const csvLink = page.getByRole("link", { name: "CSV", exact: true });
+  const pdfLink = page.getByRole("link", { name: "PDF", exact: true });
   await expect(csvLink).toHaveAttribute("href", /reportType=day_book/);
   await expect(pdfLink).toHaveAttribute("href", /format=pdf/);
 });

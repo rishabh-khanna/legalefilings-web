@@ -37,6 +37,7 @@ function money(n: number) {
 }
 
 function PayslipPdf({
+  orgName,
   employeeName,
   designation,
   department,
@@ -46,6 +47,7 @@ function PayslipPdf({
   grossSalary,
   netSalary,
 }: {
+  orgName: string;
   employeeName: string;
   designation: string;
   department: string;
@@ -60,7 +62,7 @@ function PayslipPdf({
       <Page size="A4" style={styles.page}>
         <View style={styles.header}>
           <View>
-            <Text style={styles.brand}>{SITE_NAME}</Text>
+            <Text style={styles.brand}>{orgName}</Text>
             <Text style={styles.muted}>Payslip — {monthLabel}</Text>
           </View>
           <View>
@@ -121,7 +123,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const supabase = getSupabaseAdmin();
   const { data: payslip, error } = await supabase
     .from("payslips")
-    .select("*, profiles!payslips_staff_id_fkey(full_name, designation, department)")
+    .select("*, profiles!payslips_staff_id_fkey(full_name, designation, department), organizations(name)")
     .eq("id", id)
     .single();
 
@@ -140,6 +142,7 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
 
   const buffer = await renderToBuffer(
     <PayslipPdf
+      orgName={payslip.organizations?.name ?? SITE_NAME}
       employeeName={payslip.profiles?.full_name ?? "Employee"}
       designation={payslip.profiles?.designation ?? ""}
       department={payslip.profiles?.department ?? ""}

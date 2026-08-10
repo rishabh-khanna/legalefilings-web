@@ -7,13 +7,16 @@ import { useActionMessage } from "@/lib/use-action-message";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
-import { usePagination } from "@/lib/use-pagination";
-import { TablePagination } from "@/components/TablePagination";
-import { useDateRangeFilter } from "@/lib/use-date-range-filter";
-import { DateRangeFilter } from "@/components/DateRangeFilter";
-import { ExportButton } from "@/components/ExportButton";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
 
-type Document = { id: string; document_type: string; file_name: string; uploaded_at: string };
+type Document = {
+  id: string;
+  document_type: string;
+  file_name: string;
+  uploaded_at: string;
+  staff?: { full_name: string | null } | null;
+  uploader?: { full_name: string | null } | null;
+};
 type StaffOption = { id: string; name: string };
 
 const DOCUMENT_TYPES = ["Aadhaar", "PAN", "Resume", "Offer Letter", "Appointment Letter", "Passport", "Driving License", "Educational Certificate"];
@@ -101,14 +104,28 @@ export default function DocumentsPage() {
     }
   }
 
-  const dateFilter = useDateRangeFilter(documents, (d) => d.uploaded_at);
-  const { page, setPage, pageSize, setPageSize, pageItems: pagedDocuments, totalPages, total, start, end } = usePagination(dateFilter.filtered);
-
   if (loading) {
     return <LoadingBlock />;
   }
 
   const inputClass = "w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]";
+
+  const columns: DataTableColumn<Document>[] = [
+    { key: "type", header: "Type", className: "w-[12%] whitespace-nowrap", render: (d) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{d.document_type}</span>, exportValue: (d) => d.document_type, sortValue: (d) => d.document_type },
+    { key: "file", header: "File", render: (d) => d.file_name, exportValue: (d) => d.file_name, sortValue: (d) => d.file_name },
+    { key: "uploadedFor", header: "Uploaded For", render: (d) => d.staff?.full_name ?? "—", exportValue: (d) => d.staff?.full_name ?? "", sortValue: (d) => d.staff?.full_name },
+    { key: "uploadedBy", header: "Uploaded By", render: (d) => d.uploader?.full_name ?? "—", exportValue: (d) => d.uploader?.full_name ?? "", sortValue: (d) => d.uploader?.full_name },
+    { key: "uploaded", header: "Uploaded", className: "w-[12%] whitespace-nowrap", render: (d) => new Date(d.uploaded_at).toLocaleDateString("en-IN"), exportValue: (d) => new Date(d.uploaded_at).toLocaleDateString("en-IN"), sortValue: (d) => d.uploaded_at },
+    {
+      key: "actions",
+      header: "",
+      render: (d) => (
+        <a href={`/api/employee-documents/${d.id}/download`} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>
+          Download
+        </a>
+      ),
+    },
+  ];
   const isOwnView = viewingStaffId === ownId;
   const canSwitchStaff = staffOptions.length > 1 || isAdmin;
   const canUploadHere = isOwnView || isAdmin;
@@ -171,68 +188,16 @@ export default function DocumentsPage() {
       </form>
       )}
 
-      <DateRangeFilter
-        from={dateFilter.from}
-        to={dateFilter.to}
-        onFromChange={dateFilter.setFrom}
-        onToChange={dateFilter.setTo}
-        onClear={dateFilter.clear}
-        active={dateFilter.active}
-      />
-
-      <div className="mt-3 flex justify-end">
-        <ExportButton
-          filename="documents"
-          headers={["Type", "File", "Uploaded"]}
-          rows={dateFilter.filtered.map((d) => [d.document_type, d.file_name, new Date(d.uploaded_at).toLocaleDateString("en-IN")])}
-        />
-      </div>
-
-      <TablePagination
-        page={page}
-        totalPages={totalPages}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={setPageSize}
-        start={start}
-        end={end}
-        total={total}
+      <DataTable
+        columns={columns}
+        fixedLayout
+        rows={documents}
+        getRowKey={(d) => d.id}
         itemLabel="documents"
+        emptyMessage="No documents uploaded yet."
+        dateFilter={{ getDate: (d) => d.uploaded_at }}
+        exportFilename="documents"
       />
-
-      <div className="mt-3 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
-        <table className="dt-table w-full min-w-[420px] text-left text-sm">
-          <thead>
-            <tr style={{ backgroundColor: "var(--color-muted-tint)" }}>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>#</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Type</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>File</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Uploaded</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
-            {pagedDocuments.map((d, i) => (
-              <tr key={d.id}>
-                <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                <td className="px-4 py-3 font-medium" style={{ color: "var(--color-ink)" }}>{d.document_type}</td>
-                <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{d.file_name}</td>
-                <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{new Date(d.uploaded_at).toLocaleDateString("en-IN")}</td>
-                <td className="px-4 py-3">
-                  <a href={`/api/employee-documents/${d.id}/download`} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>
-                    Download
-                  </a>
-                </td>
-              </tr>
-            ))}
-            {documents.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>No documents uploaded yet.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }

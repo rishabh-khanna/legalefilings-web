@@ -124,6 +124,10 @@ export async function getOrCreateBalance(
 // same staff/type/year approved concurrently both land correctly
 // instead of one silently overwriting the other. Called from
 // PATCH /api/leave-requests/[id] on approval.
+//
+// `days` may be negative — that's the cancellation path handing back the
+// days an approved request had consumed. The underlying function clamps
+// used at zero, so a double-cancel can't manufacture entitlement.
 export async function creditLeaveBalanceUsed(
   supabase: ReturnType<typeof getSupabaseAdmin>,
   staffId: string,

@@ -14,7 +14,13 @@ export async function GET(request: Request) {
   const includeResolved = searchParams.get("includeResolved") === "1";
 
   const supabase = getSupabaseAdmin();
-  let query = supabase.from("email_failures").select("*").order("created_at", { ascending: false });
+  // organizations(name) only actually matters for a platform_admin, who
+  // sees every org's failures pooled together here — without it, there'd
+  // be no way to tell which tenant a failed email even belongs to.
+  let query = supabase
+    .from("email_failures")
+    .select("*, organizations(name), resolver:profiles!email_failures_resolved_by_fkey(full_name)")
+    .order("created_at", { ascending: false });
   if (!canSeeAllOrgs(profile)) query = query.eq("organization_id", profile.organization_id);
   if (!includeResolved) query = query.eq("resolved", false);
 

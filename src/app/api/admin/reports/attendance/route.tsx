@@ -7,6 +7,7 @@ import { SITE_NAME } from "@/config/site";
 import { formatHoursMinutes } from "@/lib/format-duration";
 import { canSeeAllOrgs } from "@/lib/organization";
 import { hasToolAccess } from "@/lib/tool-grants";
+import { toISTDateString } from "@/lib/ist-date";
 
 const styles = StyleSheet.create({
   page: { padding: 40, fontSize: 10, color: "#0f172a" },
@@ -120,7 +121,11 @@ export async function GET(request: Request) {
 
   const byDay = new Map<string, { checkIn?: string; checkOut?: string }>();
   for (const ev of events ?? []) {
-    const day = ev.occurred_at.slice(0, 10);
+    // IST calendar day, not the UTC slice. A punch between IST midnight
+    // and 5:30 AM falls on the previous UTC day, so slicing the
+    // timestamp filed it under the wrong date — the same skew
+    // src/lib/ist-date.ts exists to prevent.
+    const day = toISTDateString(new Date(ev.occurred_at));
     const entry = byDay.get(day) ?? {};
     if (ev.event_type === "check_in" && !entry.checkIn) entry.checkIn = ev.occurred_at;
     if (ev.event_type === "check_out") entry.checkOut = ev.occurred_at;

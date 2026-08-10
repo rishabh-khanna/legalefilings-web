@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { verifyWebhookSignature } from "@/lib/razorpay";
+import { sendPaymentConfirmationEmail } from "@/lib/email";
+import { logEmailFailure } from "@/lib/email-failures";
 
 // POST /api/payments/webhook — configured in the Razorpay dashboard
 // (Settings → Webhooks) pointing at this URL, subscribed to
@@ -30,7 +32,9 @@ export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
   const { data: invoice } = await supabase
     .from("invoices")
-    .select("id, status, order_id, total")
+    .select(
+      "id, invoice_number, status, order_id, total, customer_id, organization_id, orders(service, plan), profiles!invoices_customer_id_fkey(full_name)"
+    )
     .eq("razorpay_order_id", orderId)
     .maybeSingle();
 
@@ -89,6 +93,40 @@ export async function POST(request: Request) {
     });
     if (invoice.order_id) {
       await supabase.from("orders").update({ status: "assigned" }).eq("id", invoice.order_id).eq("status", "new");
+    }
+
+    // The receipt. /api/payments/verify sends this on the common path
+    // (browser still open); this route is the backstop for when it
+    // isn't — which meant the one customer who lost their connection
+    // mid-payment was charged and told nothing. The 23505 guard above
+    // already returned early if /verify beat us here, so reaching this
+    // point means we recorded the payment and we owe the email.
+    const { data: authUser } = await supabase.auth.admin.getUserById(invoice.customer_id);
+    const customerEmail = authUser?.user?.email;
+    try {
+      const orderInfo = invoice.orders as unknown as { service: string; plan: string } | null;
+      if (customerEmail) {
+        const { data: org } = await supabase.from("organizations").select("name").eq("id", invoice.organization_id).single();
+        await sendPaymentConfirmationEmail({
+          customerName: (invoice.profiles as unknown as { full_name: string } | null)?.full_name ?? "there",
+          customerEmail,
+          invoiceNumber: invoice.invoice_number,
+          service: orderInfo?.service ?? "your order",
+          plan: orderInfo?.plan ?? "",
+          orgName: org?.name,
+          amount: amountPaid,
+          paymentId,
+        });
+      }
+    } catch (err) {
+      console.error("Failed to send payment confirmation email (webhook):", err);
+      await logEmailFailure(supabase, {
+        emailType: "payment_confirmation",
+        recipientEmail: customerEmail ?? "unknown",
+        relatedEntity: `invoice:${invoice.id}`,
+        errorMessage: err instanceof Error ? err.message : String(err),
+        organizationId: invoice.organization_id,
+      });
     }
   }
 

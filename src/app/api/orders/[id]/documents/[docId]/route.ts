@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { loadOrderForAccess } from "@/lib/organization";
+import { notifyDocumentReviewed } from "@/lib/order-document-notify";
 
 const BUCKET = "order-documents";
 
@@ -33,6 +34,12 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     .select()
     .single();
   if (error || !data) return NextResponse.json({ error: "Document not found" }, { status: 404 });
+
+  // A rejection's reason previously existed only on a screen the
+  // customer had no reason to revisit, so a returned document just
+  // stalled the order silently. Both outcomes are worth telling them
+  // about — a verification is the "nothing more needed" signal.
+  await notifyDocumentReviewed(supabase, order, data.file_name as string, status, reviewNote);
 
   return NextResponse.json({ ok: true, document: data });
 }

@@ -87,6 +87,19 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   if (Object.keys(patch).length === 0) return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
 
+  // The employee being edited's own org — not the acting admin's. For a
+  // regular admin those are always the same org, so this bug was
+  // invisible; for a platform_admin (canSeeAllOrgs) they're almost never
+  // the same, since profile.organization_id is the platform admin's own
+  // home org, not whichever tenant this employee belongs to. Comparing
+  // reports_to/department against profile.organization_id instead of the
+  // target's own org meant a platform admin could never successfully set
+  // "Reports To" on anyone else's employee (rejected as cross-org even
+  // for a same-tenant manager), and department_id had no ownership check
+  // at all — a department from a different tenant would've been accepted.
+  const { data: targetEmployee } = await supabase.from("profiles").select("organization_id").eq("id", id).single();
+  const targetOrgId = targetEmployee?.organization_id;
+
   // reports_to used to only be settable at account-creation time (see
   // /api/admin/create-user) — there was no way to reassign who someone
   // reports to afterward, which left canApproveFor/canManageStaff (both
@@ -102,12 +115,22 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
       return NextResponse.json({ error: "An employee can't report to themselves" }, { status: 400 });
     }
     const { data: manager } = await supabase.from("profiles").select("organization_id, account_type").eq("id", patch.reports_to).single();
-    if (!manager || manager.organization_id !== profile.organization_id || manager.account_type === "customer") {
-      return NextResponse.json({ error: "reportsTo must be a staff member in your own organization" }, { status: 400 });
+    if (!manager || manager.organization_id !== targetOrgId || manager.account_type === "customer") {
+      return NextResponse.json({ error: "reportsTo must be a staff member in the same organization as this employee" }, { status: 400 });
     }
     const subordinates = await getReportingChainIds(id);
     if (subordinates.includes(patch.reports_to)) {
       return NextResponse.json({ error: "That person already reports up through this employee — can't create a reporting loop" }, { status: 400 });
+    }
+  }
+
+  // departmentId has to belong to the same org as the employee, same
+  // reasoning as reports_to above — nothing in the schema stops a
+  // cross-tenant department_id otherwise.
+  if (typeof patch.department_id === "string" && patch.department_id !== null) {
+    const { data: dept } = await supabase.from("departments").select("organization_id").eq("id", patch.department_id).single();
+    if (!dept || dept.organization_id !== targetOrgId) {
+      return NextResponse.json({ error: "That department doesn't belong to this employee's organization" }, { status: 400 });
     }
   }
 

@@ -7,11 +7,7 @@ import { DashboardPageHero } from "@/components/crm/DashboardPageHero";
 import { RequiredMark } from "@/components/RequiredMark";
 import { BookSwitcher } from "@/components/finance/BookSwitcher";
 import { formatMoney } from "@/lib/currency";
-import { usePagination } from "@/lib/use-pagination";
-import { TablePagination } from "@/components/TablePagination";
-import { useDateRangeFilter } from "@/lib/use-date-range-filter";
-import { DateRangeFilter } from "@/components/DateRangeFilter";
-import { ExportButton } from "@/components/ExportButton";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
 
 type Account = { id: string; bank_name: string; account_name: string; is_active: boolean };
 type Category = { id: string; name: string; transaction_type: "expense" | "income" };
@@ -146,8 +142,64 @@ export default function FinanceRecurringPage() {
   }
 
   const inputClass = "w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]";
-  const dateFilter = useDateRangeFilter(templates ?? [], (t) => t.next_run_date);
-  const { page, setPage, pageSize, setPageSize, pageItems: pagedTemplates, totalPages, total, start, end } = usePagination(dateFilter.filtered);
+
+  const columns: DataTableColumn<Template>[] = [
+    {
+      key: "description",
+      header: "Description",
+      render: (t) => (
+        <>
+          <p className="font-medium" style={{ color: "var(--color-ink)" }}>{t.description ?? t.expense_categories?.name ?? "Recurring entry"}</p>
+          <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>{t.party_name}</p>
+        </>
+      ),
+      exportValue: (t) => t.description ?? t.expense_categories?.name ?? "Recurring entry",
+      sortValue: (t) => t.description ?? t.expense_categories?.name,
+    },
+    {
+      key: "amount",
+      header: "Amount",
+      className: "w-[14%] whitespace-nowrap",
+      render: (t) => <span className="font-semibold" style={{ color: t.transaction_type === "income" ? "#116a2c" : "#b42318" }}>{money(t.amount)}</span>,
+      exportValue: (t) => money(t.amount),
+      sortValue: (t) => t.amount,
+    },
+    { key: "nextRun", header: "Next Run", className: "w-[14%] whitespace-nowrap", render: (t) => new Date(t.next_run_date).toLocaleDateString("en-IN"), exportValue: (t) => new Date(t.next_run_date).toLocaleDateString("en-IN"), sortValue: (t) => t.next_run_date },
+    {
+      key: "status",
+      header: "Status",
+      className: "w-[12%] whitespace-nowrap",
+      render: (t) =>
+        canManage ? (
+          <button
+            type="button"
+            onClick={() => handleToggle(t.id, !t.is_active)}
+            className="rounded-full px-2.5 py-1 text-xs font-semibold"
+            style={t.is_active ? { backgroundColor: "#d0f4db", color: "#116a2c" } : { backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}
+          >
+            {t.is_active ? "Active" : "Paused"}
+          </button>
+        ) : (
+          <span
+            className="rounded-full px-2.5 py-1 text-xs font-semibold"
+            style={t.is_active ? { backgroundColor: "#d0f4db", color: "#116a2c" } : { backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}
+          >
+            {t.is_active ? "Active" : "Paused"}
+          </span>
+        ),
+      exportValue: (t) => (t.is_active ? "Active" : "Paused"),
+      sortValue: (t) => (t.is_active ? "Active" : "Paused"),
+    },
+    {
+      key: "actions",
+      header: "",
+      className: "text-right",
+      render: (t) =>
+        canManage ? (
+          <button type="button" onClick={() => handleDelete(t.id, t.description ?? t.expense_categories?.name ?? "this recurring entry")} className="text-xs font-medium" style={{ color: "#b42318" }}>Delete</button>
+        ) : null,
+    },
+  ];
 
   return (
     <div>
@@ -212,100 +264,31 @@ export default function FinanceRecurringPage() {
             <input required type="number" min={1} max={28} value={form.dayOfMonth} onChange={(e) => setForm((p) => ({ ...p, dayOfMonth: e.target.value }))} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
           </div>
           {error && <p className="sm:col-span-3 text-sm" style={{ color: "#b42318" }}>{error}</p>}
-          <button type="submit" className="sm:col-span-3 rounded-full py-2.5 text-sm font-semibold text-white" style={{ backgroundColor: "var(--color-action)" }}>Save Recurring Entry</button>
+          <div className="flex gap-2 sm:col-span-3">
+            <button type="submit" className="rounded-full px-4 py-1.5 text-xs font-semibold text-white" style={{ backgroundColor: "var(--color-action)" }}>Save Recurring Entry</button>
+            <button
+              type="button"
+              onClick={() => setShowForm(false)}
+              className="rounded-full border px-4 py-1.5 text-xs font-semibold transition-colors hover:bg-[var(--color-accent-tint)]"
+              style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
+            >
+              Cancel
+            </button>
+          </div>
         </form>
       )}
 
-      <DateRangeFilter
-        from={dateFilter.from}
-        to={dateFilter.to}
-        onFromChange={dateFilter.setFrom}
-        onToChange={dateFilter.setTo}
-        onClear={dateFilter.clear}
-        active={dateFilter.active}
-      />
-
-      <div className="mt-3 flex justify-end">
-        <ExportButton
-          filename="recurring-expenses"
-          headers={["Description", "Amount", "Next Run", "Status"]}
-          rows={dateFilter.filtered.map((t) => [
-            t.description ?? t.expense_categories?.name ?? "Recurring entry",
-            money(t.amount),
-            new Date(t.next_run_date).toLocaleDateString("en-IN"),
-            t.is_active ? "Active" : "Paused",
-          ])}
-        />
-      </div>
-
-      <TablePagination
-        page={page}
-        totalPages={totalPages}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={setPageSize}
-        start={start}
-        end={end}
-        total={total}
+      <DataTable
+        columns={columns}
+        fixedLayout
+        rows={templates ?? []}
+        getRowKey={(t) => t.id}
         itemLabel="recurring entries"
+        emptyMessage="No recurring entries yet."
+        dateFilter={{ getDate: (t) => t.next_run_date }}
+        exportFilename="recurring-expenses"
+        minWidth={680}
       />
-
-      <div className="mt-3 overflow-x-auto rounded-2xl border bg-white dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-        <table className="dt-table w-full min-w-[680px] text-left text-sm">
-          <thead>
-            <tr style={{ backgroundColor: "var(--color-muted-tint)" }}>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>#</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Description</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Amount</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Next Run</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Status</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
-            {pagedTemplates.map((t, i) => (
-              <tr key={t.id}>
-                <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                <td className="px-4 py-3">
-                  <p className="font-medium" style={{ color: "var(--color-ink)" }}>{t.description ?? t.expense_categories?.name ?? "Recurring entry"}</p>
-                  <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>{t.party_name}</p>
-                </td>
-                <td className="px-4 py-3 font-semibold" style={{ color: t.transaction_type === "income" ? "#116a2c" : "#b42318" }}>{money(t.amount)}</td>
-                <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{new Date(t.next_run_date).toLocaleDateString("en-IN")}</td>
-                <td className="px-4 py-3">
-                  {canManage ? (
-                    <button
-                      type="button"
-                      onClick={() => handleToggle(t.id, !t.is_active)}
-                      className="rounded-full px-2.5 py-1 text-xs font-semibold"
-                      style={t.is_active ? { backgroundColor: "#d0f4db", color: "#116a2c" } : { backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}
-                    >
-                      {t.is_active ? "Active" : "Paused"}
-                    </button>
-                  ) : (
-                    <span
-                      className="rounded-full px-2.5 py-1 text-xs font-semibold"
-                      style={t.is_active ? { backgroundColor: "#d0f4db", color: "#116a2c" } : { backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}
-                    >
-                      {t.is_active ? "Active" : "Paused"}
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  {canManage && (
-                    <button type="button" onClick={() => handleDelete(t.id, t.description ?? t.expense_categories?.name ?? "this recurring entry")} className="text-xs font-medium" style={{ color: "#b42318" }}>Delete</button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {templates !== null && templates.length === 0 && (
-              <tr>
-                <td colSpan={6} className="px-4 py-8 text-center" style={{ color: "var(--color-ink-soft)" }}>No recurring entries yet.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }

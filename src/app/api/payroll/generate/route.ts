@@ -4,6 +4,8 @@ import { getCurrentProfile } from "@/lib/current-profile";
 import { calculatePayroll, computeLopDays } from "@/lib/payroll";
 import { canSeeAllOrgs } from "@/lib/organization";
 import { hasToolAccess } from "@/lib/tool-grants";
+import { toISTDateString } from "@/lib/ist-date";
+import { workingDaysInMonth } from "@/lib/working-days";
 
 // POST /api/payroll/generate — admin only. For the given month/year,
 // generates a payslip for every staff member who has a salary structure,
@@ -64,7 +66,7 @@ export async function POST(request: Request) {
           .lt("occurred_at", `${nextMonthYear}-${String(nextMonth).padStart(2, "0")}-01T00:00:00Z`),
         supabase
           .from("leave_requests")
-          .select("staff_id, leave_type, start_date, end_date")
+          .select("staff_id, leave_type, start_date, end_date, day_fraction")
           .eq("status", "approved")
           .in("staff_id", staffIds)
           .lte("start_date", periodEndExact)
@@ -74,27 +76,74 @@ export async function POST(request: Request) {
 
   const presentDatesByStaff = new Map<string, Set<string>>();
   for (const row of checkIns ?? []) {
-    const dateKey = String(row.occurred_at).slice(0, 10);
+    // IST calendar day, not the UTC slice. A check-in between IST
+    // midnight and 5:30 AM lands on the previous UTC date, so presence
+    // was recorded against the wrong day and the day they actually
+    // worked was counted as Loss of Pay — real money, every night shift.
+    const dateKey = toISTDateString(new Date(row.occurred_at));
     if (!presentDatesByStaff.has(row.staff_id)) presentDatesByStaff.set(row.staff_id, new Set());
     presentDatesByStaff.get(row.staff_id)!.add(dateKey);
   }
 
+  // A half-day of approved paid leave covers half the day — the other
+  // half is still an absence. Tracked as a fraction per date so LOP can
+  // charge 0.5 rather than treating the day as either fully covered or
+  // fully lost.
   const paidLeaveDatesByStaff = new Map<string, Set<string>>();
+  const halfLeaveDatesByStaff = new Map<string, Set<string>>();
   for (const leave of approvedLeave ?? []) {
     if (leave.leave_type === "unpaid") continue; // unpaid leave is deliberately NOT covered — that's the point of it
     if (!paidLeaveDatesByStaff.has(leave.staff_id)) paidLeaveDatesByStaff.set(leave.staff_id, new Set());
     const set = paidLeaveDatesByStaff.get(leave.staff_id)!;
+    const isHalf = Number(leave.day_fraction ?? 1) === 0.5;
+    if (isHalf && !halfLeaveDatesByStaff.has(leave.staff_id)) halfLeaveDatesByStaff.set(leave.staff_id, new Set());
     const from = leave.start_date < periodStart ? periodStart : leave.start_date;
     const to = leave.end_date > periodEndExact ? periodEndExact : leave.end_date;
     for (let d = new Date(`${from}T00:00:00Z`); d <= new Date(`${to}T00:00:00Z`); d.setUTCDate(d.getUTCDate() + 1)) {
-      set.add(d.toISOString().slice(0, 10));
+      const key = d.toISOString().slice(0, 10);
+      set.add(key);
+      if (isHalf) halfLeaveDatesByStaff.get(leave.staff_id)!.add(key);
     }
+  }
+
+  // Company holidays for every organization in this run, keyed by org —
+  // a cron/platform-admin run spans tenants, and each declares its own
+  // calendar, so one shared set would dock the wrong people. Without
+  // this, anyone who correctly didn't clock in on a declared holiday was
+  // counted as loss-of-pay.
+  const orgIds = Array.from(new Set(Array.from(latestByStaff.values()).map((s) => s.organization_id)));
+  const { data: holidayRows } = orgIds.length
+    ? await supabase
+        .from("holidays")
+        .select("organization_id, date")
+        .in("organization_id", orgIds)
+        .gte("date", periodStart)
+        .lte("date", periodEndExact)
+    : { data: [] as { organization_id: string; date: string }[] };
+  // Professional Tax slabs are per state, so payroll needs the employing
+  // org's state — a cross-org run spans states.
+  const { data: settingsRows } = orgIds.length
+    ? await supabase.from("company_settings").select("organization_id, state").in("organization_id", orgIds)
+    : { data: [] as { organization_id: string; state: string | null }[] };
+  const stateByOrg = new Map((settingsRows ?? []).map((s) => [s.organization_id, s.state]));
+
+  const holidaysByOrg = new Map<string, Set<string>>();
+  for (const h of holidayRows ?? []) {
+    if (!holidaysByOrg.has(h.organization_id)) holidaysByOrg.set(h.organization_id, new Set());
+    holidaysByOrg.get(h.organization_id)!.add(String(h.date).slice(0, 10));
   }
 
   const toInsert = [];
   for (const [staffId, s] of latestByStaff) {
     if (alreadyGenerated.has(staffId)) continue;
-    const lopDays = computeLopDays(month, year, presentDatesByStaff.get(staffId) ?? new Set(), paidLeaveDatesByStaff.get(staffId) ?? new Set());
+    const lopDays = computeLopDays(
+      month,
+      year,
+      presentDatesByStaff.get(staffId) ?? new Set(),
+      paidLeaveDatesByStaff.get(staffId) ?? new Set(),
+      holidaysByOrg.get(s.organization_id) ?? new Set(),
+      halfLeaveDatesByStaff.get(staffId) ?? new Set()
+    );
     const calc = calculatePayroll({
       basic: Number(s.basic),
       hra: Number(s.hra),
@@ -102,7 +151,10 @@ export async function POST(request: Request) {
       bonus: Number(s.bonus),
       incentives: Number(s.incentives),
       lopDays,
-      daysInMonth,
+      // Working days, not calendar days — must match the universe
+      // lopDays was counted in, and reflects this org's own holidays.
+      payableDays: workingDaysInMonth(month, year, holidaysByOrg.get(s.organization_id) ?? new Set()),
+      state: stateByOrg.get(s.organization_id) ?? null,
     });
     toInsert.push({
       organization_id: s.organization_id,

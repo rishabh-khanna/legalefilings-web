@@ -311,8 +311,20 @@ export async function GET(request: Request) {
   // payables, so presenting this as a complete balance sheet would be
   // misleading; it's exactly what it says it is, nothing more.
   if (reportType === "balance_sheet") {
-    const { data: accounts } = await supabase.from("expense_accounts").select("bank_name, account_name, current_balance").eq("customer_id", bookOwnerId).eq("is_active", true);
-    const body: Row[] = (accounts ?? []).map((a) => [`${a.bank_name} — ${a.account_name}`, formatMoney(Number(a.current_balance), currency)]);
+    // Closed accounts included. Closing an account is a "keep it out of
+    // the pay-from picker" flag — the API and the confirm dialog both
+    // promise the balance stays visible — so omitting it from a balance
+    // sheet understates assets the business genuinely holds. That is the
+    // one thing a balance sheet must not do. Labelled so the reader can
+    // see which accounts are closed rather than being quietly counted.
+    const { data: accounts } = await supabase
+      .from("expense_accounts")
+      .select("bank_name, account_name, current_balance, is_active")
+      .eq("customer_id", bookOwnerId);
+    const body: Row[] = (accounts ?? []).map((a) => [
+      `${a.bank_name} — ${a.account_name}${a.is_active ? "" : " (closed)"}`,
+      formatMoney(Number(a.current_balance), currency),
+    ]);
     body.push(["Cash", formatMoney(Number(currencyProfile?.cash_balance ?? 0), currency)]);
     const total = (accounts ?? []).reduce((s, a) => s + Number(a.current_balance), 0) + Number(currencyProfile?.cash_balance ?? 0);
     const report: ReportShape = withRowNumbers({

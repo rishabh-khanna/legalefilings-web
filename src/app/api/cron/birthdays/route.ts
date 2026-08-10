@@ -24,9 +24,11 @@ export async function GET(request: Request) {
   }
 
   const supabase = getSupabaseAdmin();
+  // organizations!organization_id disambiguates the embed — profiles has
+  // more than one FK to organizations, so PostgREST can't infer it alone.
   const { data: profiles, error } = await supabase
     .from("profiles")
-    .select("id, full_name, date_of_birth, organization_id, organizations(name)");
+    .select("id, full_name, date_of_birth, organization_id, organizations!organization_id(name)");
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   // UTC, not server-local time — Vercel Cron fires on a UTC schedule (see

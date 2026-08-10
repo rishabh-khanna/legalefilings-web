@@ -39,6 +39,7 @@ export default function PayrollPage() {
 
   const [payslipCount, setPayslipCount] = useState(0);
   const [payrollTotal, setPayrollTotal] = useState(0);
+  const [spansMultipleOrgs, setSpansMultipleOrgs] = useState(false);
 
   useEffect(() => {
     const kickoff = setTimeout(async () => {
@@ -46,6 +47,7 @@ export default function PayrollPage() {
       const data = await res.json();
       const members = (data.members ?? []) as { id: string; full_name: string | null; organizationName?: string | null }[];
       const orgCount = new Set(members.map((p) => p.organizationName)).size;
+      setSpansMultipleOrgs(orgCount > 1);
       const opts = members.map((p) => ({
         id: p.id,
         name: orgCount > 1 && p.organizationName ? `${p.full_name ?? "Unnamed"} — ${p.organizationName}` : (p.full_name ?? "Unnamed"),
@@ -108,6 +110,7 @@ export default function PayrollPage() {
   }
 
   async function handleGenerate() {
+    if (spansMultipleOrgs && !confirm(`This generates payslips for every organization's staff with a saved salary structure for ${new Date(genYear, genMonth - 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" })} — not just one company. Continue?`)) return;
     setGenerating(true);
     const res = await fetch("/api/payroll/generate", {
       method: "POST",
@@ -131,7 +134,11 @@ export default function PayrollPage() {
     <div>
       <DashboardPageHero
         title="Payroll"
-        subtitle="Set salary structures and generate monthly payslips. PF/ESI/Professional Tax use simplified standard rates — review before relying on them for statutory filing."
+        subtitle={
+          spansMultipleOrgs
+            ? "Every organization's staff, pooled here for platform-level support — the Employee picker below is labeled by company, and Generate Salary runs across every org at once, not just one."
+            : "Set salary structures and generate monthly payslips. PF/ESI/Professional Tax use simplified standard rates — review before relying on them for statutory filing."
+        }
         action={
           <Link
             href="/dashboard/admin/payslips"

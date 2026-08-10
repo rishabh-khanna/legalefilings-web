@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { getBookAccess, hasPermission } from "@/lib/expense-manager";
+import { toISTDateString } from "@/lib/ist-date";
 
 // GET /api/expense-manager/charts?bookOwnerId=&months=6 — Module 13's
 // dashboard charts, computed from the same transaction history every
@@ -22,9 +23,14 @@ export async function GET(request: Request) {
   const access = await getBookAccess(supabase, profile.id, bookOwnerId);
   if (!access || !hasPermission(access, "view_reports")) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
-  const rangeStart = new Date();
-  rangeStart.setMonth(rangeStart.getMonth() - (months - 1));
-  rangeStart.setDate(1);
+  // Anchored to the IST calendar month and built in UTC. The previous
+  // version mutated a local Date and then serialised it with
+  // toISOString(), so the range boundary shifted by a day depending on
+  // what time of day the page was opened — transactions on that
+  // boundary were double-counted into the opening balance or dropped
+  // from the chart entirely, intermittently.
+  const [istY, istM] = toISTDateString(new Date()).split("-").map(Number);
+  const rangeStart = new Date(Date.UTC(istY, istM - 1 - (months - 1), 1));
   const rangeStartStr = rangeStart.toISOString().slice(0, 10);
 
   const [{ data: accounts }, { data: businessProfile }, { data: priorTx }, { data: rangeTx }] = await Promise.all([
@@ -52,8 +58,11 @@ export async function GET(request: Request) {
 
   const monthKeys: string[] = [];
   for (let i = 0; i < months; i++) {
-    const d = new Date(rangeStart);
-    d.setMonth(d.getMonth() + i);
+    // Built from UTC parts rather than mutating a Date with local
+    // setMonth — mixing the two is what produced the boundary drift
+    // above, and month keys must line up exactly with the YYYY-MM slice
+    // of transaction_date used to bucket rows below.
+    const d = new Date(Date.UTC(rangeStart.getUTCFullYear(), rangeStart.getUTCMonth() + i, 1));
     monthKeys.push(d.toISOString().slice(0, 7));
   }
 

@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { FileText, CheckCircle2, Clock, IndianRupee, ChevronLeft, ChevronRight, Trash2, Paperclip, History, Repeat, Download, X } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { isStaffOrAdmin, type Profile } from "@/lib/roles";
@@ -14,11 +14,9 @@ import { gstStateCode } from "@/lib/gst-state-codes";
 import { buildWhatsAppLink } from "@/lib/whatsapp";
 import { SITE_NAME } from "@/config/site";
 import { LoadingBlock } from "@/components/Spinner";
-import { usePagination } from "@/lib/use-pagination";
-import { TablePagination } from "@/components/TablePagination";
-import { useDateRangeFilter } from "@/lib/use-date-range-filter";
-import { DateRangeFilter } from "@/components/DateRangeFilter";
-import { ExportButton } from "@/components/ExportButton";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { MultiSelect } from "@/components/MultiSelect";
+import { isCollectableInvoiceType } from "@/lib/invoice-calc";
 
 type InvoiceType = "gst" | "non_gst" | "export" | "proforma" | "credit_note" | "debit_note";
 type InvoiceRow = {
@@ -31,18 +29,21 @@ type InvoiceRow = {
   created_at: string;
   due_at: string | null;
   customer_id: string;
+  organization_id: string;
   profiles?: { full_name: string | null; company: string | null } | null;
   invoice_payments?: { amount: number }[];
+  organizations?: { name: string | null } | null;
 };
 type CatalogItem = { id: string; type: "product" | "service"; name: string; hsn_sac_code: string | null; gst_rate: number; unit: string; default_rate: number | null };
 type Customer = {
   id: string; full_name: string | null; company: string | null; phone: string | null;
   gstin: string | null; pan_number: string | null; state: string | null; state_code: string | null;
   billing_address: string | null; shipping_address: string | null;
+  organization_id?: string; organizations?: { name: string | null } | null;
 };
 type GstRegistration = { id: string; label: string; gst_number: string; state: string | null; state_code: string | null; is_default: boolean };
 type WizardItem = { catalogItemId: string; description: string; itemType: "product" | "service"; hsnSacCode: string; unit: string; quantity: string; rate: string; discount: string; gstRate: string };
-type RecurringTemplate = { id: string; frequency: string; next_run_date: string; active: boolean; invoice_type: string; profiles?: { full_name: string | null } | null; payload: Record<string, unknown> };
+type RecurringTemplate = { id: string; frequency: string; next_run_date: string; active: boolean; invoice_type: string; profiles?: { full_name: string | null } | null; payload: Record<string, unknown>; organizations?: { name: string | null } | null };
 type LedgerEntry = { date: string; type: "invoice" | "payment"; label: string; debit: number; credit: number; balance: number; invoiceNumber: string };
 
 const TYPE_LABEL: Record<InvoiceType, string> = {
@@ -64,12 +65,12 @@ const WIZARD_STEPS = ["Type", "Customer", "Details", "Items", "Charges & TDS", "
 export default function InvoiceCrmPage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [invoices, setInvoices] = useState<InvoiceRow[]>([]);
-  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState<InvoiceRow["status"] | "all">("all");
+  const [invoiceStatusFilter, setInvoiceStatusFilter] = useState<Set<string>>(new Set());
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [catalog, setCatalog] = useState<CatalogItem[]>([]);
   const [registrations, setRegistrations] = useState<GstRegistration[]>([]);
   const [companyStateCode, setCompanyStateCode] = useState("");
-  const [view, setView] = useState<"invoices" | "recurring">("invoices");
+  const [view, setView] = useState<"invoices" | "ledger" | "recurring">("invoices");
   const [showWizard, setShowWizard] = useState(false);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -126,6 +127,11 @@ export default function InvoiceCrmPage() {
   const [recurringTemplates, setRecurringTemplates] = useState<RecurringTemplate[]>([]);
   const [recurringFrequency, setRecurringFrequency] = useState("monthly");
   const [runningTemplateId, setRunningTemplateId] = useState<string | null>(null);
+  // A customer delegated the invoice_crm tool operates this page exactly
+  // like staff/admin would — hasToolAccess() itself needs the service-role
+  // client so it can't run here; this mirrors it with a direct
+  // staff_tool_grants read, which RLS already permits for one's own rows.
+  const [hasCrmGrant, setHasCrmGrant] = useState(false);
 
   async function loadInvoices() {
     const res = await fetch("/api/invoices");
@@ -147,7 +153,22 @@ export default function InvoiceCrmPage() {
       if (!user) return;
       const { data: p } = await supabase.from("profiles").select("*").eq("id", user.id).single();
       if (p) setProfile({ ...p, email: user.email ?? "" });
-      if (!p || !isStaffOrAdmin(p)) {
+
+      let allowed = !!p && isStaffOrAdmin(p);
+      if (!allowed && p?.account_type === "customer") {
+        const { data: grant } = await supabase
+          .from("staff_tool_grants")
+          .select("expires_at")
+          .eq("staff_id", user.id)
+          .eq("tool_key", "invoice_crm")
+          .maybeSingle();
+        const granted = !!grant && (!grant.expires_at || new Date(grant.expires_at) > new Date());
+        if (granted) {
+          allowed = true;
+          setHasCrmGrant(true);
+        }
+      }
+      if (!p || !allowed) {
         setLoading(false);
         return;
       }
@@ -397,20 +418,19 @@ export default function InvoiceCrmPage() {
   }
 
   async function handleGenerate() {
+    // Re-checks every step rather than duplicating a partial list here.
+    // The credit/debit-note "Against Invoice" requirement in particular
+    // was enforced only by the server, so the user learned about it via
+    // a raw API error after completing the whole wizard. Sends them back
+    // to the offending step instead of just complaining.
+    const blocking = [1, 2, 3, 4].find((n) => stepIssue(n) !== null);
+    if (blocking) {
+      showError(stepIssue(blocking)!);
+      setStep(blocking);
+      return;
+    }
     if (!customerId) {
       showError("Select a customer first.");
-      return;
-    }
-    if (taxable && !placeOfSupply.trim()) {
-      showError("Place of Supply is required for taxable invoices — it drives CGST+SGST vs IGST.");
-      return;
-    }
-    if (lineItemDrafts.length === 0) {
-      showError("Add at least one line item.");
-      return;
-    }
-    if (lineItemDrafts.some((i) => !(i.quantity > 0))) {
-      showError("Every line item needs a quantity greater than 0.");
       return;
     }
     setGenerating(true);
@@ -554,32 +574,203 @@ export default function InvoiceCrmPage() {
   }
 
   function balanceOf(inv: InvoiceRow) {
+    // A credit note is money owed TO the customer and a proforma is a
+    // quotation — neither is a receivable, so neither carries an
+    // outstanding balance to display or collect.
+    if (!isCollectableInvoiceType(inv.invoice_type)) return 0;
     const paid = (inv.invoice_payments ?? []).reduce((sum, p) => sum + Number(p.amount), 0);
     return Math.max(0, Number(inv.total) - paid);
   }
 
-  const canManage = profile ? isStaffOrAdmin(profile) : false;
+  const canManage = profile ? isStaffOrAdmin(profile) || hasCrmGrant : false;
   const activeStepLabels = WIZARD_STEPS;
   const currentStepLabel = activeStepLabels[Math.min(step, activeStepLabels.length) - 1];
-  const invoiceStats = useMemo(() => {
-    const paid = invoices.filter((i) => i.status === "paid").length;
+  const invoicesByStatus = useMemo(() => {
+    const paid = invoices.filter((i) => i.status === "paid");
+    const pending = invoices.filter((i) => i.status !== "paid");
     const totalValue = invoices.filter((i) => i.status !== "cancelled").reduce((sum, i) => sum + Number(i.total), 0);
-    return { total: invoices.length, paid, pending: invoices.length - paid, totalValue };
+    return { paid, pending, totalValue };
   }, [invoices]);
 
   const inputClass = "w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]";
   const labelClass = "block text-xs font-medium mb-1";
 
-  const filteredInvoices = useMemo(
-    () => (invoiceStatusFilter === "all" ? invoices : invoices.filter((i) => i.status === invoiceStatusFilter)),
+  const statusFilteredInvoices = useMemo(
+    () => (invoiceStatusFilter.size === 0 ? invoices : invoices.filter((i) => invoiceStatusFilter.has(i.status))),
     [invoices, invoiceStatusFilter]
   );
-  const invoiceDateFilter = useDateRangeFilter(filteredInvoices, (i) => i.created_at);
-  const ledgerDateFilter = useDateRangeFilter(ledger ?? [], (e) => e.date);
-  const invoicesPagination = usePagination(invoiceDateFilter.filtered);
-  const ledgerPagination = usePagination(ledgerDateFilter.filtered);
-  const recurringDateFilter = useDateRangeFilter(recurringTemplates, (t) => t.next_run_date);
-  const recurringPagination = usePagination(recurringDateFilter.filtered);
+
+  // Replaces the old group-by-client clustering on the invoice register —
+  // one dropdown to narrow the table to a single customer instead of the
+  // whole list visually reorganized around them.
+  const [invoiceClientFilter, setInvoiceClientFilter] = useState<Set<string>>(new Set());
+  const invoiceClientOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const inv of invoices) {
+      if (!byId.has(inv.customer_id)) byId.set(inv.customer_id, inv.profiles?.full_name ?? "—");
+    }
+    return [...byId.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [invoices]);
+  const filteredInvoices = useMemo(
+    () => (invoiceClientFilter.size === 0 ? statusFilteredInvoices : statusFilteredInvoices.filter((i) => invoiceClientFilter.has(i.customer_id))),
+    [statusFilteredInvoices, invoiceClientFilter]
+  );
+
+  // Only a platform_admin's request ever returns more than one org's
+  // invoices pooled together — the column is only worth showing once
+  // it's actually ambiguous which org a row belongs to.
+  const spansMultipleOrgs = new Set(invoices.map((i) => i.organization_id)).size > 1;
+  // Same reasoning for the customer picker — without a per-option org
+  // label, two different tenants' identically-named customers (or ones
+  // with no Business Name filled in) would be indistinguishable, risking
+  // invoicing the wrong company's customer entirely.
+  const spansMultipleCustomerOrgs = new Set(customers.map((c) => c.organization_id)).size > 1;
+  function customerOptionLabel(c: Customer) {
+    const base = `${c.full_name ?? "Unnamed"}${c.company ? ` — ${c.company}` : ""}`;
+    return spansMultipleCustomerOrgs && c.organizations?.name ? `${base} (${c.organizations.name})` : base;
+  }
+
+  const ledgerColumns: DataTableColumn<LedgerEntry>[] = [
+    { key: "date", header: "Date", className: "w-[14%] whitespace-nowrap", render: (e) => new Date(e.date).toLocaleDateString("en-IN"), exportValue: (e) => new Date(e.date).toLocaleDateString("en-IN"), sortValue: (e) => e.date },
+    { key: "entry", header: "Entry", render: (e) => <span style={{ color: "var(--color-ink)" }}>{e.label}</span>, exportValue: (e) => e.label, sortValue: (e) => e.label },
+    { key: "debit", header: "Debit", className: "w-[14%] whitespace-nowrap", render: (e) => (e.debit > 0 ? `₹${e.debit.toLocaleString("en-IN")}` : "—"), exportValue: (e) => (e.debit > 0 ? e.debit : ""), sortValue: (e) => e.debit },
+    { key: "credit", header: "Credit", className: "w-[14%] whitespace-nowrap", render: (e) => (e.credit > 0 ? `₹${e.credit.toLocaleString("en-IN")}` : "—"), exportValue: (e) => (e.credit > 0 ? e.credit : ""), sortValue: (e) => e.credit },
+    { key: "balance", header: "Balance", className: "w-[14%] whitespace-nowrap", render: (e) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>₹{e.balance.toLocaleString("en-IN")}</span>, exportValue: (e) => e.balance, sortValue: (e) => e.balance },
+  ];
+
+  const invoiceColumns: DataTableColumn<InvoiceRow>[] = [
+    { key: "invoice", header: "Invoice", render: (inv) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{inv.invoice_number}</span>, exportValue: (inv) => inv.invoice_number, sortValue: (inv) => inv.invoice_number },
+    { key: "type", header: "Type", className: "w-[10%] whitespace-nowrap", render: (inv) => TYPE_LABEL[inv.invoice_type] ?? "Invoice", exportValue: (inv) => TYPE_LABEL[inv.invoice_type] ?? "Invoice", sortValue: (inv) => TYPE_LABEL[inv.invoice_type] ?? inv.invoice_type },
+    { key: "client", header: "Client", render: (inv) => inv.profiles?.full_name ?? "—", exportValue: (inv) => inv.profiles?.full_name ?? "—", sortValue: (inv) => inv.profiles?.full_name },
+    { key: "date", header: "Date", className: "w-[10%] whitespace-nowrap", render: (inv) => new Date(inv.created_at).toLocaleDateString("en-IN"), exportValue: (inv) => new Date(inv.created_at).toLocaleDateString("en-IN"), sortValue: (inv) => inv.created_at },
+    { key: "amount", header: "Amount", className: "w-[12%] whitespace-nowrap", render: (inv) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>₹{Number(inv.total).toLocaleString("en-IN")}</span>, exportValue: (inv) => Number(inv.total), sortValue: (inv) => Number(inv.total) },
+    {
+      key: "balance",
+      header: "Balance",
+      className: "w-[12%] whitespace-nowrap",
+      render: (inv) => {
+        const balance = balanceOf(inv);
+        return <span style={{ color: balance > 0 ? "#b42318" : "var(--color-ink-soft)" }}>{balance > 0 ? `₹${balance.toLocaleString("en-IN")}` : "—"}</span>;
+      },
+      exportValue: (inv) => balanceOf(inv),
+      sortValue: (inv) => balanceOf(inv),
+    },
+    {
+      key: "status",
+      header: "Status",
+      className: "w-[10%] whitespace-nowrap",
+      render: (inv) => <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: STATUS_STYLE[inv.status].bg, color: STATUS_STYLE[inv.status].fg }}>{inv.status.replace("_", " ")}</span>,
+      exportValue: (inv) => inv.status.replace("_", " "),
+      sortValue: (inv) => inv.status,
+    },
+    ...(spansMultipleOrgs
+      ? [{ key: "org", header: "Organization", className: "w-[12%]", render: (inv: InvoiceRow) => inv.organizations?.name ?? "—", exportValue: (inv: InvoiceRow) => inv.organizations?.name ?? "Unknown organization" } as DataTableColumn<InvoiceRow>]
+      : []),
+    {
+      key: "actions",
+      header: "",
+      render: (inv) => {
+        const balance = balanceOf(inv);
+        const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/pay/${inv.id}` : `/pay/${inv.id}`;
+        const invCustomerPhone = customers.find((c) => c.id === inv.customer_id)?.phone ?? "";
+        const invOrgName = inv.organizations?.name ?? SITE_NAME;
+        return (
+          <div className="flex flex-wrap items-center gap-2.5">
+            <a href={`/api/invoices/${inv.id}/download`} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>PDF / Print</a>
+            {inv.status === "draft" && (
+              <>
+                <button type="button" onClick={() => handleEditDraft(inv)} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>Edit</button>
+                <button type="button" onClick={() => handleSend(inv.id)} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>Send</button>
+              </>
+            )}
+            <button type="button" onClick={() => handleEmail(inv.id)} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>Email</button>
+            {isCollectableInvoiceType(inv.invoice_type) && inv.status !== "paid" && inv.status !== "cancelled" && (
+              <button type="button" onClick={() => { setPayingInvoice(inv); setPayAmount(String(balance)); }} className="text-xs font-semibold underline" style={{ color: "#116a2c" }}>
+                Record Payment
+              </button>
+            )}
+            {invCustomerPhone && (
+              <a href={buildWhatsAppLink(invCustomerPhone, `Hi, here's your invoice ${inv.invoice_number} from ${invOrgName}: ${shareUrl}`)} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold underline" style={{ color: "#116a2c" }}>
+                WhatsApp
+              </a>
+            )}
+            <button type="button" onClick={() => { navigator.clipboard.writeText(shareUrl); showSuccess("Link copied."); }} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>
+              Copy Link
+            </button>
+            <button type="button" onClick={() => toggleExpand(inv, "attachments")} className="flex items-center gap-1 text-xs font-semibold underline" style={{ color: "var(--color-ink-soft)" }}>
+              <Paperclip className="h-3 w-3" /> Files
+            </button>
+            <button type="button" onClick={() => toggleExpand(inv, "history")} className="flex items-center gap-1 text-xs font-semibold underline" style={{ color: "var(--color-ink-soft)" }}>
+              <History className="h-3 w-3" /> History
+            </button>
+          </div>
+        );
+      },
+    },
+  ];
+
+  function renderInvoiceExpanded(inv: InvoiceRow) {
+    return (
+      <div className="px-4 py-4" style={{ backgroundColor: "var(--color-paper)" }}>
+        {expandedTab === "attachments" ? (
+          <div>
+            <div className="flex items-center gap-3">
+              <label
+                className="inline-flex cursor-pointer items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition-colors hover:bg-[var(--color-accent-tint)]"
+                style={{ borderColor: "var(--color-line)", color: "var(--color-ink)", opacity: uploadingAttachment ? 0.6 : 1 }}
+              >
+                <Paperclip className="h-3.5 w-3.5" />
+                {uploadingAttachment ? "Uploading…" : "Choose File"}
+                <input
+                  type="file"
+                  disabled={uploadingAttachment}
+                  onChange={(e) => e.target.files?.[0] && handleUploadAttachment(inv.id, e.target.files[0])}
+                  className="hidden"
+                />
+              </label>
+            </div>
+            <ul className="mt-2 space-y-1">
+              {attachments.map((a) => (
+                <li key={a.id} className="text-sm">
+                  <a href={`/api/invoices/${inv.id}/attachments/${a.id}/download`} className="underline" style={{ color: "var(--color-action-dark)" }}>{a.file_name}</a>
+                </li>
+              ))}
+              {attachments.length === 0 && <li className="text-sm" style={{ color: "var(--color-ink-soft)" }}>No attachments yet.</li>}
+            </ul>
+          </div>
+        ) : (
+          <ul className="space-y-1.5">
+            {history.map((h) => (
+              <li key={h.id} className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
+                <span className="font-medium" style={{ color: "var(--color-ink)" }}>{h.event_type.replace("_", " ")}</span>
+                {h.detail ? ` — ${h.detail}` : ""} · {h.profiles?.full_name ?? "System"} · {new Date(h.created_at).toLocaleString("en-IN")}
+              </li>
+            ))}
+            {history.length === 0 && <li className="text-sm" style={{ color: "var(--color-ink-soft)" }}>No history yet.</li>}
+          </ul>
+        )}
+      </div>
+    );
+  }
+
+  const recurringColumns: DataTableColumn<RecurringTemplate>[] = [
+    { key: "customer", header: "Customer", render: (t) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{t.profiles?.full_name ?? "—"}</span>, exportValue: (t) => t.profiles?.full_name ?? "—", sortValue: (t) => t.profiles?.full_name },
+    { key: "type", header: "Type", className: "w-[12%] whitespace-nowrap", render: (t) => TYPE_LABEL[t.invoice_type as InvoiceType] ?? t.invoice_type, exportValue: (t) => TYPE_LABEL[t.invoice_type as InvoiceType] ?? t.invoice_type, sortValue: (t) => TYPE_LABEL[t.invoice_type as InvoiceType] ?? t.invoice_type },
+    { key: "frequency", header: "Frequency", className: "w-[14%] whitespace-nowrap", render: (t) => <span className="capitalize">{t.frequency}</span>, exportValue: (t) => t.frequency, sortValue: (t) => t.frequency },
+    { key: "nextRun", header: "Next Run", className: "w-[16%] whitespace-nowrap", render: (t) => new Date(t.next_run_date).toLocaleDateString("en-IN"), exportValue: (t) => new Date(t.next_run_date).toLocaleDateString("en-IN"), sortValue: (t) => t.next_run_date },
+    ...(spansMultipleOrgs
+      ? [{ key: "org", header: "Organization", className: "w-[14%]", render: (t: RecurringTemplate) => t.organizations?.name ?? "—", exportValue: (t: RecurringTemplate) => t.organizations?.name ?? "Unknown organization" } as DataTableColumn<RecurringTemplate>]
+      : []),
+    {
+      key: "actions",
+      header: "",
+      render: (t) => (
+        <button type="button" onClick={() => handleRunTemplate(t.id)} disabled={runningTemplateId === t.id} className="flex items-center gap-1 text-xs font-semibold underline disabled:opacity-60" style={{ color: "var(--color-action-dark)" }}>
+          <Repeat className="h-3 w-3" /> {runningTemplateId === t.id ? "Running…" : "Run Now"}
+        </button>
+      ),
+    },
+  ];
 
   if (loading) {
     return <LoadingBlock />;
@@ -596,20 +787,65 @@ export default function InvoiceCrmPage() {
 
   const gstOriginalInvoices = invoices.filter((i) => i.invoice_type === "gst" || i.invoice_type === "non_gst");
 
+  // What (if anything) is still missing on a given wizard step.
+  //
+  // The wizard previously let you click Next — or jump straight to any
+  // step via the chips — with nothing filled in, and only told you what
+  // was wrong when you hit Generate at the end. Filling out seven steps
+  // and then being sent back to step 2 is a bad trade for the user, and
+  // the credit/debit-note "Against Invoice" requirement wasn't checked
+  // client-side at all: the only signal was a raw server error after
+  // everything else had been entered.
+  function stepIssue(n: number): string | null {
+    switch (n) {
+      case 1:
+        if ((invoiceType === "credit_note" || invoiceType === "debit_note") && !relatedInvoiceId) {
+          return "Pick the original invoice this note is issued against.";
+        }
+        return null;
+      case 2:
+        if (customerMode === "existing" && !customerId) return "Select a customer.";
+        if (customerMode === "new" && !newCustomer.fullName.trim()) return "Enter the new customer's name.";
+        return null;
+      case 3:
+        if (taxable && !placeOfSupply.trim()) return "Place of Supply is required — it decides CGST+SGST vs IGST.";
+        return null;
+      case 4:
+        if (lineItemDrafts.length === 0) return "Add at least one line item.";
+        if (lineItemDrafts.some((i) => !i.description.trim())) return "Every line item needs a description.";
+        if (lineItemDrafts.some((i) => !(i.quantity > 0))) return "Every line item needs a quantity greater than 0.";
+        return null;
+      default:
+        return null;
+    }
+  }
+
+  // The first step that still has a problem — used to stop a forward
+  // jump landing past something unfinished.
+  const firstIncompleteStep = [1, 2, 3, 4].find((n) => stepIssue(n) !== null) ?? activeStepLabels.length;
+  const currentStepIssue = stepIssue(step);
+
   return (
     <div>
-      <DashboardPageHero title="Invoice CRM" subtitle="GST-compliant ad-hoc invoicing — products, services, credit/debit notes, recurring billing, and payment tracking.">
+      <DashboardPageHero
+        title="Invoice CRM"
+        subtitle={
+          spansMultipleOrgs
+            ? "Every organization's invoices, pooled here for platform-level support — a new invoice is still issued and branded under whichever company the customer you pick actually belongs to, never the platform admin's own."
+            : "GST-compliant ad-hoc invoicing — products, services, credit/debit notes, recurring billing, and payment tracking."
+        }
+      >
         <div className="relative mt-6 grid grid-cols-2 gap-4 sm:grid-cols-4">
-          <HeroKpi icon={FileText} label="Total" value={invoiceStats.total} />
-          <HeroKpi icon={CheckCircle2} label="Paid" value={invoiceStats.paid} />
-          <HeroKpi icon={Clock} label="Pending" value={invoiceStats.pending} />
-          <HeroKpi icon={IndianRupee} label="Total Value" value={`₹${invoiceStats.totalValue.toLocaleString("en-IN")}`} />
+          <HeroKpi icon={FileText} label="Total" value={invoices.length} />
+          <HeroKpi icon={CheckCircle2} label="Paid" value={invoicesByStatus.paid.length} />
+          <HeroKpi icon={Clock} label="Pending" value={invoicesByStatus.pending.length} />
+          <HeroKpi icon={IndianRupee} label="Total Value" value={`₹${invoicesByStatus.totalValue.toLocaleString("en-IN")}`} />
         </div>
       </DashboardPageHero>
 
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-1 rounded-full border p-1" style={{ borderColor: "var(--color-line)" }}>
-          {([["invoices", "Invoices"], ["recurring", "Recurring"]] as const).map(([value, label]) => (
+          {([["invoices", "Invoices"], ["ledger", "Customer Statement"], ["recurring", "Recurring"]] as const).map(([value, label]) => (
             <button key={value} type="button" onClick={() => setView(value)} className="rounded-full px-4 py-2 text-sm font-semibold transition-colors" style={view === value ? { backgroundColor: "var(--color-accent)", color: "var(--color-ink)" } : { color: "var(--color-ink-soft)" }}>
               {label}
             </button>
@@ -672,7 +908,18 @@ export default function InvoiceCrmPage() {
               const stepNum = i + 1;
               const active = stepNum === step;
               return (
-                <button key={label} type="button" onClick={() => setStep(stepNum)} className="flex items-center gap-2">
+                <button
+                  key={label}
+                  type="button"
+                  // Backwards is always fine — reviewing or correcting an
+                  // earlier step shouldn't be blocked. Forwards stops at
+                  // the first step still missing something, so the chips
+                  // can't be used to skip the gating on Next.
+                  onClick={() => setStep(stepNum <= step ? stepNum : Math.min(stepNum, firstIncompleteStep))}
+                  disabled={stepNum > step && stepNum > firstIncompleteStep}
+                  title={stepNum > firstIncompleteStep ? (stepIssue(firstIncompleteStep) ?? undefined) : undefined}
+                  className="flex items-center gap-2 disabled:opacity-40"
+                >
                   <span className="flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold" style={active ? { backgroundColor: "var(--color-accent)", color: "var(--color-ink)" } : { backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}>
                     {stepNum}
                   </span>
@@ -736,7 +983,7 @@ export default function InvoiceCrmPage() {
                 <select value={customerId} onChange={(e) => handleSelectCustomer(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }}>
                   <option value="">Select a customer…</option>
                   {customers.map((c) => (
-                    <option key={c.id} value={c.id}>{c.full_name ?? "Unnamed"}{c.company ? ` — ${c.company}` : ""}</option>
+                    <option key={c.id} value={c.id}>{customerOptionLabel(c)}</option>
                   ))}
                 </select>
               ) : (
@@ -996,8 +1243,18 @@ export default function InvoiceCrmPage() {
             <button type="button" onClick={() => setStep((s) => Math.max(1, s - 1))} disabled={step === 1} className="flex items-center gap-1 rounded-full border px-4 py-2 text-sm font-medium disabled:opacity-40" style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}>
               <ChevronLeft className="h-4 w-4" /> Back
             </button>
+            {currentStepIssue && (
+              <p className="px-3 text-xs" style={{ color: "#b42318" }}>{currentStepIssue}</p>
+            )}
             {step < activeStepLabels.length && (
-              <button type="button" onClick={() => setStep((s) => s + 1)} className="flex items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold text-white" style={{ backgroundColor: "var(--color-action)" }}>
+              <button
+                type="button"
+                onClick={() => setStep((s) => s + 1)}
+                disabled={Boolean(currentStepIssue)}
+                title={currentStepIssue ?? undefined}
+                className="flex items-center gap-1 rounded-full px-4 py-2 text-sm font-semibold text-white transition-opacity disabled:opacity-40"
+                style={{ backgroundColor: "var(--color-action)" }}
+              >
                 Next <ChevronRight className="h-4 w-4" />
               </button>
             )}
@@ -1037,349 +1294,104 @@ export default function InvoiceCrmPage() {
 
       {view === "invoices" && (
         <>
-          <div className="mt-8 border-t pt-5" style={{ borderColor: "var(--color-line)" }}>
+          <div className="border-t pt-5" style={{ borderColor: "var(--color-line)" }}>
+            <h3 className="text-base font-bold" style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)" }}>All Invoices</h3>
+            <p className="mt-0.5 text-xs" style={{ color: "var(--color-ink-soft)" }}>
+              Every invoice across every customer — download, share, and record payments here.
+            </p>
+          </div>
+
+          <DataTable
+            columns={invoiceColumns}
+            fixedLayout
+            rows={filteredInvoices}
+            getRowKey={(inv) => inv.id}
+            itemLabel="invoices"
+            emptyMessage="No billed invoices yet — generate one above."
+            filteredEmptyMessage="No invoices match this filter."
+            dateFilter={{ getDate: (inv) => inv.created_at }}
+            exportFilename="invoice-crm-invoices"
+            minWidth={820}
+            renderExpanded={renderInvoiceExpanded}
+            isExpanded={(inv) => expandedInvoiceId === inv.id}
+            toolbar={
+              <>
+                <MultiSelect
+                  options={[
+                    { value: "draft", label: "Draft" },
+                    { value: "sent", label: "Sent" },
+                    { value: "paid", label: "Paid" },
+                    { value: "partially_paid", label: "Partially Paid" },
+                    { value: "overdue", label: "Overdue" },
+                    { value: "cancelled", label: "Cancelled" },
+                  ]}
+                  selected={invoiceStatusFilter}
+                  onChange={setInvoiceStatusFilter}
+                  placeholder="All statuses"
+                />
+                <MultiSelect
+                  options={invoiceClientOptions.map(([id, name]) => ({ value: id, label: name }))}
+                  selected={invoiceClientFilter}
+                  onChange={setInvoiceClientFilter}
+                  placeholder="All clients"
+                  searchable
+                />
+              </>
+            }
+          />
+        </>
+      )}
+
+      {view === "ledger" && (
+        <>
+          <div className="border-t pt-5" style={{ borderColor: "var(--color-line)" }}>
             <h3 className="text-base font-bold" style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)" }}>Customer Statement</h3>
             <p className="mt-0.5 text-xs" style={{ color: "var(--color-ink-soft)" }}>
-              A running account balance for one customer — every invoice raised (debit) and payment received (credit), in order, with the balance after each entry. Different from the invoice list below, which lists every invoice across all customers.
+              A running account balance for one customer — every invoice raised (debit) and payment received (credit), in order, with the balance after each entry.
             </p>
             <div className="mt-3 max-w-xs">
               <label className={labelClass} style={{ color: "var(--color-ink-soft)" }}>Select Customer</label>
               <select value={ledgerCustomerId} onChange={(e) => loadLedger(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }}>
                 <option value="">Select a customer to view their statement…</option>
                 {customers.map((c) => (
-                  <option key={c.id} value={c.id}>{c.full_name ?? "Unnamed"}</option>
+                  <option key={c.id} value={c.id}>{customerOptionLabel(c)}</option>
                 ))}
               </select>
             </div>
           </div>
           {ledger && (
             <>
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <DateRangeFilter
-                  from={ledgerDateFilter.from}
-                  to={ledgerDateFilter.to}
-                  onFromChange={ledgerDateFilter.setFrom}
-                  onToChange={ledgerDateFilter.setTo}
-                  onClear={ledgerDateFilter.clear}
-                  active={ledgerDateFilter.active}
-                />
-                <ExportButton
-                  filename="invoice-crm-ledger"
-                  headers={["Date", "Entry", "Debit", "Credit", "Balance"]}
-                  rows={ledgerDateFilter.filtered.map((e) => [
-                    new Date(e.date).toLocaleDateString("en-IN"),
-                    e.label,
-                    e.debit > 0 ? e.debit : "",
-                    e.credit > 0 ? e.credit : "",
-                    e.balance,
-                  ])}
-                />
-              </div>
-              <TablePagination
-                page={ledgerPagination.page}
-                totalPages={ledgerPagination.totalPages}
-                pageSize={ledgerPagination.pageSize}
-                onPageChange={ledgerPagination.setPage}
-                onPageSizeChange={ledgerPagination.setPageSize}
-                start={ledgerPagination.start}
-                end={ledgerPagination.end}
-                total={ledgerPagination.total}
+              <DataTable
+                columns={ledgerColumns}
+                fixedLayout
+                rows={ledger}
+                getRowKey={(e) => `${e.date}-${e.type}-${e.invoiceNumber}-${e.debit}-${e.credit}`}
                 itemLabel="entries"
+                emptyMessage="No activity yet."
+                filteredEmptyMessage="No activity in this date range."
+                dateFilter={{ getDate: (e) => e.date }}
+                exportFilename="invoice-crm-ledger"
+                minWidth={520}
               />
-            <div className="mt-3 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
-              <table className="dt-table w-full min-w-[520px] text-left text-sm">
-                <thead>
-                  <tr style={{ backgroundColor: "var(--color-muted-tint)" }}>
-                    <th className="px-4 py-2 font-semibold" style={{ color: "var(--color-ink)" }}>#</th>
-                    <th className="px-4 py-2 font-semibold" style={{ color: "var(--color-ink)" }}>Date</th>
-                    <th className="px-4 py-2 font-semibold" style={{ color: "var(--color-ink)" }}>Entry</th>
-                    <th className="px-4 py-2 font-semibold" style={{ color: "var(--color-ink)" }}>Debit</th>
-                    <th className="px-4 py-2 font-semibold" style={{ color: "var(--color-ink)" }}>Credit</th>
-                    <th className="px-4 py-2 font-semibold" style={{ color: "var(--color-ink)" }}>Balance</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
-                  {ledgerPagination.pageItems.map((e, i) => (
-                    <tr key={i}>
-                      <td className="px-4 py-2" style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                      <td className="px-4 py-2" style={{ color: "var(--color-ink-soft)" }}>{new Date(e.date).toLocaleDateString("en-IN")}</td>
-                      <td className="px-4 py-2" style={{ color: "var(--color-ink)" }}>{e.label}</td>
-                      <td className="px-4 py-2" style={{ color: "var(--color-ink-soft)" }}>{e.debit > 0 ? `₹${e.debit.toLocaleString("en-IN")}` : "—"}</td>
-                      <td className="px-4 py-2" style={{ color: "var(--color-ink-soft)" }}>{e.credit > 0 ? `₹${e.credit.toLocaleString("en-IN")}` : "—"}</td>
-                      <td className="px-4 py-2 font-semibold" style={{ color: "var(--color-ink)" }}>₹{e.balance.toLocaleString("en-IN")}</td>
-                    </tr>
-                  ))}
-                  {ledgerDateFilter.filtered.length === 0 && (
-                    <tr>
-                      <td colSpan={6} className="px-4 py-6 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>
-                        {ledger.length === 0 ? "No activity yet." : "No activity in this date range."}
-                      </td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-              <p className="px-4 py-3 text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Total Outstanding: ₹{ledgerOutstanding.toLocaleString("en-IN")}</p>
-            </div>
+              <p className="mt-2 text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Total Outstanding: ₹{ledgerOutstanding.toLocaleString("en-IN")}</p>
             </>
           )}
-
-          <div className="mt-8 flex flex-wrap items-end justify-between gap-3 border-t pt-5" style={{ borderColor: "var(--color-line)" }}>
-            <div>
-              <h3 className="text-base font-bold" style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)" }}>All Invoices</h3>
-              <p className="mt-0.5 text-xs" style={{ color: "var(--color-ink-soft)" }}>
-                Every invoice across every customer — download, share, and record payments here.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-end gap-3">
-              <DateRangeFilter
-                from={invoiceDateFilter.from}
-                to={invoiceDateFilter.to}
-                onFromChange={invoiceDateFilter.setFrom}
-                onToChange={invoiceDateFilter.setTo}
-                onClear={invoiceDateFilter.clear}
-                active={invoiceDateFilter.active}
-              />
-              <select
-                value={invoiceStatusFilter}
-                onChange={(e) => setInvoiceStatusFilter(e.target.value as InvoiceRow["status"] | "all")}
-                className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]"
-                style={{ borderColor: "var(--color-line)" }}
-              >
-                <option value="all">All statuses</option>
-                <option value="draft">Draft</option>
-                <option value="sent">Sent</option>
-                <option value="paid">Paid</option>
-                <option value="partially_paid">Partially Paid</option>
-                <option value="overdue">Overdue</option>
-                <option value="cancelled">Cancelled</option>
-              </select>
-              <ExportButton
-                filename="invoice-crm-invoices"
-                headers={["Invoice", "Type", "Client", "Date", "Amount", "Balance", "Status"]}
-                rows={invoiceDateFilter.filtered.map((inv) => [
-                  inv.invoice_number,
-                  TYPE_LABEL[inv.invoice_type] ?? "Invoice",
-                  inv.profiles?.full_name ?? "—",
-                  new Date(inv.created_at).toLocaleDateString("en-IN"),
-                  Number(inv.total),
-                  balanceOf(inv),
-                  inv.status.replace("_", " "),
-                ])}
-              />
-            </div>
-          </div>
-
-          <TablePagination
-            page={invoicesPagination.page}
-            totalPages={invoicesPagination.totalPages}
-            pageSize={invoicesPagination.pageSize}
-            onPageChange={invoicesPagination.setPage}
-            onPageSizeChange={invoicesPagination.setPageSize}
-            start={invoicesPagination.start}
-            end={invoicesPagination.end}
-            total={invoicesPagination.total}
-            itemLabel="invoices"
-          />
-
-          <div className="mt-3 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
-            <table className="dt-table w-full min-w-[820px] text-left text-sm">
-              <thead>
-                <tr style={{ backgroundColor: "var(--color-muted-tint)" }}>
-                  <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>#</th>
-                  <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Invoice</th>
-                  <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Type</th>
-                  <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Client</th>
-                  <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Date</th>
-                  <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Amount</th>
-                  <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Balance</th>
-                  <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Status</th>
-                  <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}></th>
-                </tr>
-              </thead>
-              <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
-                {invoicesPagination.pageItems.map((inv, i) => {
-                  const style = STATUS_STYLE[inv.status];
-                  const balance = balanceOf(inv);
-                  const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/pay/${inv.id}` : `/pay/${inv.id}`;
-                  const invCustomerPhone = customers.find((c) => c.id === inv.customer_id)?.phone ?? "";
-                  const expanded = expandedInvoiceId === inv.id;
-                  return (
-                    <Fragment key={inv.id}>
-                      <tr style={{ borderColor: "var(--color-line)" }}>
-                        <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                        <td className="px-4 py-3 font-medium" style={{ color: "var(--color-ink)" }}>{inv.invoice_number}</td>
-                        <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{TYPE_LABEL[inv.invoice_type] ?? "Invoice"}</td>
-                        <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{inv.profiles?.full_name ?? "—"}</td>
-                        <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{new Date(inv.created_at).toLocaleDateString("en-IN")}</td>
-                        <td className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>₹{Number(inv.total).toLocaleString("en-IN")}</td>
-                        <td className="px-4 py-3" style={{ color: balance > 0 ? "#b42318" : "var(--color-ink-soft)" }}>{balance > 0 ? `₹${balance.toLocaleString("en-IN")}` : "—"}</td>
-                        <td className="px-4 py-3">
-                          <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: style.bg, color: style.fg }}>{inv.status.replace("_", " ")}</span>
-                        </td>
-                        <td className="px-4 py-3">
-                          <div className="flex flex-wrap items-center gap-2.5">
-                            <a href={`/api/invoices/${inv.id}/download`} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>PDF / Print</a>
-                            {inv.status === "draft" && (
-                              <>
-                                <button type="button" onClick={() => handleEditDraft(inv)} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>Edit</button>
-                                <button type="button" onClick={() => handleSend(inv.id)} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>Send</button>
-                              </>
-                            )}
-                            <button type="button" onClick={() => handleEmail(inv.id)} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>Email</button>
-                            {inv.status !== "paid" && inv.status !== "cancelled" && (
-                              <button type="button" onClick={() => { setPayingInvoice(inv); setPayAmount(String(balance)); }} className="text-xs font-semibold underline" style={{ color: "#116a2c" }}>
-                                Record Payment
-                              </button>
-                            )}
-                            {invCustomerPhone && (
-                              <a href={buildWhatsAppLink(invCustomerPhone, `Hi, here's your invoice ${inv.invoice_number} from ${SITE_NAME}: ${shareUrl}`)} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold underline" style={{ color: "#116a2c" }}>
-                                WhatsApp
-                              </a>
-                            )}
-                            <button type="button" onClick={() => { navigator.clipboard.writeText(shareUrl); showSuccess("Link copied."); }} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>
-                              Copy Link
-                            </button>
-                            <button type="button" onClick={() => toggleExpand(inv, "attachments")} className="flex items-center gap-1 text-xs font-semibold underline" style={{ color: "var(--color-ink-soft)" }}>
-                              <Paperclip className="h-3 w-3" /> Files
-                            </button>
-                            <button type="button" onClick={() => toggleExpand(inv, "history")} className="flex items-center gap-1 text-xs font-semibold underline" style={{ color: "var(--color-ink-soft)" }}>
-                              <History className="h-3 w-3" /> History
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                      {expanded && (
-                        <tr>
-                          <td colSpan={9} className="px-4 py-4" style={{ backgroundColor: "var(--color-paper)" }}>
-                            {expandedTab === "attachments" ? (
-                              <div>
-                                <div className="flex items-center gap-3">
-                                  <label
-                                    className="inline-flex cursor-pointer items-center gap-2 rounded-full border px-4 py-2 text-xs font-semibold transition-colors hover:bg-[var(--color-accent-tint)]"
-                                    style={{ borderColor: "var(--color-line)", color: "var(--color-ink)", opacity: uploadingAttachment ? 0.6 : 1 }}
-                                  >
-                                    <Paperclip className="h-3.5 w-3.5" />
-                                    {uploadingAttachment ? "Uploading…" : "Choose File"}
-                                    <input
-                                      type="file"
-                                      disabled={uploadingAttachment}
-                                      onChange={(e) => e.target.files?.[0] && handleUploadAttachment(inv.id, e.target.files[0])}
-                                      className="hidden"
-                                    />
-                                  </label>
-                                </div>
-                                <ul className="mt-2 space-y-1">
-                                  {attachments.map((a) => (
-                                    <li key={a.id} className="text-sm">
-                                      <a href={`/api/invoices/${inv.id}/attachments/${a.id}/download`} className="underline" style={{ color: "var(--color-action-dark)" }}>{a.file_name}</a>
-                                    </li>
-                                  ))}
-                                  {attachments.length === 0 && <li className="text-sm" style={{ color: "var(--color-ink-soft)" }}>No attachments yet.</li>}
-                                </ul>
-                              </div>
-                            ) : (
-                              <ul className="space-y-1.5">
-                                {history.map((h) => (
-                                  <li key={h.id} className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
-                                    <span className="font-medium" style={{ color: "var(--color-ink)" }}>{h.event_type.replace("_", " ")}</span>
-                                    {h.detail ? ` — ${h.detail}` : ""} · {h.profiles?.full_name ?? "System"} · {new Date(h.created_at).toLocaleString("en-IN")}
-                                  </li>
-                                ))}
-                                {history.length === 0 && <li className="text-sm" style={{ color: "var(--color-ink-soft)" }}>No history yet.</li>}
-                              </ul>
-                            )}
-                          </td>
-                        </tr>
-                      )}
-                    </Fragment>
-                  );
-                })}
-                {invoiceDateFilter.filtered.length === 0 && (
-                  <tr>
-                    <td colSpan={9} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>
-                      {invoices.length === 0 ? "No billed invoices yet — generate one above." : "No invoices match this filter."}
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
         </>
       )}
 
       {view === "recurring" && (
-        <>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <DateRangeFilter
-              from={recurringDateFilter.from}
-              to={recurringDateFilter.to}
-              onFromChange={recurringDateFilter.setFrom}
-              onToChange={recurringDateFilter.setTo}
-              onClear={recurringDateFilter.clear}
-              active={recurringDateFilter.active}
-            />
-            <ExportButton
-              filename="invoice-crm-recurring"
-              headers={["Customer", "Type", "Frequency", "Next Run"]}
-              rows={recurringDateFilter.filtered.map((t) => [
-                t.profiles?.full_name ?? "—",
-                TYPE_LABEL[t.invoice_type as InvoiceType] ?? t.invoice_type,
-                t.frequency,
-                new Date(t.next_run_date).toLocaleDateString("en-IN"),
-              ])}
-            />
-          </div>
-          <TablePagination
-            page={recurringPagination.page}
-            totalPages={recurringPagination.totalPages}
-            pageSize={recurringPagination.pageSize}
-            onPageChange={recurringPagination.setPage}
-            onPageSizeChange={recurringPagination.setPageSize}
-            start={recurringPagination.start}
-            end={recurringPagination.end}
-            total={recurringPagination.total}
-            itemLabel="templates"
-          />
-        <div className="mt-3 overflow-x-auto rounded-2xl border" style={{ borderColor: "var(--color-line)" }}>
-          <table className="dt-table w-full min-w-[560px] text-left text-sm">
-            <thead>
-              <tr style={{ backgroundColor: "var(--color-muted-tint)" }}>
-                <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>#</th>
-                <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Customer</th>
-                <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Type</th>
-                <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Frequency</th>
-                <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Next Run</th>
-                <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
-              {recurringPagination.pageItems.map((t, i) => (
-                <tr key={t.id}>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                  <td className="px-4 py-3 font-medium" style={{ color: "var(--color-ink)" }}>{t.profiles?.full_name ?? "—"}</td>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{TYPE_LABEL[t.invoice_type as InvoiceType] ?? t.invoice_type}</td>
-                  <td className="px-4 py-3 capitalize" style={{ color: "var(--color-ink-soft)" }}>{t.frequency}</td>
-                  <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{new Date(t.next_run_date).toLocaleDateString("en-IN")}</td>
-                  <td className="px-4 py-3">
-                    <button type="button" onClick={() => handleRunTemplate(t.id)} disabled={runningTemplateId === t.id} className="flex items-center gap-1 text-xs font-semibold underline disabled:opacity-60" style={{ color: "var(--color-action-dark)" }}>
-                      <Repeat className="h-3 w-3" /> {runningTemplateId === t.id ? "Running…" : "Run Now"}
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {recurringDateFilter.filtered.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-sm" style={{ color: "var(--color-ink-soft)" }}>
-                    {recurringTemplates.length === 0
-                      ? 'No recurring templates yet — build an invoice above, then hit "Save as Recurring" on the Preview step.'
-                      : "No recurring templates in this date range."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-        </>
+        <DataTable
+          columns={recurringColumns}
+          fixedLayout
+          rows={recurringTemplates}
+          getRowKey={(t) => t.id}
+          itemLabel="templates"
+          emptyMessage='No recurring templates yet — build an invoice above, then hit "Save as Recurring" on the Preview step.'
+          filteredEmptyMessage="No recurring templates in this date range."
+          dateFilter={{ getDate: (t) => t.next_run_date }}
+          exportFilename="invoice-crm-recurring"
+          minWidth={560}
+        />
       )}
     </div>
   );

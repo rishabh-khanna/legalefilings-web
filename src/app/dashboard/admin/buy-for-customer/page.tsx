@@ -18,8 +18,14 @@ export default function BuyForCustomerPage() {
     const kickoff = setTimeout(async () => {
       const res = await fetch("/api/customers");
       const data = await res.json();
-      const custs = (data.customers ?? []) as { id: string; full_name: string | null }[];
-      setCustomers(custs.map((c) => ({ id: c.id, name: c.full_name ?? "Unnamed" })));
+      const custs = (data.customers ?? []) as { id: string; full_name: string | null; organizations?: { name: string | null } | null }[];
+      const orgCount = new Set(custs.map((c) => c.organizations?.name)).size;
+      setCustomers(
+        custs.map((c) => ({
+          id: c.id,
+          name: orgCount > 1 && c.organizations?.name ? `${c.full_name ?? "Unnamed"} — ${c.organizations.name}` : (c.full_name ?? "Unnamed"),
+        }))
+      );
     }, 0);
     return () => clearTimeout(kickoff);
   }, []);
@@ -108,7 +114,7 @@ export default function BuyForCustomerPage() {
         <button
           type="submit"
           disabled={submitting}
-          className="rounded-full px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+          className="rounded-full px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
           style={{ backgroundColor: "var(--color-action)" }}
         >
           {submitting ? "Creating…" : "Create Order & Send Payment Link"}

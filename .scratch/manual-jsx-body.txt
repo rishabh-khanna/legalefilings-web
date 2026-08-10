@@ -1,0 +1,389 @@
+
+
+<div className="shell">
+  <aside className="sidebar">
+    <div className="brand"><span className="mark">Legal<em>Efilings</em></span></div>
+    <div className="brand-sub">User Manual</div>
+
+    <nav className="toc">
+      <div className="toc-group">
+        <a href="#start"><span className="role-dot dot-general"></span>Getting Started</a>
+      </div>
+
+      <div className="toc-group">
+        <div className="toc-label">Customers</div>
+        <a href="#customer-buy"><span className="role-dot dot-customer"></span>Buying a service</a>
+        <a href="#customer-orders"><span className="role-dot dot-customer"></span>Tracking your order</a>
+        <a href="#customer-invoices"><span className="role-dot dot-customer"></span>Paying invoices</a>
+        <a href="#customer-finance"><span className="role-dot dot-customer"></span>Business Finance (your books)</a>
+        <a href="#customer-crm"><span className="role-dot dot-customer"></span>Getting your own CRM</a>
+        <a href="#customer-profile"><span className="role-dot dot-customer"></span>Your profile</a>
+      </div>
+
+      <div className="toc-group">
+        <div className="toc-label">Sales &amp; Ops Staff</div>
+        <a href="#staff-leads"><span className="role-dot dot-staff"></span>My Leads</a>
+        <a href="#staff-pipeline"><span className="role-dot dot-staff"></span>Team pipeline &amp; converting leads</a>
+        <a href="#staff-phone-order"><span className="role-dot dot-staff"></span>Selling over the phone</a>
+        <a href="#staff-orders"><span className="role-dot dot-staff"></span>Working an order</a>
+        <a href="#staff-invoice-crm"><span className="role-dot dot-staff"></span>Invoice CRM &amp; billing</a>
+        <a href="#staff-attendance-leave"><span className="role-dot dot-staff"></span>Attendance &amp; leave</a>
+        <a href="#staff-team-management"><span className="role-dot dot-staff"></span>Managing a team</a>
+        <a href="#staff-personal"><span className="role-dot dot-staff"></span>Payslips, documents, holidays</a>
+      </div>
+
+      <div className="toc-group">
+        <div className="toc-label">Admin &amp; HR</div>
+        <a href="#admin-people"><span className="role-dot dot-admin"></span>Bringing people on board</a>
+        <a href="#admin-structure"><span className="role-dot dot-admin"></span>Org structure &amp; access</a>
+        <a href="#admin-payroll"><span className="role-dot dot-admin"></span>Payroll</a>
+        <a href="#admin-billing-setup"><span className="role-dot dot-admin"></span>Business Settings &amp; catalog</a>
+        <a href="#admin-oversight"><span className="role-dot dot-admin"></span>Reports &amp; oversight</a>
+      </div>
+
+      <div className="toc-group">
+        <div className="toc-label">Platform Operator</div>
+        <a href="#platform-orgs"><span className="role-dot dot-platform"></span>Organizations</a>
+        <a href="#platform-crm"><span className="role-dot dot-platform"></span>CRM workspace requests</a>
+      </div>
+    </nav>
+  </aside>
+
+  <main>
+    <div className="masthead top-anchor" id="start">
+      <div className="eyebrow">Legal Efilings — User Manual</div>
+      <h1>How to use the platform</h1>
+      <p className="lede">
+        One system, four kinds of people: customers who buy filing services, the staff who sell and deliver
+        them, admins who run the company behind the scenes, and Legal Efilings' own platform team. This manual
+        walks through what each of them actually does, in the order they'd do it — no jargon, no assumed
+        knowledge.
+      </p>
+    </div>
+
+    <section className="role-section">
+      <h2 id="getting-started-h">Getting started</h2>
+      <p className="role-intro">Everyone starts the same way, regardless of role.</p>
+
+      <article className="usecase">
+        <h3>Signing in</h3>
+        <ol className="steps">
+          <li>Go to the login page. You can sign in with either your <b>email</b> or your <b>phone number</b> — use the toggle above the field to switch.</li>
+          <li>Enter your password and press <b>Sign in</b>.</li>
+          <li>You'll land on <b>Overview</b> — a one-page summary of whatever's relevant to you: your own orders and invoices if you're a customer, your leads and team stats if you're staff, company-wide numbers if you're an admin.</li>
+        </ol>
+        <div className="callout">
+          <div className="callout-label">First time in?</div>
+          <p>If your profile is missing details (phone, date of birth, state, city), you'll see a banner asking you to complete it. It's not blocking — dismiss it for the session if you're just looking around — but fill it in properly before doing anything that needs your real identity details, like generating a payslip or an invoice in your name.</p>
+        </div>
+        <div className="callout">
+          <div className="callout-label">Demo accounts for this build</div>
+          <p>On the login page itself, open <b>Check Demo Login Details</b> to see every working demo account and copy its email straight into the form. The accounts and current passwords are also listed below for reference.</p>
+        </div>
+        <div className="creds">
+          <div className="creds-grid">
+            <div className="cred-card"><div className="role-tag" style={{ color: "var(--c-admin)" }}>Admin</div><div className="email">admin@legalefilings.com</div><div className="pw">Demo@12345</div></div>
+            <div className="cred-card"><div className="role-tag" style={{ color: "var(--c-staff)" }}>Staff — Group Leader</div><div className="email">groupleader@legalefilings.com</div><div className="pw">Demo@12345</div></div>
+            <div className="cred-card"><div className="role-tag" style={{ color: "var(--c-staff)" }}>Staff — Leader</div><div className="email">leader@legalefilings.com</div><div className="pw">Demo@12345</div></div>
+            <div className="cred-card"><div className="role-tag" style={{ color: "var(--c-staff)" }}>Staff — Rater</div><div className="email">rater@legalefilings.com</div><div className="pw">Demo@12345</div></div>
+            <div className="cred-card"><div className="role-tag" style={{ color: "var(--c-customer)" }}>Customer — Free</div><div className="email">customer.free@legalefilings.com</div><div className="pw">Demo@12345</div></div>
+            <div className="cred-card"><div className="role-tag" style={{ color: "var(--c-customer)" }}>Customer — Paid</div><div className="email">customer.paid@legalefilings.com</div><div className="pw">Demo@12345</div></div>
+            <div className="cred-card"><div className="role-tag" style={{ color: "var(--c-platform)" }}>Platform Admin</div><div className="email">platformadmin.e2e@legalefilings.com</div><div className="pw">Demo@12345</div></div>
+            <div className="cred-card"><div className="role-tag" style={{ color: "var(--c-admin)" }}>Admin — own CRM workspace</div><div className="email">crm.demo@legalefilings.com</div><div className="pw">Demo@12345</div></div>
+          </div>
+        </div>
+      </article>
+
+      <article className="usecase">
+        <h3>The four kinds of people on this platform</h3>
+        <table className="ref">
+          <tr><th>Who</th><th>What they are</th></tr>
+          <tr><td><span className="role-chip customer" style={{ margin: "0" }}>Customer</span></td><td>Bought (or is about to buy) a filing service. Free or Paid tier. Can optionally unlock their own separate CRM workspace once they've bought something.</td></tr>
+          <tr><td><span className="role-chip staff" style={{ margin: "0" }}>Staff</span></td><td>Works for the company running the CRM. Three levels stack on top of each other: <b>Rater</b> (does the work), <b>Leader</b> (manages Raters), <b>Group Leader</b> (manages Leaders). Each level up sees everything the level below sees, plus more.</td></tr>
+          <tr><td><span className="role-chip admin" style={{ margin: "0" }}>Admin</span></td><td>Runs one organization's CRM entirely — every admin-only page, every employee, every order, unrestricted, within their own company.</td></tr>
+          <tr><td><span className="role-chip platform" style={{ margin: "0" }}>Platform Admin</span></td><td>Works for Legal Efilings itself, not any one tenant company. Creates new tenant organizations and approves customers' requests for their own CRM workspace.</td></tr>
+        </table>
+      </article>
+    </section>
+
+    <!-- ============ CUSTOMER ============ -->
+    <section className="role-section">
+      <span className="role-chip customer">Customer</span>
+      <h2 id="customer-buy">Buying a service, and everything after</h2>
+      <p className="role-intro">You bought (or are about to buy) something like a GST registration or a company incorporation. Here's the whole lifecycle of that purchase.</p>
+
+      <article className="usecase">
+        <h3>Buying a plan</h3>
+        <ol className="steps">
+          <li>Browse services and pricing on the public site, or ask staff to set one up for you over the phone (see <a href="#staff-phone-order">Selling over the phone</a>).</li>
+          <li>Complete checkout — this creates your account (if you're new), the order, and an invoice, all at once.</li>
+          <li>Pay online, or, if staff created the order for you, pay via the link they send.</li>
+        </ol>
+      </article>
+
+      <article className="usecase" id="customer-orders">
+        <h3>Tracking your order</h3>
+        <p>Open <b>Order History</b> to see every order you've placed. Each one tracks three separate things at once, so you can tell exactly what's holding it up:</p>
+        <table className="ref">
+          <tr><th>Signal</th><th>Means</th></tr>
+          <tr><td>Payment status</td><td>Paid, pending, or overdue — comes from the order's invoice.</td></tr>
+          <tr><td>Process status</td><td>Where the actual filing work is — new, in progress, under review, completed, and so on.</td></tr>
+          <tr><td>Document status</td><td>Whether the paperwork we need from you has been uploaded and checked.</td></tr>
+        </table>
+        <p>Open an order to upload required documents if any are still missing.</p>
+      </article>
+
+      <article className="usecase" id="customer-invoices">
+        <h3>Paying invoices</h3>
+        <p>Open <b>My Invoices</b> to see every invoice from a real purchase. From there you can download a PDF or pay anything outstanding directly.</p>
+        <div className="callout">
+          <div className="callout-label">Reminders</div>
+          <p>An unpaid invoice reminds itself automatically — an email 3 days before it's due, then again at 1, 7, 14, and 30 days overdue, each with a direct payment link. Pay the balance and the reminders stop on their own.</p>
+        </div>
+      </article>
+
+      <article className="usecase" id="customer-finance">
+        <h3>Business Finance — your own bookkeeping</h3>
+        <p>Separate from anything you bought from Legal Efilings, <b>Business Finance</b> is a full set of books for your own business — bank and cash accounts, income and expense entries, budgets, and reports. It's for keeping your own numbers straight day to day; it doesn't file anything with the government on its own, so double-check anything statutory with a real accountant.</p>
+        <ul className="plain">
+          <li><b>Accounts</b> — your bank and cash balances, updated automatically as you log income and expenses.</li>
+          <li><b>Recurring</b> — set up a template once for something that repeats every month (rent, a subscription) and it posts on its own from then on.</li>
+          <li><b>Budgets</b> — a monthly spending cap per category, with actual spend tracked against it as you go.</li>
+          <li><b>Import</b> — bring in a batch of transactions from a bank statement or CSV instead of typing each one by hand.</li>
+          <li><b>Reports</b> — Day Book, Ledger, Cash Book, category/vendor/bank breakdowns, GST purchase register, GST summary, TDS report, Profit &amp; Loss, and a Balance Sheet — every one exportable as PDF or CSV.</li>
+          <li><b>Team</b> — invite an accountant or a colleague onto your books with a specific role: Owner/Admin (full control), Accountant or Employee (can record entries), or Viewer (read-only). This is entirely separate from any staff role at Legal Efilings.</li>
+          <li><b>Activity</b> — a log of every change anyone made to these books, and when.</li>
+        </ul>
+      </article>
+
+      <article className="usecase" id="customer-crm">
+        <h3>Getting your own CRM workspace</h3>
+        <p>Every plan comes with a free year of your own separate CRM — your own login as an admin, your own team, your own leads pipeline, your own invoicing — entirely apart from Legal Efilings' CRM.</p>
+        <ol className="steps">
+          <li>You need <b>at least one completed (paid) purchase</b> to be eligible.</li>
+          <li>Open <b>Request CRM Access</b>, type your company name, and submit.</li>
+          <li>A Legal Efilings platform operator reviews it — track the status (pending / approved / rejected) on the same page.</li>
+          <li>Once approved, your <em>same login</em> — same email, same password — becomes the admin of a brand-new organization. Nothing new to set up or remember.</li>
+        </ol>
+        <div className="callout">
+          <div className="callout-label">What you actually unlock</div>
+          <p>Leads CRM, Invoice CRM, Team Management, Attendance &amp; Leave, and Payroll — the same full toolset described in the <a href="#admin-people">Admin &amp; HR</a> section below, because you're now that new organization's admin.</p>
+        </div>
+        <div className="callout warn">
+          <div className="callout-label">Time-limited</div>
+          <p>This access is bundled free for a year from approval, not permanent — it's tied to having bought a plan, the same way the eligibility check works the first time.</p>
+        </div>
+      </article>
+
+      <article className="usecase" id="customer-profile">
+        <h3>Your profile</h3>
+        <p>Edit Profile holds your name, email, phone, date of birth, state/city, and identity/bank details — always your own only.</p>
+      </article>
+    </section>
+
+    <!-- ============ STAFF ============ -->
+    <section className="role-section">
+      <span className="role-chip staff">Sales &amp; Ops Staff</span>
+      <h2 id="staff-leads">Working leads, orders, and invoices</h2>
+      <p className="role-intro">
+        Everything in this section is available to every staff level (Rater, Leader, Group Leader, Admin) unless noted —
+        the difference between levels is <em>whose</em> data you see, not which pages exist. A Rater sees only their own;
+        a Leader/Group Leader sees their own reporting chain too; Admin sees the whole company.
+      </p>
+
+      <article className="usecase">
+        <h3>My Leads — the leads assigned to you</h3>
+        <div className="who-sees">Who sees this: <b>every staff level</b> — always just your own leads, even if you manage a team.</div>
+        <ol className="steps">
+          <li>Open <b>My Leads</b>. Add a new one by hand if someone calls in directly.</li>
+          <li>Move each lead through its stages as you work it: <code>New</code> → <code>Contacted</code> → <code>In Progress</code> → <code>Won</code> or <code>Lost</code>.</li>
+          <li>Message a lead on WhatsApp straight from their row — no need to copy the number out.</li>
+        </ol>
+      </article>
+
+      <article className="usecase" id="staff-pipeline">
+        <h3>Team pipeline, and converting a Won lead</h3>
+        <div className="who-sees">Who sees this: <b>Leader, Group Leader, Admin</b> — a Rater doesn't get this page (they have My Leads instead).</div>
+        <p><b>Team Leads CRM</b> (the Pipeline board) shows the whole team's leads — or filter to one person's — as either a drag-and-drop board grouped by stage, or a sortable table. From here you can reassign a lead, leave a note, and:</p>
+        <ol className="steps">
+          <li>Move a lead to <code>Won</code>.</li>
+          <li>Open it and choose <b>Convert to Order</b>.</li>
+          <li>This creates a real customer account (if they don't have one yet), an order, and an invoice — turning the lead into an actual paying customer in one step.</li>
+        </ol>
+        <div className="callout warn">
+          <div className="callout-label">One-way</div>
+          <p>A lead can only be converted once — trying it again on an already-converted lead is blocked.</p>
+        </div>
+      </article>
+
+      <article className="usecase" id="staff-phone-order">
+        <h3>Selling over the phone</h3>
+        <div className="who-sees">Who sees this: <b>every staff level</b>.</div>
+        <p>If a customer calls in instead of buying online, use <b>Buy Plan for Customer</b>: pick their existing account or create a new one, pick the service and plan, and it creates the order, the invoice, and a payment link in one go — including their login, if they're new.</p>
+      </article>
+
+      <article className="usecase" id="staff-orders">
+        <h3>Working an order</h3>
+        <div className="who-sees">Who sees this: staff see orders assigned to them plus their reporting chain's; admin sees every order in the org.</div>
+        <p>Open <b>Orders</b> for the full list. Use the <b>Ready to Work</b> filter to jump straight to orders that are paid, have their documents verified, and aren't finished yet — the ones actually ready for you to act on. Open an order to:</p>
+        <ul className="plain">
+          <li>Move it through its process stages (advance it with <b>Move to &lt;next stage&gt;</b>, or cancel it).</li>
+          <li>Review uploaded documents and mark each one verified or rejected (with a note) — or use <b>Mark all verified</b> once everything checks out.</li>
+        </ul>
+      </article>
+
+      <article className="usecase" id="staff-invoice-crm">
+        <h3>Invoice CRM — billing that isn't tied to a purchase</h3>
+        <div className="who-sees">Who sees this: any staff or admin, scoped to their own org — never shown to customers.</div>
+        <p>For an order that came from an actual purchase, invoices are already handled automatically (see Order Invoices below). <b>Invoice CRM</b> is for everything else — a GST invoice for something ad-hoc, a non-GST or export invoice, a proforma, or a credit/debit note against an existing invoice.</p>
+        <ol className="steps">
+          <li>Open Invoice CRM and start <b>+ Generate Invoice</b>.</li>
+          <li>Pick the invoice type, the customer (or add a new one inline), and fill in place-of-supply and line items from your product/service catalog.</li>
+          <li>Add any charges (freight, packing) and a discount if needed, then generate.</li>
+        </ol>
+        <div className="callout">
+          <div className="callout-label">How GST is calculated</div>
+          <p>If your company and the customer are in the <b>same state</b>, tax splits evenly into CGST + SGST. In <b>different states</b>, it's all IGST instead. Either way the total tax is the same — only how it's split changes.</p>
+        </div>
+        <div className="callout">
+          <div className="callout-label">If TDS applies</div>
+          <p>TDS is calculated on the pre-tax value of the invoice, never on the GST-inclusive total — GST charged on an invoice was never part of the income TDS applies to.</p>
+        </div>
+        <p>This page also has each customer's running account statement (every invoice and payment, with a running balance), the full invoice list, and recurring invoice templates that generate themselves on a schedule.</p>
+      </article>
+
+      <article className="usecase">
+        <h3>Order Invoices — recording a payment</h3>
+        <div className="who-sees">Who sees this: staff see invoices they created plus their reporting chain's; admin sees every invoice.</div>
+        <p>Open <b>Order Invoices</b>, find the invoice, and use <b>Record Payment</b> for a cash, bank, UPI, or cheque payment the customer made outside of online checkout — partial payments are fine, the balance and status update as you go (<code>sent</code> → <code>partially paid</code> → <code>paid</code>).</p>
+      </article>
+
+      <article className="usecase" id="staff-attendance-leave">
+        <h3>Your own attendance and leave</h3>
+        <div className="who-sees">Who sees this: every staff level — always your own only, never a customer.</div>
+        <ul className="plain">
+          <li><b>Attendance</b> — clock in and out, see your own hours logged per day. Forgot to clock in or out? Submit a fix on <b>Attendance Correction Requests</b> and track its approval.</li>
+          <li><b>Leave</b> — apply for leave, see your balance per leave type (carried forward, accrued this year, used), and withdraw a still-pending request or cancel an approved one before it starts. Once it's started, it can't be cancelled — you were actually out for it.</li>
+        </ul>
+        <div className="callout">
+          <div className="callout-label">Running out of balance?</div>
+          <p>If a leave request would use more days than you have left in that type, the extra days are automatically filed as <b>Unpaid Leave</b> instead of being blocked outright. Unpaid Leave itself has no balance or cap — it's always available.</p>
+        </div>
+      </article>
+
+      <article className="usecase" id="staff-team-management">
+        <h3>Managing a team (Leader, Group Leader, Admin)</h3>
+        <div className="who-sees">Who sees this: Leader, Group Leader, Admin — a Rater doesn't get these pages.</div>
+        <ul className="plain">
+          <li><b>Team Leave Requests</b> — approve or reject leave from everyone in your reporting chain. You can also cancel an already-approved request before it starts, which returns those days to that person's balance.</li>
+          <li><b>Team Attendance</b> — pick someone from your chain and review their check-in history month by month, download a PDF, and approve or reject their correction requests.</li>
+          <li><b>Analytics</b> (Group Leader and Admin only) — company-wide charts: revenue trend, leads funnel, order status breakdown, staff leaderboard.</li>
+        </ul>
+      </article>
+
+      <article className="usecase" id="staff-personal">
+        <h3>Payslips, documents, and holidays</h3>
+        <div className="who-sees">Who sees this: every staff level — your own only, unless noted.</div>
+        <ul className="plain">
+          <li><b>My Payslips</b> — every payslip generated for you, downloadable as a PDF.</li>
+          <li><b>Documents</b> — upload your own ID/employment documents. A manager can also see and upload for their own reporting chain; admin sees and manages everyone's.</li>
+          <li><b>Holidays</b> — a read-only calendar of the company's official holidays.</li>
+          <li><b>Account Requests</b> — everyone can see the queue of pending customer/staff account requests, but only admin can actually approve one. Already-decided ones are on <b>Reviewed Account Requests</b>.</li>
+        </ul>
+      </article>
+    </section>
+
+    <!-- ============ ADMIN ============ -->
+    <section className="role-section">
+      <span className="role-chip admin">Admin</span>
+      <h2 id="admin-people">Running the company</h2>
+      <p className="role-intro">Everything below is admin-only (<code>account_type = admin</code>), except where an admin has individually delegated one specific tool to a staff member — see Delegated Access.</p>
+
+      <article className="usecase">
+        <h3>Bringing people on board</h3>
+        <ul className="plain">
+          <li><b>Create User</b> — as admin, this creates a staff or customer login immediately. Anyone else who isn't admin sees the same page as "Request New User" — it submits a request for you to approve instead.</li>
+          <li><b>Employees</b> — the master HR record: department, designation, employee ID, date of joining, UAN/ESIC, Aadhaar/PAN, bank details, staff level, and who they report to. This is admin-set data, not something the employee fills in on their own profile.</li>
+        </ul>
+        <div className="callout">
+          <div className="callout-label">Leaving the company</div>
+          <p>Deleting an employee who has real history (attendance, leave, a payslip) doesn't erase them — it deactivates the account instead (blocks login, flags the record) so payroll/attendance history stays intact for compliance. A <b>Reactivate</b> button appears in its place if you need to undo that. Only a brand-new account with zero history is actually deleted outright.</p>
+        </div>
+      </article>
+
+      <article className="usecase" id="admin-structure">
+        <h3>Org structure and access</h3>
+        <ul className="plain">
+          <li><b>Departments</b> — build your own department + role ladder (e.g. Sales: Lead → Manager → Senior Manager) on top of the fixed Rater/Leader/Group Leader levels. Entirely optional — skip it and the built-in levels still work.</li>
+          <li><b>Delegated Access</b> — hand one specific staff member access to one normally admin-only tool (Employees, Payroll, Payslips, HR Letters, Reports, and more) without promoting them to admin, which would unlock everything. Set it to expire on a date, or leave it permanent.</li>
+          <li><b>Leave Types</b> — define the org's own leave types (Casual, Sick, Earned…), each with a yearly day credit and a carry-forward cap. Unpaid Leave is fixed and always available, and never appears here.</li>
+        </ul>
+      </article>
+
+      <article className="usecase" id="admin-payroll">
+        <h3>Payroll</h3>
+        <ol className="steps">
+          <li>On the <b>Payroll</b> page, set each employee's salary structure — Basic, HRA, Special Allowance, Bonus, Incentives.</li>
+          <li>Pick a month and year, and click <b>Generate Salary</b> — it creates a payslip for everyone with a structure who doesn't already have one for that month.</li>
+        </ol>
+        <div className="callout">
+          <div className="callout-label">How the numbers are worked out</div>
+          <p>
+            <b>Loss of Pay (LOP)</b> — any working day with neither a check-in nor approved paid leave counts against you; a declared holiday or a weekend never does. A full month of absence deducts the full month's pay, not a fraction of it.<br /><br />
+            <b>PF</b> — 12% of Basic, capped at the ₹15,000 statutory wage ceiling.<br />
+            <b>ESI</b> — 0.75% of gross pay, only if gross is ₹21,000 or under.<br />
+            <b>Professional Tax</b> — a state levy; the slab depends on the company's own state (some states charge none at all).<br /><br />
+            All of these apply to pay actually <em>earned</em> after LOP, not the full structure — you're never taxed on money you didn't receive.
+          </p>
+        </div>
+        <p>See every payslip ever generated, for anyone, on <b>Payslips</b> (the company-wide register — separate from an individual's own My Payslips).</p>
+      </article>
+
+      <article className="usecase" id="admin-billing-setup">
+        <h3>Business Settings and the invoice catalog</h3>
+        <div className="callout warn">
+          <div className="callout-label">Do this first</div>
+          <p><b>Business Settings</b> — address, GSTIN, PAN, state, and at least one payment method (bank details or UPI) — is mandatory. Every invoice-generating action (Buy Plan for Customer, converting a lead, Invoice CRM) is blocked with a clear error until this is filled in. It also shows up on every generated invoice PDF and the customer's payment page.</p>
+        </div>
+        <p><b>Invoice Item Catalog</b> holds your products/services with their HSN/SAC code, GST rate, and default price — picking one on an invoice line auto-fills those fields. Editing a price here only changes that autofill default; it never changes what a customer actually pays through checkout.</p>
+      </article>
+
+      <article className="usecase" id="admin-oversight">
+        <h3>Reports and oversight</h3>
+        <ul className="plain">
+          <li><b>Data Exports</b> — company-wide HR/ops data (attendance, salary, leave, employees, department, invoice ageing) as CSV.</li>
+          <li><b>Activity Log</b> — one timeline over every audit trail — invoice events, order status changes, lead moves, Business Finance entries — with who did it and when. Useful when a customer disputes something.</li>
+          <li><b>Email Failures</b> — a log of transactional emails (mostly new-account passwords) that failed to send, so you can follow up with that person by hand instead of it silently vanishing.</li>
+          <li><b>HR Letters</b> — generate an offer letter, appointment letter, or similar from a template for any employee.</li>
+        </ul>
+      </article>
+    </section>
+
+    <!-- ============ PLATFORM ============ -->
+    <section className="role-section">
+      <span className="role-chip platform">Platform Operator</span>
+      <h2 id="platform-orgs">Running the platform itself</h2>
+      <p className="role-intro">This section is only visible to Legal Efilings' own operators (<code>is_platform_admin</code>) — a completely separate axis from account_type, so not even a regular company's own admin sees any of this.</p>
+
+      <article className="usecase">
+        <h3>Organizations</h3>
+        <p>Create and manage every tenant organization on the platform from here — including provisioning a brand-new company directly (name, slug, plan tier, and its first admin login) without going through the customer-request flow at all.</p>
+      </article>
+
+      <article className="usecase" id="platform-crm">
+        <h3>Reviewing CRM workspace requests</h3>
+        <p>Every customer's request for their own free CRM workspace (submitted from <a href="#customer-crm">Request CRM Access</a>) lands on <b>CRM Requests</b>.</p>
+        <ol className="steps">
+          <li><b>Approve</b> one — this promotes the requester's existing login to admin of a brand-new organization, same email and password, nothing new to set up.</li>
+          <li><b>Reject</b> one with a required reason, which the customer sees back on their own request-status page.</li>
+        </ol>
+        <p>Past decisions, approved or rejected, stay visible in the Reviewed table on the same page.</p>
+      </article>
+    </section>
+
+    <footer className="manual-footer">
+      Legal Efilings — internal user manual for this build. Reflects the application as of this write-up; if a page's
+      behavior doesn't match what's described here, the product has moved on since — trust what's on screen.
+    </footer>
+  </main>
+</div>

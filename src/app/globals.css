@@ -159,6 +159,19 @@ h1, h2, h3 {
    class + one element) beats the plain utility classes (px-4 py-3 etc.)
    already on those cells, so this overrides them without needing
    !important or touching every inline className. */
+/* Native <button> elements default to cursor: default, not pointer — only
+   <a href> gets the hand cursor for free. Tailwind's preflight doesn't add
+   it back either (checked: no cursor rule on button in the shipped
+   preflight.css). Every clickable button across this app — table sort
+   headers, row actions, toggles, everything styled as a <button
+   type="button"> — has therefore never shown a pointer, and adding
+   cursor-pointer by hand to every one of them individually is exactly the
+   kind of drift this stylesheet-level rule exists to avoid. Disabled
+   buttons are excluded so a genuinely inert control still reads as inert. */
+button:not(:disabled) {
+  cursor: pointer;
+}
+
 .dt-table {
   border-collapse: separate;
   border-spacing: 0;
@@ -180,6 +193,18 @@ h1, h2, h3 {
   font-size: 0.8125rem;
   line-height: 1.4;
   border-bottom: 1px solid var(--color-line);
+}
+/* Long unbroken values — an organization name carrying a 13-digit suffix,
+   an email address, a reference number — used to run straight out of their
+   column and print on top of the next one under table-layout: fixed, which
+   gives a cell its width up front and does not grow it back. break-word
+   only engages when the content would otherwise overflow, so ordinary
+   cells wrap at spaces exactly as before. Columns that must stay on one
+   line (dates, amounts, status pills) opt out with whitespace-nowrap,
+   which still wins here. */
+.dt-table th,
+.dt-table td {
+  overflow-wrap: break-word;
 }
 .dt-table tbody tr {
   transition: background-color 0.12s ease-out;

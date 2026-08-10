@@ -41,7 +41,9 @@ export async function onboardCompany(browser: Browser, cfg: CompanyConfig): Prom
   const platformCtx = await browser.newContext({ storageState: "tests/e2e/.auth/platformAdmin.json" });
   const platformPage = await platformCtx.newPage();
   await platformPage.goto("/dashboard/platform/organizations");
-  await expect(platformPage.getByRole("heading", { name: "Organizations" })).toBeVisible({ timeout: 15000 });
+  // exact:true — the page also has an "All Organizations" section
+  // heading, which substring-matches "Organizations" too.
+  await expect(platformPage.getByRole("heading", { name: "Organizations", exact: true })).toBeVisible({ timeout: 15000 });
   await platformPage.getByRole("button", { name: "+ New Organization" }).click();
 
   await platformPage.getByPlaceholder("Acme Legal Associates").fill(cfg.orgName);
@@ -111,15 +113,17 @@ export async function onboardCompany(browser: Browser, cfg: CompanyConfig): Prom
   // -- Departments: real department + a manager-level role --
   await adminPage.goto("/dashboard/admin/departments");
   await expect(adminPage.getByRole("heading", { name: "Departments" })).toBeVisible({ timeout: 10000 });
-  await adminPage.getByPlaceholder("New department name (e.g. Sales, Support, Compliance)").fill("Operations");
+  await adminPage.getByPlaceholder("e.g. Sales, Support, Compliance").fill("Operations");
   await adminPage.getByRole("button", { name: "Add Department" }).click();
   await expect(adminPage.getByText("Department created.")).toBeVisible({ timeout: 10000 });
 
-  const deptCard = adminPage.locator("text=Operations").locator("xpath=ancestor::div[contains(@class,'rounded-xl')][1]");
+  // rounded-2xl — the department card itself, not the role-row div one
+  // level down (which uses rounded-xl).
+  const deptCard = adminPage.locator("text=Operations").locator("xpath=ancestor::div[contains(@class,'rounded-2xl')][1]");
   await expect(deptCard).toBeVisible();
-  await deptCard.getByPlaceholder("New role title (e.g. Lead, Manager, Senior Manager)").fill("Ops Lead");
+  await deptCard.getByPlaceholder("Add a role title, e.g. Lead, Manager, Senior Manager").fill("Ops Lead");
   await deptCard.locator('input[type="checkbox"]').check();
-  await deptCard.getByRole("button", { name: "Add Role" }).click();
+  await deptCard.getByRole("button", { name: "Add", exact: true }).click();
   await expect(adminPage.getByText("Role added.")).toBeVisible({ timeout: 10000 });
   await expect(deptCard.getByText("Ops Lead")).toBeVisible();
 
@@ -146,6 +150,23 @@ export async function onboardCompany(browser: Browser, cfg: CompanyConfig): Prom
   const empRow = adminPage.locator("tr", { hasText: cfg.staffFullName });
   await expect(empRow).toBeVisible({ timeout: 10000 });
   await empRow.getByRole("button", { name: "Edit" }).click();
+
+  // The edit form now requires a full HR record before it'll save, not
+  // just Bank Details — Date of Joining, Team/Department + Role in Team
+  // (tied to the real Departments feature — "Operations" / "Ops Lead"
+  // were created earlier in this same flow), Reports To, and the
+  // identity/statutory fields.
+  await adminPage.locator("text=Date of Joining").locator("xpath=following-sibling::input[1]").fill("2024-01-15");
+  // Options are value={id}/label={name} — select by label, not value.
+  // Not exact: RequiredMark appends "*" to the label's own accessible
+  // text ("Team / Department*"), so an exact match never resolves.
+  await adminPage.locator("text=Team / Department").locator("xpath=following-sibling::select[1]").selectOption({ label: "Operations" });
+  await adminPage.locator("text=Role in Team").locator("xpath=following-sibling::select[1]").selectOption({ label: "Ops Lead" });
+  await adminPage.locator("text=Reports To").locator("xpath=following-sibling::select[1]").selectOption({ label: cfg.adminFullName });
+  await adminPage.locator("text=UAN Number").locator("xpath=following-sibling::input[1]").fill("101234567899");
+  await adminPage.locator("text=ESIC Number").locator("xpath=following-sibling::input[1]").fill("3112345678000099");
+  await adminPage.locator("text=Aadhaar Number").locator("xpath=following-sibling::input[1]").fill("999988887777");
+  await adminPage.locator("text=PAN Number").locator("xpath=following-sibling::input[1]").fill("ZZZZZ0000Z");
   await adminPage.locator("text=Bank Name").locator("xpath=following-sibling::input[1]").fill("HDFC Bank");
   await adminPage.locator("text=Account Number").locator("xpath=following-sibling::input[1]").fill("50100111222333");
   await adminPage.getByRole("button", { name: "Save Changes" }).click();
@@ -247,7 +268,7 @@ export async function onboardCompany(browser: Browser, cfg: CompanyConfig): Prom
   // -- Holidays: real "+ Add Holiday" --
   await adminPage.goto("/dashboard/holidays");
   await expect(adminPage.getByRole("heading", { name: "Holiday Calendar" })).toBeVisible({ timeout: 10000 });
-  await adminPage.getByRole("button", { name: "+ Add Holiday" }).click();
+  await adminPage.getByRole("button", { name: "Add Holiday", exact: true }).click();
   await adminPage.getByPlaceholder("Holiday name").fill(`${cfg.label} Foundation Day`);
   await adminPage.locator('input[type="date"]').fill("2026-11-15");
   await adminPage.getByRole("button", { name: "Add Holiday", exact: true }).click();
@@ -318,6 +339,18 @@ export async function onboardCompany(browser: Browser, cfg: CompanyConfig): Prom
   await dashboardReady.click();
   const expenseModal = customerPage.locator("text=Amount").locator("xpath=ancestor::div[contains(@class,'fixed')][1]");
   await expect(expenseModal).toBeVisible();
+  // Category is now required, via a custom DetailPickerModal (not a
+  // native <select>) — a fresh org has no categories yet, so create one
+  // inline through its "+ Add new category…" option.
+  await expenseModal.getByRole("button", { name: "Select a category" }).click();
+  await customerPage.getByRole("button", { name: "+ Add new category…" }).click();
+  await expenseModal.getByPlaceholder("New category").fill("Regression Test Category");
+  await expenseModal.getByRole("button", { name: "Add", exact: true }).click();
+  // handleAddCategory() is async (POSTs, then sets categoryId from the
+  // response) — wait for the trigger button to actually reflect the new
+  // selection before continuing, or Save can fire while categoryId is
+  // still empty and get rejected with "Choose a category."
+  await expect(expenseModal.getByRole("button", { name: "Regression Test Category" })).toBeVisible({ timeout: 10000 });
   await expenseModal.locator("text=Amount").locator("xpath=following-sibling::input[1]").fill("799");
   await expenseModal.locator("text=Payment Mode").locator("xpath=following-sibling::select[1]").selectOption("cash");
   await expenseModal.locator("text=Description").locator("xpath=following-sibling::input[1]").fill(expenseDescription);
@@ -365,7 +398,9 @@ export async function onboardCompany(browser: Browser, cfg: CompanyConfig): Prom
   await expect(staffPage.getByText("Leave request submitted.")).toBeVisible({ timeout: 10000 });
 
   await staffPage.goto("/dashboard/attendance");
-  await expect(staffPage.getByRole("heading", { name: "Attendance" })).toBeVisible({ timeout: 10000 });
+  // exact:true — the page also has an "Attendance Log" tab heading, which
+  // substring-matches "Attendance" too.
+  await expect(staffPage.getByRole("heading", { name: "Attendance", exact: true })).toBeVisible({ timeout: 10000 });
   await expect(staffPage.getByText("Not clocked in", { exact: true })).toBeVisible();
   await staffPage.getByRole("button", { name: "Clock In" }).click();
   // Generous timeout: handleClock() waits on navigator.geolocation

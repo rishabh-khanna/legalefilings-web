@@ -5,9 +5,8 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { DashboardPageHero } from "@/components/crm/DashboardPageHero";
 import { BookSwitcher } from "@/components/finance/BookSwitcher";
-import { usePagination } from "@/lib/use-pagination";
-import { TablePagination } from "@/components/TablePagination";
-import { ExportButton } from "@/components/ExportButton";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { MultiSelect } from "@/components/MultiSelect";
 
 type Member = {
   id: string;
@@ -114,12 +113,39 @@ export default function FinanceTeamPage() {
 
   const inputClass = "w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]";
 
-  const [roleFilter, setRoleFilter] = useState<Member["role"] | "all">("all");
+  const [roleFilter, setRoleFilter] = useState<Set<string>>(new Set());
   const filteredMembers = useMemo(() => {
-    return (members ?? []).filter((m) => roleFilter === "all" || m.role === roleFilter);
+    return (members ?? []).filter((m) => roleFilter.size === 0 || roleFilter.has(m.role));
   }, [members, roleFilter]);
 
-  const { page, setPage, pageSize, setPageSize, pageItems: pagedMembers, totalPages, total, start, end } = usePagination(filteredMembers);
+  const columns: DataTableColumn<Member>[] = [
+    { key: "name", header: "Name", render: (m) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{m.profiles?.full_name ?? "Unknown"}</span>, exportValue: (m) => m.profiles?.full_name ?? "Unknown", sortValue: (m) => m.profiles?.full_name },
+    {
+      key: "role",
+      header: "Role",
+      render: (m) =>
+        m.role === "owner" ? (
+          <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: "#fff6d9", color: "#8a6700" }}>Owner</span>
+        ) : (
+          <select value={m.role} onChange={(e) => handleRoleChange(m.id, e.target.value)} className="rounded-lg border px-2 py-1 text-xs" style={{ borderColor: "var(--color-line)" }}>
+            {ROLE_OPTIONS.map((r) => (
+              <option key={r.value} value={r.value}>{r.label}</option>
+            ))}
+          </select>
+        ),
+      exportValue: (m) => (m.role === "owner" ? "Owner" : ROLE_OPTIONS.find((r) => r.value === m.role)?.label ?? m.role),
+      sortValue: (m) => m.role,
+    },
+    {
+      key: "actions",
+      header: "",
+      className: "text-right",
+      render: (m) =>
+        m.role !== "owner" ? (
+          <button type="button" onClick={() => handleRemove(m.id, m.profiles?.full_name ?? "this member")} className="text-xs font-medium" style={{ color: "#b42318" }}>Remove</button>
+        ) : null,
+    },
+  ];
 
   return (
     <div>
@@ -154,96 +180,24 @@ export default function FinanceTeamPage() {
         )}
       </form>
 
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex flex-wrap items-center gap-2">
-          <select
-            value={roleFilter}
-            onChange={(e) => setRoleFilter(e.target.value as Member["role"] | "all")}
-            className="rounded-lg border px-2.5 py-1.5 text-sm outline-none"
-            style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
-          >
-            <option value="all">All roles</option>
-            <option value="owner">Owner</option>
-            {ROLE_OPTIONS.map((r) => (
-              <option key={r.value} value={r.value}>{r.label}</option>
-            ))}
-          </select>
-          {roleFilter !== "all" && (
-            <button
-              type="button"
-              onClick={() => setRoleFilter("all")}
-              className="text-xs font-semibold"
-              style={{ color: "var(--color-action-dark)" }}
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
-        <ExportButton
-          filename="finance-team"
-          headers={["Name", "Role"]}
-          rows={filteredMembers.map((m) => [m.profiles?.full_name ?? "Unknown", m.role === "owner" ? "Owner" : ROLE_OPTIONS.find((r) => r.value === m.role)?.label ?? m.role])}
-        />
-      </div>
-
-      <TablePagination
-        page={page}
-        totalPages={totalPages}
-        pageSize={pageSize}
-        onPageChange={setPage}
-        onPageSizeChange={setPageSize}
-        start={start}
-        end={end}
-        total={total}
+      <DataTable
+        columns={columns}
+        rows={filteredMembers}
+        getRowKey={(m) => m.id}
         itemLabel="team members"
+        emptyMessage={(members ?? []).length === 0 ? "No team members yet." : "No team members match this filter."}
+        filteredEmptyMessage="No team members match this filter."
+        exportFilename="finance-team"
+        minWidth={560}
+        toolbar={
+          <MultiSelect
+            options={[{ value: "owner", label: "Owner" }, ...ROLE_OPTIONS.map((r) => ({ value: r.value, label: r.label }))]}
+            selected={roleFilter}
+            onChange={setRoleFilter}
+            placeholder="All roles"
+          />
+        }
       />
-
-      <div className="mt-3 overflow-x-auto rounded-2xl border bg-white dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-        <table className="dt-table w-full min-w-[560px] text-left text-sm">
-          <thead>
-            <tr style={{ backgroundColor: "var(--color-muted-tint)" }}>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>#</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Name</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}>Role</th>
-              <th className="px-4 py-3 font-semibold" style={{ color: "var(--color-ink)" }}></th>
-            </tr>
-          </thead>
-          <tbody className="divide-y" style={{ borderColor: "var(--color-line)" }}>
-            {pagedMembers.map((m, i) => (
-              <tr key={m.id}>
-                <td className="px-4 py-3" style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                <td className="px-4 py-3 font-medium" style={{ color: "var(--color-ink)" }}>{m.profiles?.full_name ?? "Unknown"}</td>
-                <td className="px-4 py-3">
-                  {m.role === "owner" ? (
-                    <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: "#fff6d9", color: "#8a6700" }}>Owner</span>
-                  ) : (
-                    <select value={m.role} onChange={(e) => handleRoleChange(m.id, e.target.value)} className="rounded-lg border px-2 py-1 text-xs" style={{ borderColor: "var(--color-line)" }}>
-                      {ROLE_OPTIONS.map((r) => (
-                        <option key={r.value} value={r.value}>{r.label}</option>
-                      ))}
-                    </select>
-                  )}
-                </td>
-                <td className="px-4 py-3 text-right">
-                  {m.role !== "owner" && (
-                    <button type="button" onClick={() => handleRemove(m.id, m.profiles?.full_name ?? "this member")} className="text-xs font-medium" style={{ color: "#b42318" }}>Remove</button>
-                  )}
-                </td>
-              </tr>
-            ))}
-            {members !== null && members.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center" style={{ color: "var(--color-ink-soft)" }}>No team members yet.</td>
-              </tr>
-            )}
-            {members !== null && members.length !== 0 && filteredMembers.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-4 py-8 text-center" style={{ color: "var(--color-ink-soft)" }}>No team members match this filter.</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
     </div>
   );
 }

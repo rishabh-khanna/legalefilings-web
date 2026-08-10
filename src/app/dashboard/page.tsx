@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { Users, UserCheck, UserX, Gift, IndianRupee, LogIn, LogOut, Package, FileText } from "lucide-react";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { getReportingChainIds } from "@/lib/reporting-chain";
@@ -8,6 +9,57 @@ import { AnimatedCounter } from "@/components/crm/AnimatedCounter";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { GettingStartedChecklist } from "@/components/crm/GettingStartedChecklist";
 import { getMissingBusinessSettingsFields } from "@/lib/business-settings-completeness";
+import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, type OrderStatus } from "@/lib/order-status";
+
+const LEAVE_STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
+  pending: { bg: "#fff6d9", fg: "#8a6700" },
+  approved: { bg: "#d0f4db", fg: "#116a2c" },
+  rejected: { bg: "#fde2e2", fg: "#b42318" },
+};
+
+const INVOICE_STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
+  draft: { bg: "var(--color-paper)", fg: "var(--color-ink-soft)" },
+  sent: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
+  paid: { bg: "#d0f4db", fg: "#116a2c" },
+  partially_paid: { bg: "#fff6d9", fg: "#8a6700" },
+  overdue: { bg: "#fde2e2", fg: "#b42318" },
+  cancelled: { bg: "var(--color-paper)", fg: "var(--color-ink-soft)" },
+};
+
+const AVATAR_GRADIENTS = [
+  "linear-gradient(135deg, #fdc500, #ff8a3d)",
+  "linear-gradient(135deg, #60a5fa, #6366f1)",
+  "linear-gradient(135deg, #34d399, #059669)",
+  "linear-gradient(135deg, #f472b6, #db2777)",
+  "linear-gradient(135deg, #a78bfa, #7c3aed)",
+  "linear-gradient(135deg, #fb923c, #ea580c)",
+];
+
+function initialsFor(name: string) {
+  const parts = name.trim().split(/\s+/);
+  return ((parts[0]?.[0] ?? "") + (parts[1]?.[0] ?? "")).toUpperCase() || "?";
+}
+
+function RowAvatar({ name }: { name: string }) {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) hash = (hash * 31 + name.charCodeAt(i)) >>> 0;
+  return (
+    <span
+      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+      style={{ background: AVATAR_GRADIENTS[hash % AVATAR_GRADIENTS.length] }}
+    >
+      {initialsFor(name)}
+    </span>
+  );
+}
+
+function StatusPill({ label, style }: { label: string; style: { bg: string; fg: string } }) {
+  return (
+    <span className="inline-flex shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold capitalize" style={{ backgroundColor: style.bg, color: style.fg }}>
+      {label}
+    </span>
+  );
+}
 
 const PersonIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
@@ -190,11 +242,14 @@ export default async function DashboardOverviewPage() {
         subtitle={staff ? "Your work at a glance." : "Your account at a glance."}
       >
         <div className={`relative mt-6 grid grid-cols-2 gap-4 ${staff ? "sm:grid-cols-3" : "sm:grid-cols-2"}`}>
-          {stats.map((stat) => (
-            <Link key={stat.label} href={stat.href}>
-              <HeroKpi icon={stat.icon} label={stat.label} value={stat.value} />
-            </Link>
-          ))}
+          {stats.map((stat) => {
+            const Icon = stat.icon;
+            return (
+              <Link key={stat.label} href={stat.href}>
+                <HeroKpi icon={<Icon className="h-4 w-4" />} label={stat.label} value={stat.value} />
+              </Link>
+            );
+          })}
         </div>
       </DashboardPageHero>
 
@@ -211,19 +266,25 @@ export default async function DashboardOverviewPage() {
           </h2>
           <div className="mt-3 grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
             {[
-              { label: "Total Employees", value: hrOverview.totalEmployees, href: "/dashboard/admin/users" },
-              { label: "Present Today", value: hrOverview.presentToday, href: "/dashboard/admin/attendance" },
-              { label: "Absent Today", value: hrOverview.absentToday, href: "/dashboard/admin/attendance" },
-              { label: "Today's Birthdays", value: hrOverview.birthdaysToday, href: "/dashboard/admin/users" },
-              { label: "Payroll Due", value: hrOverview.payrollDue, href: "/dashboard/admin/payroll" },
+              { label: "Total Employees", value: hrOverview.totalEmployees, href: "/dashboard/admin/users", icon: Users, tint: { bg: "#dbe7ff", fg: "#1d4fb8" } },
+              { label: "Present Today", value: hrOverview.presentToday, href: "/dashboard/admin/attendance", icon: UserCheck, tint: { bg: "#dcfce3", fg: "#116a2c" } },
+              { label: "Absent Today", value: hrOverview.absentToday, href: "/dashboard/admin/attendance", icon: UserX, tint: { bg: "#fde2e2", fg: "#b42318" } },
+              { label: "Today's Birthdays", value: hrOverview.birthdaysToday, href: "/dashboard/admin/users", icon: Gift, tint: { bg: "#fce7f3", fg: "#9d174d" } },
+              { label: "Payroll Due", value: hrOverview.payrollDue, href: "/dashboard/admin/payroll", icon: IndianRupee, tint: { bg: "#fff1cc", fg: "#8a6700" } },
             ].map((s) => (
               <Link
                 key={s.label}
                 href={s.href}
-                className="rounded-2xl border p-4 backdrop-blur-xl transition-[box-shadow,border-color,transform] hover:-translate-y-0.5 hover:shadow-lg hover:border-[var(--color-accent)] dark:bg-[var(--color-paper-raised)]/80"
+                className="group rounded-2xl border p-4 backdrop-blur-xl transition-[box-shadow,border-color,transform] hover:-translate-y-0.5 hover:shadow-lg hover:border-[var(--color-accent)] dark:bg-[var(--color-paper-raised)]/80"
                 style={{ borderColor: "var(--color-line)", backgroundColor: "rgba(255,255,255,0.78)" }}
               >
-                <p className="text-2xl font-extrabold" style={{ color: "var(--color-ink)" }}>
+                <span
+                  className="flex h-9 w-9 items-center justify-center rounded-full transition-transform duration-150 group-hover:scale-110"
+                  style={{ backgroundColor: s.tint.bg, color: s.tint.fg }}
+                >
+                  <s.icon className="h-4 w-4" />
+                </span>
+                <p className="mt-3 text-2xl font-extrabold" style={{ color: "var(--color-ink)" }}>
                   <AnimatedCounter value={s.value} />
                 </p>
                 <p className="mt-0.5 text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>
@@ -243,19 +304,23 @@ export default async function DashboardOverviewPage() {
                   View all →
                 </Link>
               </div>
-              <ul className="mt-3 space-y-3">
+              <ul className="mt-3 -mx-2">
                 {recentAttendance.map((a) => (
-                  <li key={a.id} className="flex items-center justify-between text-sm">
-                    <p className="font-medium" style={{ color: "var(--color-ink)" }}>
-                      {a.name}
-                    </p>
-                    <span className="text-xs" style={{ color: "var(--color-ink-soft)" }}>
-                      {a.eventType.replace("_", " ")} · {new Date(a.occurredAt).toLocaleString("en-IN")}
-                    </span>
+                  <li key={a.id}>
+                    <Link href="/dashboard/admin/attendance" className="flex items-center gap-3 rounded-xl px-2 py-2 text-sm transition-colors hover:bg-[var(--color-paper)]">
+                      <RowAvatar name={a.name} />
+                      <p className="min-w-0 flex-1 truncate font-medium" style={{ color: "var(--color-ink)" }}>
+                        {a.name}
+                      </p>
+                      <span className="flex shrink-0 items-center gap-1 text-xs" style={{ color: a.eventType === "check_in" ? "#116a2c" : "var(--color-ink-soft)" }}>
+                        {a.eventType === "check_in" ? <LogIn className="h-3.5 w-3.5" /> : <LogOut className="h-3.5 w-3.5" />}
+                        {new Date(a.occurredAt).toLocaleString("en-IN")}
+                      </span>
+                    </Link>
                   </li>
                 ))}
                 {recentAttendance.length === 0 && (
-                  <li className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
+                  <li className="px-2 text-sm" style={{ color: "var(--color-ink-soft)" }}>
                     No attendance events yet.
                   </li>
                 )}
@@ -271,24 +336,25 @@ export default async function DashboardOverviewPage() {
                   View all →
                 </Link>
               </div>
-              <ul className="mt-3 space-y-3">
+              <ul className="mt-3 -mx-2">
                 {recentLeaveRequests.map((l) => (
-                  <li key={l.id} className="flex items-center justify-between text-sm">
-                    <div>
-                      <p className="font-medium" style={{ color: "var(--color-ink)" }}>
-                        {l.name}
-                      </p>
-                      <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>
-                        {l.leaveType} · {new Date(l.startDate).toLocaleDateString("en-IN")}–{new Date(l.endDate).toLocaleDateString("en-IN")}
-                      </p>
-                    </div>
-                    <span className="text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>
-                      {l.status}
-                    </span>
+                  <li key={l.id}>
+                    <Link href="/dashboard/leave" className="flex items-center gap-3 rounded-xl px-2 py-2 text-sm transition-colors hover:bg-[var(--color-paper)]">
+                      <RowAvatar name={l.name} />
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-medium" style={{ color: "var(--color-ink)" }}>
+                          {l.name}
+                        </p>
+                        <p className="truncate text-xs" style={{ color: "var(--color-ink-soft)" }}>
+                          {l.leaveType} · {new Date(l.startDate).toLocaleDateString("en-IN")}–{new Date(l.endDate).toLocaleDateString("en-IN")}
+                        </p>
+                      </div>
+                      <StatusPill label={l.status} style={LEAVE_STATUS_STYLE[l.status] ?? { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" }} />
+                    </Link>
                   </li>
                 ))}
                 {recentLeaveRequests.length === 0 && (
-                  <li className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
+                  <li className="px-2 text-sm" style={{ color: "var(--color-ink-soft)" }}>
                     No leave requests yet.
                   </li>
                 )}
@@ -308,24 +374,30 @@ export default async function DashboardOverviewPage() {
               View all →
             </Link>
           </div>
-          <ul className="mt-3 space-y-3">
-            {orderList.slice(0, 3).map((order) => (
-              <li key={order.id} className="flex items-center justify-between text-sm">
-                <div>
-                  <p className="font-medium" style={{ color: "var(--color-ink)" }}>
-                    {order.service}
-                  </p>
-                  <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>
-                    {order.id.slice(0, 8)} · {new Date(order.created_at).toLocaleDateString("en-IN")}
-                  </p>
-                </div>
-                <span className="text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>
-                  {order.status}
-                </span>
-              </li>
-            ))}
+          <ul className="mt-3 -mx-2">
+            {orderList.slice(0, 3).map((order) => {
+              const style = ORDER_STATUS_STYLE[order.status as OrderStatus] ?? { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" };
+              return (
+                <li key={order.id}>
+                  <Link href="/dashboard/orders" className="flex items-center gap-3 rounded-xl px-2 py-2 text-sm transition-colors hover:bg-[var(--color-paper)]">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: "#dbe7ff", color: "#1d4fb8" }}>
+                      <Package className="h-4 w-4" />
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium" style={{ color: "var(--color-ink)" }}>
+                        {order.service}
+                      </p>
+                      <p className="truncate text-xs" style={{ color: "var(--color-ink-soft)" }}>
+                        {order.id.slice(0, 8)} · {new Date(order.created_at).toLocaleDateString("en-IN")}
+                      </p>
+                    </div>
+                    <StatusPill label={ORDER_STATUS_LABEL[order.status as OrderStatus] ?? order.status} style={style} />
+                  </Link>
+                </li>
+              );
+            })}
             {orderList.length === 0 && (
-              <li className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
+              <li className="px-2 text-sm" style={{ color: "var(--color-ink-soft)" }}>
                 No orders yet.
               </li>
             )}
@@ -341,24 +413,32 @@ export default async function DashboardOverviewPage() {
               View all →
             </Link>
           </div>
-          <ul className="mt-3 space-y-3">
+          <ul className="mt-3 -mx-2">
             {invoiceList.slice(0, 3).map((inv) => (
-              <li key={inv.id} className="flex items-center justify-between text-sm">
-                <div>
-                  <p className="font-medium" style={{ color: "var(--color-ink)" }}>
-                    {inv.invoice_number}
-                  </p>
-                  <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>
-                    {new Date(inv.created_at).toLocaleDateString("en-IN")}
-                  </p>
-                </div>
-                <span className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
-                  ₹{Number(inv.total).toLocaleString("en-IN")}
-                </span>
+              <li key={inv.id}>
+                <Link href="/dashboard/invoices" className="flex items-center gap-3 rounded-xl px-2 py-2 text-sm transition-colors hover:bg-[var(--color-paper)]">
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: "#fff1cc", color: "#8a6700" }}>
+                    <FileText className="h-4 w-4" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-medium" style={{ color: "var(--color-ink)" }}>
+                      {inv.invoice_number}
+                    </p>
+                    <p className="truncate text-xs" style={{ color: "var(--color-ink-soft)" }}>
+                      {new Date(inv.created_at).toLocaleDateString("en-IN")}
+                    </p>
+                  </div>
+                  <div className="shrink-0 text-right">
+                    <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+                      ₹{Number(inv.total).toLocaleString("en-IN")}
+                    </p>
+                    <StatusPill label={inv.status.replace("_", " ")} style={INVOICE_STATUS_STYLE[inv.status] ?? { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" }} />
+                  </div>
+                </Link>
               </li>
             ))}
             {invoiceList.length === 0 && (
-              <li className="text-sm" style={{ color: "var(--color-ink-soft)" }}>
+              <li className="px-2 text-sm" style={{ color: "var(--color-ink-soft)" }}>
                 No invoices yet.
               </li>
             )}

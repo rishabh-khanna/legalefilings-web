@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { isStaffOrAdmin } from "@/lib/roles";
 import { canSeeAllOrgs } from "@/lib/organization";
+import { isRateLimited, getClientIp } from "@/lib/rate-limit";
 
 // GET /api/account-requests
 //   - ?email=... (public): status check for the person who submitted it —
@@ -44,6 +45,13 @@ export async function GET(request: Request) {
 // than creating a duplicate, UNLESS it's already approved (a live account
 // already exists — nothing to resubmit).
 export async function POST(request: Request) {
+  // Public and unauthenticated — same reasoning as the lead form. This
+  // one also upserts by email, so without a limit it doubles as a way to
+  // repeatedly reset someone else's pending request back to 'pending'.
+  if (isRateLimited(`account-request:${getClientIp(request)}`, 5, 10 * 60 * 1000)) {
+    return NextResponse.json({ error: "Too many submissions. Please try again in a few minutes." }, { status: 429 });
+  }
+
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });

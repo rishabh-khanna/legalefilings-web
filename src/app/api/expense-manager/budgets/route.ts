@@ -27,7 +27,11 @@ export async function GET(request: Request) {
 
   const monthStart = `${month}-01`;
   const [y, m] = month.split("-").map(Number);
-  const monthEnd = new Date(y, m, 1).toISOString().slice(0, 10);
+  // Date.UTC, not new Date(y, m, ...) — the latter is local time and
+  // toISOString() converts it back to UTC, which lands a day earlier for
+  // any timezone ahead of UTC. As an exclusive month-end bound in IST
+  // that silently dropped the last day of every month from the range.
+  const monthEnd = new Date(Date.UTC(y, m, 1)).toISOString().slice(0, 10);
 
   const { data: monthTx } = await supabase
     .from("expense_transactions")
@@ -55,7 +59,11 @@ export async function GET(request: Request) {
         monthlyAmount: Number(b.monthly_amount),
         actual,
         remaining: Number(b.monthly_amount) - actual,
-        percentUsed: Math.round((actual / Number(b.monthly_amount)) * 100),
+        // Guarded: POST rejects a non-positive cap, but nothing stops a
+        // zero reaching this table by another route, and dividing by it
+        // renders the budget bar as NaN% or Infinity% rather than
+        // failing loudly.
+        percentUsed: Number(b.monthly_amount) > 0 ? Math.round((actual / Number(b.monthly_amount)) * 100) : 0,
       };
     }),
   });

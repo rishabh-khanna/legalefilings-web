@@ -20,7 +20,7 @@ export async function GET() {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from("leave_types")
-    .select("*")
+    .select("*, creator:profiles!leave_types_created_by_fkey(full_name)")
     .eq("organization_id", profile.organization_id)
     .eq("is_active", true)
     .order("name");
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from("leave_types")
-    .insert({ organization_id: profile.organization_id, name, code, annual_credit_days: annualCreditDays, carry_forward_cap: Math.max(0, carryForwardCap) })
+    .insert({ organization_id: profile.organization_id, name, code, annual_credit_days: annualCreditDays, carry_forward_cap: Math.max(0, carryForwardCap), created_by: profile.id })
     .select()
     .single();
   if (error) {

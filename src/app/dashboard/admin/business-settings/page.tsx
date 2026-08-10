@@ -10,7 +10,7 @@ import { StateSelect } from "@/components/StateSelect";
 import { gstStateCode } from "@/lib/gst-state-codes";
 import { getMissingBusinessSettingsFields } from "@/lib/business-settings-completeness";
 
-type GstRegistration = { id: string; label: string; gst_number: string; state: string | null; state_code: string | null; is_default: boolean };
+type GstRegistration = { id: string; label: string; gst_number: string; state: string | null; state_code: string | null; is_default: boolean; organization_id: string; organizations?: { name: string | null } | null; creator?: { full_name: string | null } | null };
 
 type Settings = {
   logo_url: string | null;
@@ -29,6 +29,8 @@ type Settings = {
   upi_id: string | null;
   default_invoice_notes: string | null;
   invoice_number_prefix: string;
+  updated_at?: string;
+  updater?: { full_name: string | null } | null;
 };
 
 export default function BusinessSettingsPage() {
@@ -218,9 +220,22 @@ export default function BusinessSettingsPage() {
 
   const missing = getMissingBusinessSettingsFields(settings);
 
+  // Only a platform_admin's request ever returns more than one org's GST
+  // registrations pooled together — the label is only worth showing once
+  // it's actually ambiguous which org a row belongs to. The rest of this
+  // page (Branding/Invoicing/Company Details) always stays scoped to the
+  // viewer's own organization, so this only applies to this one section.
+  const spansMultipleOrgs = new Set(registrations.map((r) => r.organization_id)).size > 1;
+
   return (
     <div>
       <DashboardPageHero title="Business Settings" subtitle="Required before invoices can be generated — also used on generated invoices and the customer payment page." />
+
+      {settings?.updater?.full_name && settings.updated_at && (
+        <p className="mt-2 text-xs" style={{ color: "var(--color-ink-soft)" }}>
+          Last updated by {settings.updater.full_name} on {new Date(settings.updated_at).toLocaleDateString("en-IN")}
+        </p>
+      )}
 
       <div className="mt-3">
         <ActionMessage message={message} />
@@ -323,7 +338,7 @@ export default function BusinessSettingsPage() {
                 <textarea rows={2} value={defaultInvoiceNotes} onChange={(e) => setDefaultInvoiceNotes(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} placeholder="Thank you for your business. GST once charged is non-refundable. Subject to Lucknow jurisdiction." />
               </div>
             </div>
-            <button type="submit" disabled={savingInvoicing} className="mt-4 rounded-full px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60" style={{ backgroundColor: "var(--color-action)" }}>
+            <button type="submit" disabled={savingInvoicing} className="mt-4 rounded-full px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ backgroundColor: "var(--color-action)" }}>
               {savingInvoicing ? "Saving…" : "Save Invoicing Settings"}
             </button>
           </form>
@@ -370,7 +385,7 @@ export default function BusinessSettingsPage() {
               </select>
             </div>
           </div>
-          <button type="submit" disabled={saving} className="mt-4 rounded-full px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60" style={{ backgroundColor: "var(--color-action)" }}>
+          <button type="submit" disabled={saving} className="mt-4 rounded-full px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-60" style={{ backgroundColor: "var(--color-action)" }}>
             {saving ? "Saving…" : "Save Settings"}
           </button>
         </form>
@@ -379,20 +394,36 @@ export default function BusinessSettingsPage() {
       <div className="mt-6 rounded-2xl border bg-white p-5 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
         <h3 className="font-semibold" style={{ color: "var(--color-ink)" }}>Additional GST Registrations</h3>
         <p className="mt-1 text-xs" style={{ color: "var(--color-ink-soft)" }}>
-          If the company operates under more than one GSTIN (e.g. a branch in another state), add each one here — Invoice CRM lets staff pick which registration an invoice is issued under.
+          {spansMultipleOrgs
+            ? "Every organization's additional GST registrations, pooled here for platform-level support — each company still manages its own from its own Business Settings page."
+            : "If the company operates under more than one GSTIN (e.g. a branch in another state), add each one here — Invoice CRM lets staff pick which registration an invoice is issued under."}
         </p>
-        <form onSubmit={handleAddRegistration} className="mt-3 grid gap-3 sm:grid-cols-3">
-          <input required placeholder="Label (e.g. Delhi Office)" value={regLabel} onChange={(e) => setRegLabel(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
-          <input required placeholder="GST Number" value={regGstNumber} onChange={(e) => setRegGstNumber(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
-          <StateSelect value={regState} onChange={(e) => setRegState(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
-          <button type="submit" disabled={savingRegistration} className="sm:col-span-3 rounded-full py-2 text-sm font-semibold text-white disabled:opacity-60" style={{ backgroundColor: "var(--color-action)" }}>
-            {savingRegistration ? "Adding…" : "+ Add Registration"}
-          </button>
-        </form>
+        {spansMultipleOrgs ? (
+          <p className="mt-3 text-xs" style={{ color: "var(--color-ink-soft)" }}>
+            Adding a new registration here isn&apos;t available in this cross-org view — there&apos;s no single company to attach it to. Open a specific organization&apos;s own Business Settings page to add one for them.
+          </p>
+        ) : (
+          <form onSubmit={handleAddRegistration} className="mt-3 grid gap-3 sm:grid-cols-3">
+            <input required placeholder="Label (e.g. Delhi Office)" value={regLabel} onChange={(e) => setRegLabel(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+            <input required placeholder="GST Number" value={regGstNumber} onChange={(e) => setRegGstNumber(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+            <StateSelect value={regState} onChange={(e) => setRegState(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+            <button type="submit" disabled={savingRegistration} className="sm:col-span-3 rounded-full py-2 text-sm font-semibold text-white disabled:opacity-60" style={{ backgroundColor: "var(--color-action)" }}>
+              {savingRegistration ? "Adding…" : "+ Add Registration"}
+            </button>
+          </form>
+        )}
         <div className="mt-4 space-y-2">
           {registrations.map((r) => (
             <div key={r.id} className="flex items-center justify-between rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--color-line)" }}>
-              <span style={{ color: "var(--color-ink)" }}>{r.label} — {r.gst_number} {r.state ? `(${r.state})` : ""}</span>
+              <span style={{ color: "var(--color-ink)" }}>
+                {r.label} — {r.gst_number} {r.state ? `(${r.state})` : ""}
+                {spansMultipleOrgs && (
+                  <span className="ml-2 text-xs" style={{ color: "var(--color-ink-soft)" }}>{r.organizations?.name ?? "Unknown organization"}</span>
+                )}
+                {r.creator?.full_name && (
+                  <span className="ml-2 text-xs" style={{ color: "var(--color-ink-soft)" }}>· Added by {r.creator.full_name}</span>
+                )}
+              </span>
               <button type="button" onClick={() => handleRemoveRegistration(r.id, r.label)} className="text-xs font-semibold" style={{ color: "#b42318" }}>Remove</button>
             </div>
           ))}

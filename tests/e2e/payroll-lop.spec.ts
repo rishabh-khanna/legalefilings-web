@@ -1,5 +1,5 @@
 import { test, expect } from "@playwright/test";
-import { workingDaysInMonth } from "../../src/lib/payroll";
+import { workingDaysInMonth } from "../../src/lib/working-days";
 
 test.use({ storageState: "tests/e2e/.auth/admin.json" });
 
@@ -32,7 +32,9 @@ test("payroll generation computes Loss of Pay from real attendance/leave data", 
   const payslip = payslips.find((p: { month: number; year: number }) => p.month === LOP_TEST_MONTH && p.year === LOP_TEST_YEAR);
   expect(payslip, "no payslip found for the zero-attendance test period").toBeTruthy();
 
-  const expectedLopDays = workingDaysInMonth(LOP_TEST_MONTH, LOP_TEST_YEAR);
+  // No holidays are declared for this far-future test period, so the
+  // expected LOP is simply every working day in it.
+  const expectedLopDays = workingDaysInMonth(LOP_TEST_MONTH, LOP_TEST_YEAR, new Set());
   expect(Number(payslip.lop_days)).toBe(expectedLopDays);
   expect(Number(payslip.lop_deduction)).toBeGreaterThan(0);
 

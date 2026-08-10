@@ -7,6 +7,8 @@ import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
 import { DELEGABLE_TOOLS, isGrantActive, type ToolKey } from "@/lib/tool-grants";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { MultiSelect } from "@/components/MultiSelect";
 
 type StaffRow = { id: string; full_name: string | null; account_type: string; staff_level: string | null };
 type GrantRow = { id: string; staff_id: string; tool_key: ToolKey; granted_by: string | null; expires_at: string | null; created_at: string };
@@ -41,19 +43,20 @@ export default function ToolAccessPage() {
     return () => clearTimeout(kickoff);
   }, []);
 
-  const staffOnly = useMemo(() => (staff ?? []).filter((s) => s.account_type === "staff"), [staff]);
+  // "customer" included so a paid customer can be delegated real CRM
+  // tool access without ever being promoted off account_type=customer.
+  const staffOnly = useMemo(() => (staff ?? []).filter((s) => s.account_type === "staff" || s.account_type === "customer"), [staff]);
   const staffById = useMemo(() => new Map((staff ?? []).map((s) => [s.id, s])), [staff]);
-  const activeGrantCount = useMemo(() => (grants ?? []).filter(isGrantActive).length, [grants]);
+  const activeGrants = useMemo(() => (grants ?? []).filter(isGrantActive), [grants]);
 
-  const [toolFilter, setToolFilter] = useState<ToolKey | "all">("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "expired">("all");
+  const [toolFilter, setToolFilter] = useState<Set<string>>(new Set());
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
   const filteredGrants = useMemo(() => {
     return (grants ?? []).filter((g) => {
-      if (toolFilter !== "all" && g.tool_key !== toolFilter) return false;
-      if (statusFilter !== "all") {
+      if (toolFilter.size > 0 && !toolFilter.has(g.tool_key)) return false;
+      if (statusFilter.size > 0) {
         const active = isGrantActive(g);
-        if (statusFilter === "active" && !active) return false;
-        if (statusFilter === "expired" && active) return false;
+        if (!statusFilter.has(active ? "active" : "expired")) return false;
       }
       return true;
     });
@@ -96,14 +99,55 @@ export default function ToolAccessPage() {
 
   const inputClass = "w-full rounded-lg border px-2.5 py-1.5 text-sm outline-none focus:border-[var(--color-action)]";
 
+  const columns: DataTableColumn<GrantRow>[] = [
+    { key: "staff", header: "Staff Member", render: (g) => staffById.get(g.staff_id)?.full_name ?? "Unknown", exportValue: (g) => staffById.get(g.staff_id)?.full_name ?? "Unknown", sortValue: (g) => staffById.get(g.staff_id)?.full_name },
+    { key: "tool", header: "Tool", render: (g) => DELEGABLE_TOOLS.find((t) => t.key === g.tool_key)?.label ?? g.tool_key, exportValue: (g) => DELEGABLE_TOOLS.find((t) => t.key === g.tool_key)?.label ?? g.tool_key, sortValue: (g) => DELEGABLE_TOOLS.find((t) => t.key === g.tool_key)?.label ?? g.tool_key },
+    { key: "expires", header: "Expires", className: "w-[14%] whitespace-nowrap", render: (g) => (g.expires_at ? new Date(g.expires_at).toLocaleDateString("en-IN") : "No expiry"), exportValue: (g) => (g.expires_at ? new Date(g.expires_at).toLocaleDateString("en-IN") : "No expiry"), sortValue: (g) => g.expires_at },
+    {
+      key: "status",
+      header: "Status",
+      className: "w-[12%] whitespace-nowrap",
+      render: (g) => {
+        const active = isGrantActive(g);
+        return (
+          <span
+            className="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold"
+            style={active ? { backgroundColor: "var(--color-accent-tint)", color: "#116a2c" } : { backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}
+          >
+            {active ? "Active" : "Expired"}
+          </span>
+        );
+      },
+      exportValue: (g) => (isGrantActive(g) ? "Active" : "Expired"),
+      sortValue: (g) => (isGrantActive(g) ? "Active" : "Expired"),
+    },
+    {
+      key: "actions",
+      header: "Action",
+      className: "text-right",
+      render: (g) => (
+        <button
+          type="button"
+          onClick={() => handleRevoke(g)}
+          disabled={revokingId === g.id}
+          aria-label="Revoke access"
+          className="rounded-lg p-1.5 transition-colors hover:bg-red-50 disabled:opacity-60"
+          style={{ color: "#b42318" }}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </button>
+      ),
+    },
+  ];
+
   return (
     <div>
       <DashboardPageHero
         title="Delegated Access"
-        subtitle="Grant a specific staff member access to one admin-only tool, without promoting them to admin."
+        subtitle="Grant a specific staff member or paid customer access to one admin-only tool, without changing their account type."
       >
         <div className="relative mt-6 grid grid-cols-1 gap-4 sm:max-w-xs">
-          <HeroKpi icon={KeyRound} label="Active Grants" value={activeGrantCount} />
+          <HeroKpi icon={KeyRound} label="Active Grants" value={activeGrants.length} />
         </div>
       </DashboardPageHero>
 
@@ -117,7 +161,7 @@ export default function ToolAccessPage() {
           <select value={selectedStaff} onChange={(e) => setSelectedStaff(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }}>
             <option value="">Select staff member…</option>
             {staffOnly.map((s) => (
-              <option key={s.id} value={s.id}>{s.full_name ?? "Unnamed"}</option>
+              <option key={s.id} value={s.id}>{s.full_name ?? "Unnamed"}{s.account_type === "customer" ? " (Customer)" : ""}</option>
             ))}
           </select>
           <select value={selectedTool} onChange={(e) => setSelectedTool(e.target.value as ToolKey)} className={inputClass} style={{ borderColor: "var(--color-line)" }}>
@@ -147,101 +191,51 @@ export default function ToolAccessPage() {
         <p className="mt-2 text-xs" style={{ color: "var(--color-ink-soft)" }}>Leave the date blank for access that lasts until you revoke it.</p>
       </div>
 
-      {staff !== null && grants !== null && grants.length !== 0 && (
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <select
-            value={toolFilter}
-            onChange={(e) => setToolFilter(e.target.value as ToolKey | "all")}
-            className="rounded-lg border px-2.5 py-1.5 text-sm outline-none"
-            style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
-          >
-            <option value="all">All tools</option>
-            {DELEGABLE_TOOLS.map((t) => (
-              <option key={t.key} value={t.key}>{t.label}</option>
-            ))}
-          </select>
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as "all" | "active" | "expired")}
-            className="rounded-lg border px-2.5 py-1.5 text-sm outline-none"
-            style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
-          >
-            <option value="all">All statuses</option>
-            <option value="active">Active</option>
-            <option value="expired">Expired</option>
-          </select>
-          {(toolFilter !== "all" || statusFilter !== "all") && (
-            <button
-              type="button"
-              onClick={() => {
-                setToolFilter("all");
-                setStatusFilter("all");
-              }}
-              className="text-xs font-semibold"
-              style={{ color: "var(--color-action-dark)" }}
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
-      )}
-
       {staff === null || grants === null ? (
         <LoadingBlock className="mt-6" />
-      ) : grants.length === 0 ? (
-        <p className="mt-6 text-sm" style={{ color: "var(--color-ink-soft)" }}>No delegated access granted yet.</p>
-      ) : filteredGrants.length === 0 ? (
-        <p className="mt-6 text-sm" style={{ color: "var(--color-ink-soft)" }}>No grants match this filter.</p>
       ) : (
-        <div className="mt-5 overflow-x-auto rounded-2xl border bg-white dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-          <table className="dt-table min-w-[640px] w-full">
-            <thead>
-              <tr>
-                <th className="text-left">#</th>
-                <th className="text-left">Staff Member</th>
-                <th className="text-left">Tool</th>
-                <th className="text-left">Expires</th>
-                <th className="text-left">Status</th>
-                <th className="text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredGrants.map((g, i) => {
-                const person = staffById.get(g.staff_id);
-                const tool = DELEGABLE_TOOLS.find((t) => t.key === g.tool_key);
-                const active = isGrantActive(g);
-                return (
-                  <tr key={g.id}>
-                    <td style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                    <td>{person?.full_name ?? "Unknown"}</td>
-                    <td>{tool?.label ?? g.tool_key}</td>
-                    <td>{g.expires_at ? new Date(g.expires_at).toLocaleDateString("en-IN") : "No expiry"}</td>
-                    <td>
-                      <span
-                        className="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold"
-                        style={active ? { backgroundColor: "var(--color-accent-tint)", color: "#116a2c" } : { backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}
-                      >
-                        {active ? "Active" : "Expired"}
-                      </span>
-                    </td>
-                    <td className="text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleRevoke(g)}
-                        disabled={revokingId === g.id}
-                        aria-label="Revoke access"
-                        className="rounded-lg p-1.5 transition-colors hover:bg-red-50 disabled:opacity-60"
-                        style={{ color: "#b42318" }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
+        <DataTable
+          columns={columns}
+          fixedLayout
+          rows={filteredGrants}
+          getRowKey={(g) => g.id}
+          itemLabel="grants"
+          emptyMessage={grants.length === 0 ? "No delegated access granted yet." : "No grants match this filter."}
+          filteredEmptyMessage="No grants match this filter."
+          exportFilename="delegated-access"
+          toolbar={
+            <>
+              <MultiSelect
+                options={DELEGABLE_TOOLS.map((t) => ({ value: t.key, label: t.label }))}
+                selected={toolFilter}
+                onChange={setToolFilter}
+                placeholder="All tools"
+              />
+              <MultiSelect
+                options={[
+                  { value: "active", label: "Active" },
+                  { value: "expired", label: "Expired" },
+                ]}
+                selected={statusFilter}
+                onChange={setStatusFilter}
+                placeholder="All statuses"
+              />
+              {(toolFilter.size > 0 || statusFilter.size > 0) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setToolFilter(new Set());
+                    setStatusFilter(new Set());
+                  }}
+                  className="text-xs font-semibold"
+                  style={{ color: "var(--color-action-dark)" }}
+                >
+                  Clear filters
+                </button>
+              )}
+            </>
+          }
+        />
       )}
     </div>
   );

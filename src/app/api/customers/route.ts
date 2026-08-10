@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { isStaffOrAdmin } from "@/lib/roles";
 import { canSeeAllOrgs } from "@/lib/organization";
+import { hasToolAccess } from "@/lib/tool-grants";
 
 // GET /api/customers — every customer account. Staff need this for
 // pickers (invoice generation, buy-for-customer); an explicit column
@@ -13,12 +14,18 @@ import { canSeeAllOrgs } from "@/lib/organization";
 // access — the exact leak closed in an earlier migration).
 export async function GET() {
   const profile = await getCurrentProfile();
-  if (!isStaffOrAdmin(profile) || !profile) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  const isCustomerOperator = profile?.account_type === "customer" && (await hasToolAccess(profile, "invoice_crm"));
+  if (!profile || (!isStaffOrAdmin(profile) && !isCustomerOperator)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const supabase = getSupabaseAdmin();
+  // organizations(name) only actually matters for a platform_admin, who
+  // sees every org's customers pooled together here — without it, two
+  // different tenants' customers with the same name are indistinguishable
+  // in every picker built on this endpoint (Invoice CRM, Buy Plan for
+  // Customer), risking billing the wrong company's customer entirely.
   let query = supabase
     .from("profiles")
-    .select("id, full_name, company, phone, gstin, pan_number, state, state_code, billing_address, shipping_address")
+    .select("id, full_name, company, phone, gstin, pan_number, state, state_code, billing_address, shipping_address, organization_id, organizations!organization_id(name)")
     .eq("account_type", "customer");
   if (!canSeeAllOrgs(profile)) query = query.eq("organization_id", profile.organization_id);
   const { data, error } = await query;

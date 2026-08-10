@@ -45,7 +45,10 @@ export function DateRangeFilter({
         <button
           type="button"
           onClick={onClear}
-          className="rounded-lg border px-3 py-2 text-xs font-semibold transition-colors hover:bg-[var(--color-accent-tint)]"
+          // text-sm, not text-xs — this sits in the same bottom-aligned row
+          // as the two date inputs and Export, and the smaller line-height
+          // made it 4px shorter than everything beside it.
+          className="rounded-lg border px-3 py-2 text-sm font-semibold transition-colors hover:bg-[var(--color-accent-tint)]"
           style={{ borderColor: "var(--color-line)", color: "var(--color-ink-soft)" }}
         >
           Clear dates

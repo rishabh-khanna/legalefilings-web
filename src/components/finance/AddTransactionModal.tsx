@@ -386,7 +386,7 @@ export function AddTransactionModal({
             type="button"
             disabled={submitting}
             onClick={() => handleSubmit(true)}
-            className="rounded-full px-6 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+            className="rounded-full px-4 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
             style={{ backgroundColor: "var(--color-action)" }}
           >
             {submitting ? "Saving…" : "Save"}
@@ -396,7 +396,7 @@ export function AddTransactionModal({
               type="button"
               disabled={submitting}
               onClick={() => handleSubmit(false)}
-              className="rounded-full border px-6 py-2.5 text-sm font-semibold disabled:opacity-60"
+              className="rounded-full border px-4 py-1.5 text-xs font-semibold disabled:opacity-60"
               style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
             >
               Save &amp; New
@@ -406,7 +406,7 @@ export function AddTransactionModal({
             type="button"
             disabled={submitting}
             onClick={onClose}
-            className="rounded-full border px-6 py-2.5 text-sm font-semibold disabled:opacity-60"
+            className="rounded-full border px-4 py-1.5 text-xs font-semibold disabled:opacity-60"
             style={{ borderColor: "var(--color-line)", color: "var(--color-ink-soft)" }}
           >
             Cancel

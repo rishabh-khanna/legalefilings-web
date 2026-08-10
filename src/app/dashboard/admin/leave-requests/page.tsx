@@ -1,12 +1,14 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Clock, CheckCircle2, XCircle } from "lucide-react";
+import { Clock, CheckCircle2, XCircle, Check, X } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useActionMessage } from "@/lib/use-action-message";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
+import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { MultiSelect } from "@/components/MultiSelect";
 
 type LeaveRow = {
   id: string;
@@ -16,7 +18,7 @@ type LeaveRow = {
   start_date: string;
   end_date: string;
   reason: string | null;
-  status: "pending" | "approved" | "rejected";
+  status: "pending" | "approved" | "rejected" | "cancelled";
   review_note: string | null;
   organization_id: string;
   profiles?: { full_name: string | null } | null;
@@ -32,7 +34,16 @@ const STATUS_STYLE: Record<LeaveRow["status"], { bg: string; fg: string }> = {
   pending: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
   approved: { bg: "#d0f4db", fg: "#116a2c" },
   rejected: { bg: "#fde2e2", fg: "#b42318" },
+  // Neutral, not red — a cancelled request isn't a refusal.
+  cancelled: { bg: "var(--color-paper)", fg: "var(--color-ink-soft)" },
 };
+
+// Approved future leave can be called back by the approver; once it has
+// started the person was actually absent, so the balance stays spent.
+function canCancel(r: LeaveRow): boolean {
+  if (r.status !== "approved") return false;
+  return r.start_date > new Date().toISOString().slice(0, 10);
+}
 
 export default function AdminLeaveRequestsPage() {
   const [requests, setRequests] = useState<LeaveRow[] | null>(null);
@@ -58,6 +69,23 @@ export default function AdminLeaveRequestsPage() {
     return () => clearTimeout(kickoff);
   }, []);
 
+  async function cancelApproved(r: LeaveRow) {
+    const who = r.profiles?.full_name ?? "this employee";
+    if (!window.confirm(`Cancel ${who}'s approved leave? The days go back to their balance.`)) return;
+    const res = await fetch(`/api/leave-requests/${r.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ decision: "cancel" }),
+    });
+    if (res.ok) {
+      await load();
+      showSuccess("Leave cancelled — the days are back in their balance.");
+    } else {
+      const data = await res.json().catch(() => null);
+      showError(data?.error ?? "Failed to cancel this leave.");
+    }
+  }
+
   async function decide(id: string, decision: "approve" | "reject", reason?: string) {
     const res = await fetch(`/api/leave-requests/${id}`, {
       method: "PATCH",
@@ -79,28 +107,36 @@ export default function AdminLeaveRequestsPage() {
     }
   }
 
-  const stats = useMemo(() => {
+  const byStatus = useMemo(() => {
     const all = requests ?? [];
     return {
-      pending: all.filter((r) => r.status === "pending").length,
-      approved: all.filter((r) => r.status === "approved").length,
-      rejected: all.filter((r) => r.status === "rejected").length,
+      pending: all.filter((r) => r.status === "pending"),
+      approved: all.filter((r) => r.status === "approved"),
+      rejected: all.filter((r) => r.status === "rejected"),
     };
   }, [requests]);
 
-  const [statusFilter, setStatusFilter] = useState<LeaveRow["status"] | "all">("all");
-  const [search, setSearch] = useState("");
-  const filteredRequests = useMemo(() => {
-    return (requests ?? []).filter((r) => {
-      if (statusFilter !== "all" && r.status !== statusFilter) return false;
-      if (search.trim()) {
-        const q = search.trim().toLowerCase();
-        const hay = `${r.profiles?.full_name ?? ""} ${leaveRowLabel(r)} ${r.reason ?? ""}`.toLowerCase();
-        if (!hay.includes(q)) return false;
-      }
-      return true;
-    });
-  }, [requests, statusFilter, search]);
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
+  const [staffFilter, setStaffFilter] = useState<Set<string>>(new Set());
+  const statusFilteredRequests = useMemo(() => {
+    return (requests ?? []).filter((r) => statusFilter.size === 0 || statusFilter.has(r.status));
+  }, [requests, statusFilter]);
+  // Replaces the old group-by-staff clustering — one dropdown to narrow
+  // the table to a single person instead of the whole queue visually
+  // reorganized around them. Built from whoever actually has a request
+  // (across all statuses, not just the current status filter), so
+  // switching Status back to "All" never leaves a stale-looking option.
+  const staffOptions = useMemo(() => {
+    const byId = new Map<string, string>();
+    for (const r of requests ?? []) {
+      if (!byId.has(r.staff_id)) byId.set(r.staff_id, r.profiles?.full_name ?? "Staff");
+    }
+    return [...byId.entries()].sort((a, b) => a[1].localeCompare(b[1]));
+  }, [requests]);
+  const filteredRequests = useMemo(
+    () => (staffFilter.size === 0 ? statusFilteredRequests : statusFilteredRequests.filter((r) => staffFilter.has(r.staff_id))),
+    [statusFilteredRequests, staffFilter]
+  );
 
   if (requests === null && !error) return <LoadingBlock />;
 
@@ -109,13 +145,77 @@ export default function AdminLeaveRequestsPage() {
   // once it's actually ambiguous which org a row belongs to.
   const spansMultipleOrgs = new Set((requests ?? []).map((r) => r.organization_id)).size > 1;
 
+  const columns: DataTableColumn<LeaveRow>[] = [
+    { key: "staff", header: "Staff", render: (r) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>{r.profiles?.full_name ?? "Staff"}</span>, exportValue: (r) => r.profiles?.full_name ?? "", sortValue: (r) => r.profiles?.full_name },
+    { key: "type", header: "Leave Type", className: "w-[12%] whitespace-nowrap", render: (r) => leaveRowLabel(r), exportValue: (r) => leaveRowLabel(r), sortValue: (r) => leaveRowLabel(r) },
+    { key: "dates", header: "Dates", className: "w-[16%] whitespace-nowrap", render: (r) => `${r.start_date} → ${r.end_date}`, exportValue: (r) => `${r.start_date} to ${r.end_date}`, sortValue: (r) => r.start_date },
+    { key: "reason", header: "Reason", render: (r) => <span className="max-w-xs italic" style={{ color: "var(--color-ink-soft)" }}>{r.reason ? `“${r.reason}”` : "—"}</span>, exportValue: (r) => r.reason ?? "" },
+    ...(spansMultipleOrgs
+      ? [{ key: "org", header: "Organization", render: (r: LeaveRow) => r.organizations?.name ?? "—", exportValue: (r: LeaveRow) => r.organizations?.name ?? "Unknown organization" } as DataTableColumn<LeaveRow>]
+      : []),
+    {
+      key: "status",
+      header: "Status",
+      className: "w-[10%] whitespace-nowrap",
+      render: (r) => (
+        <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: STATUS_STYLE[r.status].bg, color: STATUS_STYLE[r.status].fg }}>{r.status}</span>
+      ),
+      exportValue: (r) => r.status,
+      sortValue: (r) => r.status,
+    },
+    {
+      key: "actions",
+      header: "Actions",
+      render: (r) => {
+        if (r.status === "pending" && r.staff_id === viewerId) {
+          return <p className="text-xs italic" style={{ color: "var(--color-ink-soft)" }}>Awaiting your manager.</p>;
+        }
+        if (r.status === "pending" && r.staff_id !== viewerId) {
+          return (
+            <div className="flex flex-wrap items-center gap-2">
+              <button type="button" onClick={() => decide(r.id, "approve")} aria-label="Approve" className="rounded-full p-1.5 transition-colors hover:bg-[var(--color-accent-tint)]">
+                <Check className="h-4 w-4" style={{ color: "#116a2c" }} />
+              </button>
+              {rejectingId === r.id ? (
+                <>
+                  <input autoFocus placeholder="Reason" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className="w-28 rounded-lg border px-3 py-1.5 text-xs outline-none" style={{ borderColor: "var(--color-line)" }} />
+                  <button type="button" disabled={!rejectReason.trim()} onClick={() => decide(r.id, "reject", rejectReason)} className="rounded-full border px-4 py-1.5 text-xs font-semibold disabled:opacity-50" style={{ borderColor: "#b42318", color: "#b42318" }}>
+                    Confirm
+                  </button>
+                  <button type="button" onClick={() => setRejectingId(null)} className="text-xs" style={{ color: "var(--color-ink-soft)" }}>Cancel</button>
+                </>
+              ) : (
+                <button type="button" onClick={() => setRejectingId(r.id)} aria-label="Reject" className="rounded-full p-1.5 transition-colors hover:bg-[var(--color-accent-tint)]">
+                  <X className="h-4 w-4" style={{ color: "#b42318" }} />
+                </button>
+              )}
+            </div>
+          );
+        }
+        if (canCancel(r)) {
+          return (
+            <button
+              type="button"
+              onClick={() => cancelApproved(r)}
+              className="rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-red-50"
+              style={{ borderColor: "var(--color-line)", color: "#b42318" }}
+            >
+              Cancel leave
+            </button>
+          );
+        }
+        return "—";
+      },
+    },
+  ];
+
   return (
     <div>
       <DashboardPageHero title="Leave Requests" subtitle="Approve or reject leave requests from your reporting chain.">
         <div className="relative mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <HeroKpi icon={Clock} label="Pending" value={stats.pending} />
-          <HeroKpi icon={CheckCircle2} label="Approved" value={stats.approved} />
-          <HeroKpi icon={XCircle} label="Rejected" value={stats.rejected} />
+          <HeroKpi icon={Clock} label="Pending" value={byStatus.pending.length} />
+          <HeroKpi icon={CheckCircle2} label="Approved" value={byStatus.approved.length} />
+          <HeroKpi icon={XCircle} label="Rejected" value={byStatus.rejected.length} />
         </div>
       </DashboardPageHero>
 
@@ -124,109 +224,43 @@ export default function AdminLeaveRequestsPage() {
         <ActionMessage message={message} />
       </div>
 
-      {requests?.length !== 0 && (
-        <div className="mt-4 flex flex-wrap items-center gap-2">
-          <input
-            type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search staff, leave type, reason…"
-            className="w-full max-w-xs rounded-lg border px-3 py-1.5 text-sm outline-none focus:border-[var(--color-action)]"
-            style={{ borderColor: "var(--color-line)" }}
-          />
-          <select
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value as LeaveRow["status"] | "all")}
-            className="rounded-lg border px-2.5 py-1.5 text-sm outline-none"
-            style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
-          >
-            <option value="all">All statuses</option>
-            <option value="pending">Pending</option>
-            <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
-          </select>
-          {(search.trim() || statusFilter !== "all") && (
-            <button
-              type="button"
-              onClick={() => {
-                setSearch("");
-                setStatusFilter("all");
-              }}
-              className="text-xs font-semibold"
-              style={{ color: "var(--color-action-dark)" }}
-            >
-              Clear filters
-            </button>
-          )}
-        </div>
-      )}
-
-      {requests?.length === 0 ? (
-        <p className="mt-5 text-sm" style={{ color: "var(--color-ink-soft)" }}>No leave requests yet.</p>
-      ) : filteredRequests.length === 0 ? (
-        <p className="mt-5 text-sm" style={{ color: "var(--color-ink-soft)" }}>No requests match this search.</p>
-      ) : (
-        <div className="mt-3 overflow-x-auto rounded-2xl border bg-white dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-          <table className="dt-table w-full min-w-[760px]">
-            <thead>
-              <tr className="text-left">
-                <th>#</th>
-                <th>Staff</th>
-                <th>Leave Type</th>
-                <th>Dates</th>
-                <th>Reason</th>
-                {spansMultipleOrgs && <th>Organization</th>}
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredRequests.map((r, i) => {
-                const style = STATUS_STYLE[r.status];
-                return (
-                  <tr key={r.id}>
-                    <td style={{ color: "var(--color-ink-soft)" }}>{i + 1}</td>
-                    <td className="font-semibold" style={{ color: "var(--color-ink)" }}>{r.profiles?.full_name ?? "Staff"}</td>
-                    <td style={{ color: "var(--color-ink-soft)" }}>{leaveRowLabel(r)}</td>
-                    <td style={{ color: "var(--color-ink-soft)" }}>{r.start_date} → {r.end_date}</td>
-                    <td className="max-w-xs italic" style={{ color: "var(--color-ink-soft)" }}>{r.reason ? `“${r.reason}”` : "—"}</td>
-                    {spansMultipleOrgs && <td style={{ color: "var(--color-ink-soft)" }}>{r.organizations?.name ?? "—"}</td>}
-                    <td>
-                      <span className="inline-flex rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: style.bg, color: style.fg }}>{r.status}</span>
-                    </td>
-                    <td>
-                      {r.status === "pending" && r.staff_id === viewerId && (
-                        <p className="text-xs italic" style={{ color: "var(--color-ink-soft)" }}>Awaiting your manager.</p>
-                      )}
-                      {r.status === "pending" && r.staff_id !== viewerId && (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <button type="button" onClick={() => decide(r.id, "approve")} className="rounded-full px-4 py-1.5 text-xs font-semibold text-white" style={{ backgroundColor: "var(--color-action)" }}>
-                            Approve
-                          </button>
-                          {rejectingId === r.id ? (
-                            <>
-                              <input autoFocus placeholder="Reason" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className="w-28 rounded-lg border px-3 py-1.5 text-xs outline-none" style={{ borderColor: "var(--color-line)" }} />
-                              <button type="button" disabled={!rejectReason.trim()} onClick={() => decide(r.id, "reject", rejectReason)} className="rounded-full border px-4 py-1.5 text-xs font-semibold disabled:opacity-50" style={{ borderColor: "#b42318", color: "#b42318" }}>
-                                Confirm
-                              </button>
-                              <button type="button" onClick={() => setRejectingId(null)} className="text-xs" style={{ color: "var(--color-ink-soft)" }}>Cancel</button>
-                            </>
-                          ) : (
-                            <button type="button" onClick={() => setRejectingId(r.id)} className="rounded-full border px-4 py-1.5 text-xs font-semibold" style={{ borderColor: "var(--color-line)", color: "var(--color-ink-soft)" }}>
-                              Reject
-                            </button>
-                          )}
-                        </div>
-                      )}
-                      {r.status !== "pending" && "—"}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <DataTable
+        columns={columns}
+        fixedLayout
+        rows={filteredRequests}
+        getRowKey={(r) => r.id}
+        itemLabel="requests"
+        emptyMessage={(requests ?? []).length === 0 ? "No leave requests yet." : "No requests match this filter."}
+        filteredEmptyMessage="No requests match this search."
+        search={{
+          placeholder: "Search staff, leave type, reason…",
+          filter: (r, q) => `${r.profiles?.full_name ?? ""} ${leaveRowLabel(r)} ${r.reason ?? ""}`.toLowerCase().includes(q),
+        }}
+        exportFilename="leave-requests"
+        minWidth={760}
+        toolbar={
+          <>
+            <MultiSelect
+              options={[
+                { value: "pending", label: "Pending" },
+                { value: "approved", label: "Approved" },
+                { value: "rejected", label: "Rejected" },
+                { value: "cancelled", label: "Cancelled" },
+              ]}
+              selected={statusFilter}
+              onChange={setStatusFilter}
+              placeholder="All statuses"
+            />
+            <MultiSelect
+              options={staffOptions.map(([id, name]) => ({ value: id, label: name }))}
+              selected={staffFilter}
+              onChange={setStaffFilter}
+              placeholder="All staff"
+              searchable
+            />
+          </>
+        }
+      />
     </div>
   );
 }

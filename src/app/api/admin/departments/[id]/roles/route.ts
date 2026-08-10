@@ -30,7 +30,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   const { data, error } = await supabase
     .from("department_roles")
-    .insert({ department_id: id, title, rank, is_manager_level: isManagerLevel })
+    .insert({ department_id: id, title, rank, is_manager_level: isManagerLevel, created_by: profile.id })
     .select()
     .single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

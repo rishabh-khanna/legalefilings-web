@@ -72,8 +72,17 @@ test("admin generates a GST invoice for a brand-new customer through all 7 steps
   await wizard.getByRole("button", { name: "Generate Invoice", exact: true }).click();
   await expect(page.getByText("Invoice generated.")).toBeVisible({ timeout: 15000 });
 
-  const row = page.locator("tr", { hasText: `Invoice Wizard Customer ${suffix}` });
-  await expect(row).toBeVisible({ timeout: 10000 });
+  // Invoices are now grouped by customer (DataTable groupBy) — the
+  // customer's name only ever appears on the group's own caption row
+  // (every data row's own client cell is blanked, see DataTable.tsx),
+  // so find that caption row first, then its immediately-following
+  // sibling — the actual invoice row. Also paginated with no search box
+  // on this page, so bump rows-per-page to its max to guarantee this
+  // brand-new invoice's group is actually rendered, not on another page.
+  await page.locator("select").filter({ has: page.locator('option[value="100"]') }).selectOption("100");
+  const groupHeader = page.locator("tr", { hasText: `Invoice Wizard Customer ${suffix}` });
+  await expect(groupHeader).toBeVisible({ timeout: 10000 });
+  const row = groupHeader.locator("xpath=following-sibling::tr[1]");
   // Invoice total is the item's rate plus 18% GST (₹5,000 -> ₹5,900),
   // not the raw taxable value.
   await expect(row.getByText("₹5,900", { exact: false }).first()).toBeVisible();
@@ -83,10 +92,11 @@ test("Invoice CRM's Recurring tab is reachable and lists templates without error
   await page.goto("/dashboard/invoice-crm");
   await expect(page.getByRole("heading", { name: "Invoice CRM" })).toBeVisible({ timeout: 15000 });
   await page.getByRole("button", { name: "Recurring", exact: true }).click();
-  // The empty state ("No recurring templates yet...") renders as a row
-  // inside the same table, so it's always a subset of table.dt-table —
-  // asserting the table alone covers both the populated and empty cases.
-  await expect(page.locator("table.dt-table")).toBeVisible({ timeout: 10000 });
+  // Now the shared DataTable component — its empty state is a plain
+  // <p>, not a row inside the table, so the table itself genuinely
+  // doesn't exist when there are zero templates. Either is a valid,
+  // non-erroring outcome.
+  await expect(page.locator("table.dt-table").or(page.getByText("No recurring templates yet", { exact: false }))).toBeVisible({ timeout: 10000 });
 });
 
 test("a customer account (not staff/admin) is blocked from Invoice CRM", async ({ browser }) => {

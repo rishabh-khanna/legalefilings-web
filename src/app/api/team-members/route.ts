@@ -3,6 +3,7 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { getReportingChainIds } from "@/lib/reporting-chain";
 import { canSeeAllOrgs } from "@/lib/organization";
+import { hasToolAccess } from "@/lib/tool-grants";
 
 // GET /api/team-members — the staff/admin list a given viewer is allowed
 // to act on: admin gets everyone in their own organization (a
@@ -14,13 +15,20 @@ import { canSeeAllOrgs } from "@/lib/organization";
 // or, now, another organization's entire team to this one's admin.
 export async function GET() {
   const profile = await getCurrentProfile();
-  if (!profile || profile.account_type === "customer") {
+  // A customer delegated Team Attendance or Team Leave Requests needs
+  // this same org-wide staff picker admin gets — they have no reporting
+  // chain of their own (customers are never in anyone's reports_to), so
+  // the chain-scoped branch below would always show them an empty list.
+  const isCustomerOperator =
+    profile?.account_type === "customer" &&
+    ((await hasToolAccess(profile, "team_attendance")) || (await hasToolAccess(profile, "team_leave")));
+  if (!profile || (profile.account_type === "customer" && !isCustomerOperator)) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const supabase = getSupabaseAdmin();
 
-  if (profile.account_type === "admin") {
+  if (profile.account_type === "admin" || isCustomerOperator) {
     // organizations(name) only actually matters for a platform_admin —
     // that's the one case where this list spans more than one org, and
     // without it, two different orgs' same-named seed/test accounts
@@ -28,7 +36,10 @@ export async function GET() {
     // render as what looks like duplicate rows in every picker built on
     // this endpoint, with no way to tell which org either one belongs
     // to short of guessing.
-    let query = supabase.from("profiles").select("id, full_name, organization_id, organizations(name)").in("account_type", ["staff", "admin"]);
+    // organizations!organization_id disambiguates the embed — profiles
+    // now has more than one FK to organizations, so PostgREST can't
+    // infer which relationship "organizations(name)" means on its own.
+    let query = supabase.from("profiles").select("id, full_name, organization_id, organizations!organization_id(name)").in("account_type", ["staff", "admin"]);
     if (!canSeeAllOrgs(profile)) query = query.eq("organization_id", profile.organization_id);
     const { data, error } = await query;
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });
