@@ -15,10 +15,15 @@ test("admin adds, uses, and removes an additional GST registration", async ({ pa
   await expect(page.getByRole("heading", { name: "Business Settings" })).toBeVisible({ timeout: 15000 });
 
   await expect(page.getByText("Additional GST Registrations")).toBeVisible();
-  await page.getByPlaceholder("Label (e.g. Delhi Office)").fill(label);
-  await page.getByPlaceholder("GST Number").fill(gstNumber);
-  await page.locator("select").filter({ hasText: "Select state" }).selectOption("Karnataka");
-  await page.getByRole("button", { name: "+ Add Registration" }).click();
+  // Scoped to the Additional Registration form specifically — the main
+  // Business Settings form above it has its own #state select too (same
+  // StateSelect component, duplicate id), so an unscoped "select" lookup
+  // is ambiguous.
+  const regForm = page.locator("form").filter({ has: page.getByPlaceholder("Label (e.g. Delhi Office)") });
+  await regForm.getByPlaceholder("Label (e.g. Delhi Office)").fill(label);
+  await regForm.getByPlaceholder("GST Number").fill(gstNumber);
+  await regForm.locator("select").selectOption("Karnataka");
+  await regForm.getByRole("button", { name: "+ Add Registration" }).click();
 
   const row = page.locator("div", { hasText: label }).filter({ has: page.getByRole("button", { name: "Remove" }) }).last();
   await expect(row).toBeVisible({ timeout: 10000 });
@@ -35,6 +40,7 @@ test("admin adds, uses, and removes an additional GST registration", async ({ pa
   await wizard.getByRole("button", { name: "Next" }).click(); // Step 1 -> 2
   await wizard.getByRole("button", { name: "+ Add New Customer" }).click();
   await wizard.locator("text=Customer Name").locator("xpath=following-sibling::input[1]").fill(`GST Reg Test Customer ${suffix}`);
+  await wizard.locator("text=Email").locator("xpath=following-sibling::input[1]").fill(`gst-reg-test-${suffix}@example.com`);
   await wizard.locator("select").filter({ hasText: "Select state" }).selectOption("Delhi");
   await wizard.getByPlaceholder("Billing Address").fill("Test Address");
   await wizard.getByRole("button", { name: "Add Customer" }).click();
@@ -43,7 +49,8 @@ test("admin adds, uses, and removes an additional GST registration", async ({ pa
 
   const regSelect = wizard.locator("select").filter({ has: page.locator(`option:has-text("${label}")`) });
   await expect(regSelect).toBeVisible({ timeout: 10000 });
-  await regSelect.selectOption({ label: new RegExp(label) });
+  const regOptionValue = await regSelect.locator(`option:has-text("${label}")`).getAttribute("value");
+  await regSelect.selectOption(regOptionValue!);
 
   // Close the wizard without generating — this test only needs to prove
   // the registration is selectable, not create another invoice.

@@ -74,6 +74,52 @@ test("staff can reject a document with a note", async ({ page, request }) => {
   await expect(docRow.getByText("Blurry, please re-upload")).toBeVisible();
 });
 
+// Download was never covered — upload/verify/reject all were, but the
+// actual download link (a redirect to a short-lived signed Supabase
+// Storage URL, see the download route's own comment on why it isn't a
+// permanent public link) had zero test coverage.
+test("the uploaded document's download link resolves to a real signed URL, and the file is actually fetchable", async ({ page, request }) => {
+  const { order } = await seedUnpaidInvoice(request, { price: 1200 });
+  const drawer = await openOrderDrawer(page, order.id);
+
+  await drawer.locator('input[type="file"]').setInputFiles(VALID_FILE);
+  await expect(drawer.getByText("pending", { exact: true })).toBeVisible({ timeout: 10000 });
+
+  const downloadLink = drawer.getByRole("link", { name: "test-document.png" });
+  await expect(downloadLink).toBeVisible();
+  const href = await downloadLink.getAttribute("href");
+  expect(href).toMatch(new RegExp(`/api/orders/${order.id}/documents/.+/download`));
+
+  // Follow the redirect ourselves rather than clicking (which opens a
+  // new tab) — confirms both the redirect target is a real signed
+  // storage URL and that URL actually serves the file, not a dead link.
+  const redirectRes = await page.request.get(href!, { maxRedirects: 0 });
+  expect(redirectRes.status()).toBe(307);
+  const signedUrl = redirectRes.headers()["location"];
+  expect(signedUrl).toBeTruthy();
+  expect(signedUrl).toContain("/storage/v1/object/sign/");
+
+  const fileRes = await page.request.get(signedUrl!);
+  expect(fileRes.ok()).toBeTruthy();
+  expect(fileRes.headers()["content-type"]).toContain("image");
+});
+
+test("a different customer can't download another customer's order document", async ({ page, request, browser }) => {
+  const { order } = await seedUnpaidInvoice(request, { price: 1200 });
+  const drawer = await openOrderDrawer(page, order.id);
+  await drawer.locator('input[type="file"]').setInputFiles(VALID_FILE);
+  await expect(drawer.getByText("pending", { exact: true })).toBeVisible({ timeout: 10000 });
+  const href = await drawer.getByRole("link", { name: "test-document.png" }).getAttribute("href");
+
+  const otherCustomerCtx = await browser.newContext({ storageState: "tests/e2e/.auth/customerPaid.json" });
+  const res = await otherCustomerCtx.request.get(href!, { maxRedirects: 0 });
+  // Either a clean 404 ("Order not found" — loadOrderForAccess scopes to
+  // the caller) or, if this customer happens to own a same-shaped order
+  // elsewhere, still never a 2xx/redirect to the real file.
+  expect([403, 404]).toContain(res.status());
+  await otherCustomerCtx.close();
+});
+
 // The actual bug fixed earlier: "Mark all verified" used to only flip
 // the order-level badge, leaving individual pending document rows
 // untouched underneath it — an order could read "Documents Verified"

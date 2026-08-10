@@ -54,7 +54,7 @@ test("admin issues a Credit Note against a real invoice through the wizard", asy
 
   // Step 1: Type — Credit Note, then pick the original invoice.
   await wizard.getByRole("button", { name: "Credit Note", exact: true }).click();
-  await wizard.locator("select").filter({ hasText: "Select the original invoice" }).selectOption({ label: new RegExp(invoice.invoice_number) });
+  await wizard.locator("select").filter({ hasText: "Select the original invoice" }).selectOption(invoice.id);
   await wizard.getByRole("button", { name: "Next" }).click();
 
   // Step 2: Customer — locked to the original invoice's customer, no
@@ -97,7 +97,7 @@ test("admin issues a Debit Note against a real invoice through the wizard", asyn
   await expect(wizard).toBeVisible();
 
   await wizard.getByRole("button", { name: "Debit Note", exact: true }).click();
-  await wizard.locator("select").filter({ hasText: "Select the original invoice" }).selectOption({ label: new RegExp(invoice.invoice_number) });
+  await wizard.locator("select").filter({ hasText: "Select the original invoice" }).selectOption(invoice.id);
   await wizard.getByRole("button", { name: "Next" }).click();
 
   await expect(wizard.getByText("Customer (from the selected invoice)", { exact: false })).toBeVisible();
@@ -128,6 +128,9 @@ test("a Credit Note can't be generated without picking the original invoice firs
   await expect(wizard).toBeVisible();
 
   await wizard.getByRole("button", { name: "Credit Note", exact: true }).click();
-  await wizard.getByRole("button", { name: "Next" }).click();
-  await expect(page.getByText("Pick the original invoice this note is issued against.", { exact: false })).toBeVisible({ timeout: 5000 });
+  // The Next button itself carries the validation message as a title
+  // attribute and stays disabled — there's nothing to click through.
+  const nextButton = wizard.getByRole("button", { name: "Next" });
+  await expect(nextButton).toBeDisabled();
+  await expect(nextButton).toHaveAttribute("title", "Pick the original invoice this note is issued against.");
 });
