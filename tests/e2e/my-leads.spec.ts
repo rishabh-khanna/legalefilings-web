@@ -28,9 +28,11 @@ test("staff adds a lead via the real form and sees it in their own list", async 
   await expect(row.getByRole("link", { name: "WhatsApp" })).toHaveAttribute("href", /wa\.me/);
 
   // Filtering by status should still surface it (default stage is "new").
-  // "All statuses" is one of this select's own option labels — search
-  // placeholder text isn't real DOM text, so anchor on the select itself.
-  await page.locator("select").filter({ hasText: "All statuses" }).selectOption({ label: "New" });
+  // The status filter is a MultiSelect (checkbox popover), not a native
+  // <select>.
+  await page.getByRole("button", { name: "All statuses" }).click();
+  await page.getByRole("button", { name: "New", exact: true }).click();
+  await page.keyboard.press("Escape");
   await expect(row).toBeVisible();
 });
 

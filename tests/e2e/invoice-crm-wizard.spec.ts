@@ -72,17 +72,14 @@ test("admin generates a GST invoice for a brand-new customer through all 7 steps
   await wizard.getByRole("button", { name: "Generate Invoice", exact: true }).click();
   await expect(page.getByText("Invoice generated.")).toBeVisible({ timeout: 15000 });
 
-  // Invoices are now grouped by customer (DataTable groupBy) — the
-  // customer's name only ever appears on the group's own caption row
-  // (every data row's own client cell is blanked, see DataTable.tsx),
-  // so find that caption row first, then its immediately-following
-  // sibling — the actual invoice row. Also paginated with no search box
-  // on this page, so bump rows-per-page to its max to guarantee this
-  // brand-new invoice's group is actually rendered, not on another page.
+  // Every invoice row shows its own customer name inline (grouping was
+  // replaced by the client filter dropdown — see invoice-crm/page.tsx's
+  // invoiceClientFilter). Paginated with no search box on this page, so
+  // bump rows-per-page to its max to guarantee this brand-new invoice is
+  // actually rendered, not on another page.
   await page.locator("select").filter({ has: page.locator('option[value="100"]') }).selectOption("100");
-  const groupHeader = page.locator("tr", { hasText: `Invoice Wizard Customer ${suffix}` });
-  await expect(groupHeader).toBeVisible({ timeout: 10000 });
-  const row = groupHeader.locator("xpath=following-sibling::tr[1]");
+  const row = page.locator("tr", { hasText: `Invoice Wizard Customer ${suffix}` });
+  await expect(row).toBeVisible({ timeout: 10000 });
   // Invoice total is the item's rate plus 18% GST (₹5,000 -> ₹5,900),
   // not the raw taxable value.
   await expect(row.getByText("₹5,900", { exact: false }).first()).toBeVisible();
@@ -99,10 +96,15 @@ test("Invoice CRM's Recurring tab is reachable and lists templates without error
   await expect(page.locator("table.dt-table").or(page.getByText("No recurring templates yet", { exact: false }))).toBeVisible({ timeout: 10000 });
 });
 
-test("a customer account (not staff/admin) is blocked from Invoice CRM", async ({ browser }) => {
+test("a customer account with no invoice_crm grant is bounced away from Invoice CRM before the page ever loads", async ({ browser }) => {
+  // proxy.ts gates this server-side now (a customer needs a live
+  // invoice_crm grant, same mechanism as every other delegable admin
+  // tool — see src/lib/tool-grants.ts) — a non-granted customer never
+  // reaches the client-rendered "no access" state below, they're
+  // redirected before the page loads at all.
   const customerCtx = await browser.newContext({ storageState: "tests/e2e/.auth/customerFree.json" });
   const page = await customerCtx.newPage();
   await page.goto("/dashboard/invoice-crm");
-  await expect(page.getByText("You don't have access to this page.", { exact: false })).toBeVisible({ timeout: 15000 });
+  await expect(page).toHaveURL(/\/dashboard$/, { timeout: 10000 });
   await customerCtx.close();
 });

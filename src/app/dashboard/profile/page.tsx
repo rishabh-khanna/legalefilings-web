@@ -1,11 +1,34 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { ShoppingBag } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { StateSelect } from "@/components/StateSelect";
 import { CitySelect } from "@/components/CitySelect";
 import { LoadingBlock } from "@/components/Spinner";
 import { DashboardPageHero } from "@/components/crm/DashboardPageHero";
+import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, type OrderStatus } from "@/lib/order-status";
+
+type PastOrder = {
+  id: string;
+  service: string;
+  plan: string;
+  plan_price: number | null;
+  status: OrderStatus;
+  created_at: string;
+  organization_id: string;
+  organizations?: { name: string | null } | null;
+};
+type PastInvoice = {
+  id: string;
+  invoice_number: string;
+  total: number;
+  status: string;
+  created_at: string;
+  organization_id: string;
+  organizations?: { name: string | null } | null;
+};
 
 export default function ProfilePage() {
   const [name, setName] = useState("");
@@ -31,6 +54,9 @@ export default function ProfilePage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [currentOrgId, setCurrentOrgId] = useState<string | null>(null);
+  const [pastOrders, setPastOrders] = useState<PastOrder[]>([]);
+  const [pastInvoices, setPastInvoices] = useState<PastInvoice[]>([]);
 
   useEffect(() => {
     // Deferred (not called synchronously in the effect body) — same pattern
@@ -64,8 +90,20 @@ export default function ProfilePage() {
         setEsicNumber(profile.esic_number ?? "");
         setEmergencyContactName(profile.emergency_contact_name ?? "");
         setEmergencyContactPhone(profile.emergency_contact_phone ?? "");
+        setCurrentOrgId(profile.organization_id ?? null);
       }
       setLoading(false);
+
+      // Best-effort, non-blocking — this section is a bonus, not core to
+      // the page, so a failed fetch just leaves it empty rather than
+      // failing the whole profile load.
+      fetch("/api/profile/purchase-history")
+        .then((res) => (res.ok ? res.json() : { orders: [], invoices: [] }))
+        .then((data) => {
+          setPastOrders(data.orders ?? []);
+          setPastInvoices(data.invoices ?? []);
+        })
+        .catch(() => {});
     }, 0);
     return () => clearTimeout(kickoff);
   }, []);
@@ -272,6 +310,82 @@ export default function ProfilePage() {
           {saving ? "Saving…" : "Save Changes"}
         </button>
       </form>
+
+      {/* Only for the "CRM Access" promotion case: your account_type moved
+          off "customer", so Order History / My Invoices — both scoped to
+          your CURRENT organization — stop finding purchases you made
+          before the promotion, under a different org. Nothing was
+          deleted; this is the one place that looks them up by your
+          identity instead of your current org, so they don't just
+          disappear. Hidden entirely for the overwhelming majority of
+          accounts that never went through that promotion and have
+          nothing orphaned to show. */}
+      {(() => {
+        const orphanedOrders = pastOrders.filter((o) => o.organization_id !== currentOrgId);
+        const orphanedInvoices = pastInvoices.filter((i) => i.organization_id !== currentOrgId);
+        if (orphanedOrders.length === 0 && orphanedInvoices.length === 0) return null;
+        return (
+          <div
+            className="mt-5 rounded-2xl border bg-white p-6 dark:bg-[var(--color-paper-raised)]"
+            style={{ borderColor: "var(--color-line)" }}
+          >
+            <div className="flex items-center gap-2">
+              <ShoppingBag className="h-4 w-4" style={{ color: "var(--color-ink-soft)" }} />
+              <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Purchases From Before</p>
+            </div>
+            <p className="mt-1 text-xs" style={{ color: "var(--color-ink-soft)" }}>
+              From a different workspace than the one you&apos;re in now — not part of your current Order History or Invoices, kept here so they&apos;re still reachable.
+            </p>
+
+            {orphanedOrders.length > 0 && (
+              <div className="mt-4 space-y-2">
+                {orphanedOrders.map((o) => {
+                  const style = ORDER_STATUS_STYLE[o.status];
+                  return (
+                    <div key={o.id} className="flex items-center justify-between gap-3 rounded-xl px-4 py-3" style={{ backgroundColor: "var(--color-paper)" }}>
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium" style={{ color: "var(--color-ink)" }}>{o.service} — {o.plan}</p>
+                        <p className="truncate text-xs" style={{ color: "var(--color-ink-soft)" }}>
+                          {o.organizations?.name ?? "Unknown workspace"} · {new Date(o.created_at).toLocaleDateString("en-IN")}
+                        </p>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-3">
+                        {o.plan_price != null && (
+                          <span className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>₹{Number(o.plan_price).toLocaleString("en-IN")}</span>
+                        )}
+                        <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: style.bg, color: style.fg }}>
+                          {ORDER_STATUS_LABEL[o.status]}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {orphanedInvoices.length > 0 && (
+              <div className="mt-4 space-y-2">
+                {orphanedInvoices.map((inv) => (
+                  <div key={inv.id} className="flex items-center justify-between gap-3 rounded-xl px-4 py-3" style={{ backgroundColor: "var(--color-paper)" }}>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium" style={{ color: "var(--color-ink)" }}>{inv.invoice_number}</p>
+                      <p className="truncate text-xs" style={{ color: "var(--color-ink-soft)" }}>
+                        {inv.organizations?.name ?? "Unknown workspace"} · {new Date(inv.created_at).toLocaleDateString("en-IN")}
+                      </p>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-3">
+                      <span className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>₹{Number(inv.total).toLocaleString("en-IN")}</span>
+                      <Link href={`/api/invoices/${inv.id}/download`} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>
+                        PDF
+                      </Link>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })()}
     </div>
   );
 }
