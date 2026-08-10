@@ -2,7 +2,7 @@ import { test, expect } from "@playwright/test";
 
 test.use({ storageState: "tests/e2e/.auth/admin.json" });
 
-// Real smoke test for the sidebar's grouped-section flyout (DashboardShell.tsx)
+// Real test smoke test for the sidebar's grouped-section flyout (DashboardShell.tsx)
 // — confirms no runtime crash and that a grouped section's hover-triggered
 // flyout actually opens, stacks above page content, and navigates.
 test("dashboard loads with no console errors and the sidebar renders", async ({ page }) => {
