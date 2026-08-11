@@ -14,7 +14,7 @@ const BUCKET = "employee-documents";
 // rule already used for attendance/leave — hierarchy-based, not opt-in.
 export async function GET(request: Request) {
   const profile = await getCurrentProfile();
-  if (!isStaffOrAdmin(profile) || !profile) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!profile || !isStaffOrAdmin(profile)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { searchParams } = new URL(request.url);
   const requestedStaffId = searchParams.get("staffId");
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
 // a staffId field.
 export async function POST(request: Request) {
   const profile = await getCurrentProfile();
-  if (!isStaffOrAdmin(profile) || !profile) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!profile || !isStaffOrAdmin(profile)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const form = await request.formData().catch(() => null);
   if (!form) return NextResponse.json({ error: "Invalid form data" }, { status: 400 });

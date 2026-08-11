@@ -1,6 +1,5 @@
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import type { Profile } from "@/lib/roles";
-import { hasToolAccess } from "@/lib/tool-grants";
 
 // Everyone in `viewerId`'s reporting chain, walking `reports_to` down as
 // far as it goes (rater -> leader -> group_leader is only ever 2 hops in
@@ -36,14 +35,7 @@ export async function canManageStaff(
   targetStaffId: string
 ): Promise<boolean> {
   if (viewer.id === targetStaffId) return true;
-  // A customer delegated Team Attendance has no reporting chain of their
-  // own (customers never appear in reports_to) — chain.includes() below
-  // would always be false for them, silently showing an empty team no
-  // matter who they picked. They're meant to operate as their new org's
-  // sole HR-side operator, so treat them the same as admin: org-wide,
-  // not chain-scoped.
-  const customerWithGrant = viewer.account_type === "customer" && (await hasToolAccess(viewer, "team_attendance"));
-  if (viewer.account_type === "admin" || viewer.is_platform_admin || customerWithGrant) {
+  if (viewer.account_type === "admin" || viewer.is_platform_admin) {
     if (viewer.is_platform_admin) return true;
     const supabase = getSupabaseAdmin();
     const { data: target } = await supabase.from("profiles").select("organization_id").eq("id", targetStaffId).single();
@@ -74,11 +66,5 @@ export async function canApproveFor(
 
   if (approver.is_platform_admin) return true;
   if (approver.account_type === "admin") return target?.organization_id === approver.organization_id;
-  // A customer delegated Team Leave Requests has nobody reporting_to
-  // them (customers aren't in anyone's reporting chain) — approve like
-  // admin, org-wide, same reasoning as canManageStaff above.
-  if (approver.account_type === "customer" && (await hasToolAccess(approver, "team_leave"))) {
-    return target?.organization_id === approver.organization_id;
-  }
   return target?.reports_to === approver.id;
 }

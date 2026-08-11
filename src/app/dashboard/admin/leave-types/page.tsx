@@ -204,6 +204,7 @@ export default function LeaveTypesPage() {
           getRowKey={(t) => t.id}
           itemLabel="leave types"
           emptyMessage="No leave types yet — add one above."
+          search={{ placeholder: "Search leave type…", filter: (t, q) => `${t.name} ${t.code}`.toLowerCase().includes(q) }}
           exportFilename="leave-types"
           minWidth={560}
         />

@@ -187,6 +187,7 @@ export default function FinanceTeamPage() {
         itemLabel="team members"
         emptyMessage={(members ?? []).length === 0 ? "No team members yet." : "No team members match this filter."}
         filteredEmptyMessage="No team members match this filter."
+        search={{ placeholder: "Search name…", filter: (m, q) => (m.profiles?.full_name ?? "").toLowerCase().includes(q) }}
         exportFilename="finance-team"
         minWidth={560}
         toolbar={

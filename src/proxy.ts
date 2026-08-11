@@ -157,26 +157,13 @@ export async function proxy(request: NextRequest) {
       return profile.is_platform_admin ? response : bounce();
     }
 
-    if (profile.account_type === "customer") {
-      // A customer normally has no business under /dashboard/admin/* at
-      // all — but one individually delegated a CRM tool (see
-      // staff_tool_grants / src/lib/tool-grants.ts: leads_crm,
-      // team_attendance, team_leave) is the one exception, and unlike
-      // staff (who get most of this prefix "for free" and only need a
-      // grant for the ADMIN_ONLY_SECTIONS below) a customer needs an
-      // explicit grant for literally every section under this prefix —
-      // there's no seniority tier standing in for one.
-      const matchedTool = DELEGABLE_TOOLS.find((t) => path.startsWith(t.path));
-      if (!matchedTool) return bounce();
-      const { data: grant } = await supabase
-        .from("staff_tool_grants")
-        .select("expires_at")
-        .eq("staff_id", user.id)
-        .eq("tool_key", matchedTool.key)
-        .maybeSingle();
-      if (!grant || !isGrantActive(grant)) return bounce();
-      return response;
-    }
+    // A customer account has no business under /dashboard/admin/* at
+    // all — no delegable tool can be granted to a customer anymore (see
+    // src/lib/tool-grants.ts: hasToolAccess() rejects every customer
+    // outright). One wanting real CRM capability goes through Request
+    // CRM Access instead, which promotes them to admin of their own
+    // organization — a different account_type, not this branch.
+    if (profile.account_type === "customer") return bounce();
 
     const needsAdmin = ADMIN_ONLY_SECTIONS.some((p) => path.startsWith(p)) && profile.account_type !== "admin";
     const needsGroupLeaderUp =

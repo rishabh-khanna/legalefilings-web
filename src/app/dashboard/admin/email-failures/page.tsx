@@ -8,6 +8,7 @@ import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { MultiSelect } from "@/components/MultiSelect";
+import { TruncatedText } from "@/components/TruncatedText";
 
 type EmailFailure = {
   id: string;
@@ -92,7 +93,13 @@ export default function EmailFailuresPage() {
     { key: "type", header: "Type", render: (f) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>{TYPE_LABEL[f.email_type] ?? f.email_type}</span>, exportValue: (f) => TYPE_LABEL[f.email_type] ?? f.email_type, sortValue: (f) => TYPE_LABEL[f.email_type] ?? f.email_type },
     { key: "recipient", header: "Recipient", render: (f) => f.recipient_email, exportValue: (f) => f.recipient_email, sortValue: (f) => f.recipient_email },
     { key: "related", header: "Related To", render: (f) => f.related_entity ?? "—", exportValue: (f) => f.related_entity ?? "" },
-    { key: "error", header: "Error", render: (f) => <span className="max-w-xs" style={{ color: "#b42318" }}>{f.error_message ?? "—"}</span>, exportValue: (f) => f.error_message ?? "" },
+    {
+      key: "error",
+      header: "Error",
+      className: "max-w-[200px]",
+      render: (f) => (f.error_message ? <TruncatedText text={f.error_message} style={{ color: "#b42318" }} /> : "—"),
+      exportValue: (f) => f.error_message ?? "",
+    },
     { key: "sentAt", header: "Sent At", className: "w-[14%] whitespace-nowrap", render: (f) => new Date(f.created_at).toLocaleString("en-IN"), exportValue: (f) => new Date(f.created_at).toLocaleString("en-IN"), sortValue: (f) => f.created_at },
     ...(spansMultipleOrgs
       ? [{ key: "org", header: "Organization", className: "w-[14%]", render: (f: EmailFailure) => f.organizations?.name ?? "—", exportValue: (f: EmailFailure) => f.organizations?.name ?? "Unknown organization" } as DataTableColumn<EmailFailure>]

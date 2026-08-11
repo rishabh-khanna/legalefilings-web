@@ -5,7 +5,6 @@ import { getReportingChainIds } from "@/lib/reporting-chain";
 import { canSeeAllOrgs } from "@/lib/organization";
 import { getLeaveBalance, type LeaveType } from "@/lib/leave-balance";
 import { countWorkingDays, fetchHolidayDates } from "@/lib/working-days";
-import { hasToolAccess } from "@/lib/tool-grants";
 
 // Calendar span — used ONLY to reject an end-before-start range. Leave
 // *duration* is always working days (see countWorkingDays), never this.
@@ -70,10 +69,7 @@ async function hasOverlappingRequest(
 // team's requests folded into what reads as their personal history.
 export async function GET(request: Request) {
   const profile = await getCurrentProfile();
-  // A customer delegated Team Leave Requests operates this same queue
-  // admin does — see the isCustomerOperator branches below.
-  const isCustomerOperator = profile?.account_type === "customer" && (await hasToolAccess(profile, "team_leave"));
-  if (!profile || (profile.account_type === "customer" && !isCustomerOperator)) {
+  if (!profile || profile.account_type === "customer") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -92,7 +88,7 @@ export async function GET(request: Request) {
   if (!canSeeAllOrgs(profile)) query = query.eq("organization_id", profile.organization_id);
   if (mineOnly) {
     query = query.eq("staff_id", profile.id);
-  } else if (profile.account_type !== "admin" && !canSeeAllOrgs(profile) && !isCustomerOperator) {
+  } else if (profile.account_type !== "admin" && !canSeeAllOrgs(profile)) {
     const chain = await getReportingChainIds(profile.id);
     query = query.in("staff_id", [profile.id, ...chain]);
   }

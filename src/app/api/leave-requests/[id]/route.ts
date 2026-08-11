@@ -4,7 +4,6 @@ import { getCurrentProfile } from "@/lib/current-profile";
 import { canApproveFor } from "@/lib/reporting-chain";
 import { creditLeaveBalanceUsed, type LeaveType } from "@/lib/leave-balance";
 import { countWorkingDays, fetchHolidayDates } from "@/lib/working-days";
-import { hasToolAccess } from "@/lib/tool-grants";
 
 // PATCH /api/leave-requests/[id] — approve, reject, or cancel.
 //
@@ -20,11 +19,7 @@ import { hasToolAccess } from "@/lib/tool-grants";
 // genuinely took.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await getCurrentProfile();
-  // A customer delegated Team Leave Requests approves/rejects/cancels
-  // through this same route — canApproveFor already treats a granted
-  // customer as org-wide, same as admin.
-  const isCustomerOperator = profile?.account_type === "customer" && (await hasToolAccess(profile, "team_leave"));
-  if (!profile || (profile.account_type === "customer" && !isCustomerOperator)) {
+  if (!profile || profile.account_type === "customer") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 

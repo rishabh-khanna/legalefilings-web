@@ -18,7 +18,7 @@ function toCsv(rows: string[][]) {
 // ad-hoc CRM invoices.
 export async function GET(request: Request) {
   const profile = await getCurrentProfile();
-  if (!isStaffOrAdmin(profile) || !profile) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!profile || !isStaffOrAdmin(profile)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { searchParams } = new URL(request.url);
   const origin = searchParams.get("origin");

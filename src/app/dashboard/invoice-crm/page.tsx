@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { FileText, CheckCircle2, Clock, IndianRupee, ChevronLeft, ChevronRight, Trash2, Paperclip, History, Repeat, Download, X } from "lucide-react";
+import { FileText, CheckCircle2, Clock, IndianRupee, ChevronLeft, ChevronRight, Trash2, Paperclip, History, Repeat, Download, X, Mail, MessageCircle, Pencil, Send as SendIcon, Link2 } from "lucide-react";
+import { ActionsMenu, type ActionItem } from "@/components/ActionsMenu";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { isStaffOrAdmin, type Profile } from "@/lib/roles";
 import { useActionMessage } from "@/lib/use-action-message";
@@ -674,37 +675,42 @@ export default function InvoiceCrmPage() {
         const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/pay/${inv.id}` : `/pay/${inv.id}`;
         const invCustomerPhone = customers.find((c) => c.id === inv.customer_id)?.phone ?? "";
         const invOrgName = inv.organizations?.name ?? SITE_NAME;
-        return (
-          <div className="flex flex-wrap items-center gap-2.5">
-            <a href={`/api/invoices/${inv.id}/download`} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>PDF / Print</a>
-            {inv.status === "draft" && (
-              <>
-                <button type="button" onClick={() => handleEditDraft(inv)} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>Edit</button>
-                <button type="button" onClick={() => handleSend(inv.id)} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>Send</button>
-              </>
-            )}
-            <button type="button" onClick={() => handleEmail(inv.id)} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>Email</button>
-            {isCollectableInvoiceType(inv.invoice_type) && inv.status !== "paid" && inv.status !== "cancelled" && (
-              <button type="button" onClick={() => { setPayingInvoice(inv); setPayAmount(String(balance)); }} className="text-xs font-semibold underline" style={{ color: "#116a2c" }}>
-                Record Payment
-              </button>
-            )}
-            {invCustomerPhone && (
-              <a href={buildWhatsAppLink(invCustomerPhone, `Hi, here's your invoice ${inv.invoice_number} from ${invOrgName}: ${shareUrl}`)} target="_blank" rel="noopener noreferrer" className="text-xs font-semibold underline" style={{ color: "#116a2c" }}>
-                WhatsApp
-              </a>
-            )}
-            <button type="button" onClick={() => { navigator.clipboard.writeText(shareUrl); showSuccess("Link copied."); }} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>
-              Copy Link
-            </button>
-            <button type="button" onClick={() => toggleExpand(inv, "attachments")} className="flex items-center gap-1 text-xs font-semibold underline" style={{ color: "var(--color-ink-soft)" }}>
-              <Paperclip className="h-3 w-3" /> Files
-            </button>
-            <button type="button" onClick={() => toggleExpand(inv, "history")} className="flex items-center gap-1 text-xs font-semibold underline" style={{ color: "var(--color-ink-soft)" }}>
-              <History className="h-3 w-3" /> History
-            </button>
-          </div>
-        );
+        const canRecordPayment = isCollectableInvoiceType(inv.invoice_type) && inv.status !== "paid" && inv.status !== "cancelled";
+
+        // Primary: the handful of things done on most rows, most of the
+        // time — visible as icon buttons so the row stays one line
+        // regardless of which of these actually apply. Everything else
+        // (draft-only Edit/Send, Copy Link, Files, History) is one click
+        // behind the "⋯" instead of spelled out in every row — this
+        // used to be 6-9 underlined text links wrapping across 2-3 lines
+        // per row, a different row height depending on invoice status.
+        const primary: ActionItem[] = [
+          { key: "pdf", label: "PDF / Print", icon: FileText, href: `/api/invoices/${inv.id}/download`, color: "var(--color-action-dark)" },
+          { key: "email", label: "Email", icon: Mail, onClick: () => handleEmail(inv.id), color: "var(--color-action-dark)" },
+        ];
+        if (canRecordPayment) {
+          primary.push({ key: "payment", label: "Record Payment", icon: IndianRupee, onClick: () => { setPayingInvoice(inv); setPayAmount(String(balance)); }, color: "#116a2c" });
+        }
+        if (invCustomerPhone) {
+          primary.push({
+            key: "whatsapp",
+            label: "WhatsApp",
+            icon: MessageCircle,
+            href: buildWhatsAppLink(invCustomerPhone, `Hi, here's your invoice ${inv.invoice_number} from ${invOrgName}: ${shareUrl}`),
+            color: "#116a2c",
+          });
+        }
+
+        const overflow: ActionItem[] = [];
+        if (inv.status === "draft") {
+          overflow.push({ key: "edit", label: "Edit", icon: Pencil, onClick: () => handleEditDraft(inv) });
+          overflow.push({ key: "send", label: "Send", icon: SendIcon, onClick: () => handleSend(inv.id) });
+        }
+        overflow.push({ key: "copy", label: "Copy Link", icon: Link2, onClick: () => { navigator.clipboard.writeText(shareUrl); showSuccess("Link copied."); } });
+        overflow.push({ key: "files", label: "Files", icon: Paperclip, onClick: () => toggleExpand(inv, "attachments") });
+        overflow.push({ key: "history", label: "History", icon: History, onClick: () => toggleExpand(inv, "history") });
+
+        return <ActionsMenu primary={primary} overflow={overflow} />;
       },
     },
   ];
@@ -1309,6 +1315,10 @@ export default function InvoiceCrmPage() {
             itemLabel="invoices"
             emptyMessage="No billed invoices yet — generate one above."
             filteredEmptyMessage="No invoices match this filter."
+            search={{
+              placeholder: "Search invoice number, client…",
+              filter: (inv, q) => `${inv.invoice_number} ${inv.profiles?.full_name ?? ""} ${inv.profiles?.company ?? ""}`.toLowerCase().includes(q),
+            }}
             dateFilter={{ getDate: (inv) => inv.created_at }}
             exportFilename="invoice-crm-invoices"
             minWidth={820}
@@ -1387,7 +1397,8 @@ export default function InvoiceCrmPage() {
           getRowKey={(t) => t.id}
           itemLabel="templates"
           emptyMessage='No recurring templates yet — build an invoice above, then hit "Save as Recurring" on the Preview step.'
-          filteredEmptyMessage="No recurring templates in this date range."
+          filteredEmptyMessage="No recurring templates match this filter."
+          search={{ placeholder: "Search client…", filter: (t, q) => (t.profiles?.full_name ?? "").toLowerCase().includes(q) }}
           dateFilter={{ getDate: (t) => t.next_run_date }}
           exportFilename="invoice-crm-recurring"
           minWidth={560}

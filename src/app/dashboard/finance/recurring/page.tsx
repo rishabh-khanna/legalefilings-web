@@ -285,6 +285,7 @@ export default function FinanceRecurringPage() {
         getRowKey={(t) => t.id}
         itemLabel="recurring entries"
         emptyMessage="No recurring entries yet."
+        search={{ placeholder: "Search party, description…", filter: (t, q) => `${t.party_name ?? ""} ${t.description ?? ""}`.toLowerCase().includes(q) }}
         dateFilter={{ getDate: (t) => t.next_run_date }}
         exportFilename="recurring-expenses"
         minWidth={680}

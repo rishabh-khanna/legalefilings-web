@@ -161,7 +161,7 @@ export default function ManualPage() {
   .dot-platform { background: var(--c-platform); }
   .dot-general { background: var(--gold); }
 
-  main { padding: 3.2rem clamp(1.3rem, 5vw, 4.5rem) 6rem; max-width: 920px; }
+  main { padding: 3.2rem clamp(1.3rem, 5vw, 4.5rem) 6rem; max-width: 1400px; }
 
   /* ---- masthead ---- */
   .masthead { margin-bottom: 2.6rem; border-bottom: 1px solid var(--line); padding-bottom: 2rem; }
@@ -226,6 +226,59 @@ export default function ManualPage() {
 
   .top-anchor { scroll-margin-top: 1.5rem; }
 
+  td.email-cell { font-family: var(--mono); font-size: .82rem; word-break: break-all; color: var(--ink); }
+
+  /* ---- wide blocks — for sections that benefit from the page's full
+     measure instead of the 64–68ch prose column everything else uses.
+     Scoped to .wide so the rest of the manual is untouched. ---- */
+  .wide { max-width: none; }
+  .wide p, .wide ol.steps, .wide ul.plain, .wide table.ref { max-width: none; }
+
+  .compare-grid {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.2rem;
+    margin: 1.1rem 0 1.5rem;
+  }
+  @media (max-width: 760px) { .compare-grid { grid-template-columns: 1fr; } }
+  .compare-card {
+    border: 1px solid var(--line); border-radius: 12px; background: var(--paper-raised);
+    padding: 1.2rem 1.3rem 1.4rem;
+  }
+  .compare-card .compare-eyebrow { font-size: .7rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; margin-bottom: .4rem; }
+  .compare-card h4 { margin-top: 0; margin-bottom: .5rem; font-style: normal; color: var(--ink); }
+  .compare-card ul.plain { margin: .6rem 0 0; }
+  .compare-card ul.plain li { margin-bottom: .5rem; font-size: .92rem; }
+
+  .step-flow {
+    display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem;
+    margin: 1.1rem 0 1.5rem;
+  }
+  @media (max-width: 860px) { .step-flow { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 520px) { .step-flow { grid-template-columns: 1fr; } }
+  .step-card {
+    border: 1px solid var(--line); border-radius: 12px; background: var(--paper-raised);
+    padding: 1rem 1.1rem 1.2rem; position: relative;
+  }
+  .step-card .step-num {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 50%; background: var(--gold-tint);
+    color: var(--gold-deep); font-weight: 700; font-size: .82rem; margin-bottom: .6rem;
+  }
+  .step-card h5 { margin: 0 0 .4rem; font-size: .96rem; font-weight: 700; color: var(--ink); }
+  .step-card p { font-size: .87rem; margin: 0; color: var(--ink-soft); }
+
+  .tool-grid {
+    display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .9rem;
+    margin: 1.1rem 0 1.5rem;
+  }
+  @media (max-width: 760px) { .tool-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 480px) { .tool-grid { grid-template-columns: 1fr; } }
+  .tool-card {
+    border: 1px solid var(--line); border-left: 3px solid var(--c-admin);
+    border-radius: 8px; background: var(--paper-raised); padding: .85rem 1rem;
+  }
+  .tool-card .tool-name { font-weight: 700; font-size: .9rem; margin-bottom: .3rem; color: var(--ink); }
+  .tool-card p { font-size: .84rem; margin: 0; color: var(--ink-soft); }
+
   footer.manual-footer {
     margin-top: 4rem; padding-top: 1.5rem; border-top: 1px solid var(--line);
     color: var(--ink-faint); font-size: .82rem;
@@ -274,6 +327,7 @@ export default function ManualPage() {
         <div className="toc-label">Admin &amp; HR</div>
         <a href="#admin-people"><span className="role-dot dot-admin"></span>Bringing people on board</a>
         <a href="#admin-structure"><span className="role-dot dot-admin"></span>Org structure &amp; access</a>
+        <a href="#admin-crm-workspace"><span className="role-dot dot-admin"></span>Giving a customer their own CRM</a>
         <a href="#admin-payroll"><span className="role-dot dot-admin"></span>Payroll</a>
         <a href="#admin-billing-setup"><span className="role-dot dot-admin"></span>Business Settings &amp; catalog</a>
         <a href="#admin-oversight"><span className="role-dot dot-admin"></span>Reports &amp; oversight</a>
@@ -306,8 +360,8 @@ export default function ManualPage() {
       <article className="usecase">
         <h3>Signing in</h3>
         <ol className="steps">
-          <li>Go to the login page. You can sign in with either your <b>email</b> or your <b>phone number</b> — use the toggle above the field to switch.</li>
-          <li>Enter your password and press <b>Sign in</b>.</li>
+          <li>Go to the login page and enter your <b>email</b> and <b>password</b>.</li>
+          <li>Press <b>Sign in</b>.</li>
           <li>You’ll land on <b>Overview</b> — a one-page summary of whatever’s relevant to you: your own orders and invoices if you’re a customer, your leads and team stats if you’re staff, company-wide numbers if you’re an admin.</li>
         </ol>
         <div className="callout">
@@ -315,20 +369,50 @@ export default function ManualPage() {
           <p>If your profile is missing details (phone, date of birth, state, city), you’ll see a banner asking you to complete it. It’s not blocking — dismiss it for the session if you’re just looking around — but fill it in properly before doing anything that needs your real identity details, like generating a payslip or an invoice in your name.</p>
         </div>
         <div className="callout">
-          <div className="callout-label">Demo accounts for this build</div>
-          <p>On the login page itself, open <b>Check Demo Login Details</b> to see every working demo account and copy its email straight into the form. The accounts and current passwords are also listed below for reference.</p>
+          <div className="callout-label">Accounts in this environment</div>
+          <p>
+            Every account below signs in with the same password: <b>Chatak@2026</b>. There are two organizations —
+            <b> Legal Efilings</b>, the provider, and <b>Chatak Singh</b>, a Kanpur mouth-freshener (mukhwas)
+            manufacturer that bought a plan and now runs its own CRM workspace.
+          </p>
         </div>
-        <div className="creds">
-          <div className="creds-grid">
-            <div className="cred-card"><div className="role-tag" style={{ color: "var(--c-admin)" }}>Admin</div><div className="email">admin@legalefilings.com</div><div className="pw">Demo@12345</div></div>
-            <div className="cred-card"><div className="role-tag" style={{ color: "var(--c-staff)" }}>Staff — Group Leader</div><div className="email">groupleader@legalefilings.com</div><div className="pw">Demo@12345</div></div>
-            <div className="cred-card"><div className="role-tag" style={{ color: "var(--c-staff)" }}>Staff — Leader</div><div className="email">leader@legalefilings.com</div><div className="pw">Demo@12345</div></div>
-            <div className="cred-card"><div className="role-tag" style={{ color: "var(--c-staff)" }}>Staff — Rater</div><div className="email">rater@legalefilings.com</div><div className="pw">Demo@12345</div></div>
-            <div className="cred-card"><div className="role-tag" style={{ color: "var(--c-customer)" }}>Customer — Free</div><div className="email">customer.free@legalefilings.com</div><div className="pw">Demo@12345</div></div>
-            <div className="cred-card"><div className="role-tag" style={{ color: "var(--c-customer)" }}>Customer — Paid</div><div className="email">customer.paid@legalefilings.com</div><div className="pw">Demo@12345</div></div>
-            <div className="cred-card"><div className="role-tag" style={{ color: "var(--c-platform)" }}>Platform Admin</div><div className="email">platformadmin.e2e@legalefilings.com</div><div className="pw">Demo@12345</div></div>
-            <div className="cred-card"><div className="role-tag" style={{ color: "var(--c-admin)" }}>Admin — own CRM workspace</div><div className="email">crm.demo@legalefilings.com</div><div className="pw">Demo@12345</div></div>
-          </div>
+
+        <div className="wide">
+          <h4>Chatak Singh — a customer&apos;s own CRM workspace (Kanpur)</h4>
+          <table className="ref">
+            <thead><tr><th>Email</th><th>Name</th><th>Role</th><th>What they do</th></tr></thead>
+            <tbody>
+<tr><td className="email-cell">rishabhkhanna.93@gmail.com</td><td>Rishabh Khanna</td><td><b>Admin</b></td><td>Proprietor. Started as a paid customer of Legal Efilings, then became this org&apos;s admin when his CRM workspace request was approved.</td></tr>
+<tr><td className="email-cell">manpreet.kaur@chataksingh.in</td><td>Manpreet Kaur</td><td>Staff — Group Leader</td><td>Operations Manager. Sees the whole sales team below her.</td></tr>
+<tr><td className="email-cell">vikas.dwivedi@chataksingh.in</td><td>Vikas Dwivedi</td><td>Staff — Leader</td><td>Sales Head. Approves his team&apos;s leave; sees their leads.</td></tr>
+<tr><td className="email-cell">anjali.verma@chataksingh.in</td><td>Anjali Verma</td><td>Staff — Rater</td><td>Regional Sales Executive.</td></tr>
+<tr><td className="email-cell">sahil.bhatia@chataksingh.in</td><td>Sahil Bhatia</td><td>Staff — Rater</td><td>Sales Executive. Has a pending leave request in the queue.</td></tr>
+<tr><td className="email-cell">nusrat.ali@chataksingh.in</td><td>Nusrat Ali</td><td>Staff — Rater</td><td>Dispatch Coordinator.</td></tr>
+<tr><td className="email-cell">naresh.agarwal@shreebalajistores.in</td><td>Naresh Agarwal</td><td>Customer</td><td>Shree Balaji Provision Stores, Kanpur — intra-state buyer (CGST+SGST).</td></tr>
+<tr><td className="email-cell">sunil.gupta@guptakirana.co.in</td><td>Sunil Gupta</td><td>Customer</td><td>Gupta Kirana, Lucknow — has a part-paid invoice and a standing monthly order.</td></tr>
+<tr><td className="email-cell">deepak.anand@anmolsweets.in</td><td>Deepak Anand</td><td>Customer</td><td>Anmol Sweets, Delhi — inter-state buyer (IGST).</td></tr>
+<tr><td className="email-cell">meena.chauhan@rajwadistores.in</td><td>Meena Chauhan</td><td>Customer</td><td>Rajwadi Stores, Jaipur — inter-state, with TDS deducted on their invoice.</td></tr>
+            </tbody>
+          </table>
+
+          <h4>Legal Efilings — the provider (New Delhi)</h4>
+          <table className="ref">
+            <thead><tr><th>Email</th><th>Name</th><th>Role</th><th>What they do</th></tr></thead>
+            <tbody>
+<tr><td className="email-cell">nandini.iyer@legalefilings.com</td><td>Nandini Iyer</td><td><b>Platform Operator</b></td><td>The superuser. Manages every organization and approves CRM workspace requests.</td></tr>
+<tr><td className="email-cell">arvind.menon@legalefilings.com</td><td>Arvind Menon</td><td>Admin</td><td>Head of Compliance. Runs this org day to day.</td></tr>
+<tr><td className="email-cell">kavya.reddy@legalefilings.com</td><td>Kavya Reddy</td><td>Staff — Group Leader</td><td>Group Leader, Filings.</td></tr>
+<tr><td className="email-cell">farhan.qureshi@legalefilings.com</td><td>Farhan Qureshi</td><td>Staff — Leader</td><td>Team Lead, ROC Filings. Reports to Kavya.</td></tr>
+<tr><td className="email-cell">sneha.kulkarni@legalefilings.com</td><td>Sneha Kulkarni</td><td>Staff — Rater</td><td>Compliance Associate. Reports to Farhan.</td></tr>
+<tr><td className="email-cell">aarti.deshpande@deshpandetextiles.in</td><td>Aarti Deshpande</td><td>Customer</td><td>Deshpande Textiles, Pune — two live orders.</td></tr>
+<tr><td className="email-cell">imran.shaikh@crescenttraders.co.in</td><td>Imran Shaikh</td><td>Customer</td><td>Crescent Traders, Hyderabad — free tier, so not yet eligible for a CRM workspace.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div className="callout warn">
+          <div className="callout-label">Which one is the superuser?</div>
+          <p><b>Platform Admin</b> is the one account above all tenant organizations — it isn&apos;t a role inside any one company&apos;s org chart the way Admin is. It&apos;s the only login that can see and manage every organization on the platform, provision new ones, and approve customers&apos; requests for their own CRM workspace (see <a href="#platform-orgs">Platform Operator</a> below). Every other account here is scoped to one organization.</p>
         </div>
       </article>
 
@@ -401,6 +485,12 @@ export default function ManualPage() {
       <article className="usecase" id="customer-crm">
         <h3>Getting your own CRM workspace</h3>
         <p>Every plan comes with a free year of your own separate CRM — your own login as an admin, your own team, your own leads pipeline, your own invoicing — entirely apart from Legal Efilings’ CRM.</p>
+        <p>
+          Until then, a customer account has no CRM tools at all — that isn’t a restriction to be lifted piece
+          by piece, it’s the point of the split. Running a business on this platform means having a workspace
+          of your own and being its admin. See <a href="#admin-crm-workspace">Giving a customer their own CRM</a>
+          for how it looks from the other side of the request.
+        </p>
         <ol className="steps">
           <li>You need <b>at least one completed (paid) purchase</b> to be eligible.</li>
           <li>Open <b>Request CRM Access</b>, type your company name, and submit.</li>
@@ -409,7 +499,7 @@ export default function ManualPage() {
         </ol>
         <div className="callout">
           <div className="callout-label">What you actually unlock</div>
-          <p>Leads CRM, Invoice CRM, Team Management, Attendance &amp; Leave, and Payroll — the same full toolset described in the <a href="#admin-people">Admin &amp; HR</a> section below, because you’re now that new organization’s admin.</p>
+          <p>Leads CRM, Invoice CRM, Team Management, Attendance &amp; Leave, and Payroll — the same full toolset described in the <a href="#admin-people">Admin &amp; HR</a> section below, because you’re now that new organization’s admin. Your old orders and invoices as a customer stay exactly where they were.</p>
         </div>
         <div className="callout warn">
           <div className="callout-label">Time-limited</div>
@@ -560,6 +650,77 @@ export default function ManualPage() {
           <li><b>Delegated Access</b> — hand one specific staff member access to one normally admin-only tool (Employees, Payroll, Payslips, HR Letters, Reports, and more) without promoting them to admin, which would unlock everything. Set it to expire on a date, or leave it permanent.</li>
           <li><b>Leave Types</b> — define the org’s own leave types (Casual, Sick, Earned…), each with a yearly day credit and a carry-forward cap. Unpaid Leave is fixed and always available, and never appears here.</li>
         </ul>
+      </article>
+
+      <article className="usecase wide" id="admin-crm-workspace">
+        <h3>Giving a customer their own CRM workspace</h3>
+        <p>
+          A customer account never holds CRM tools. Not some of them, not temporarily — a customer buys
+          things from you and looks at their own orders and invoices, and that is the whole of it. When
+          someone needs to actually <em>run</em> a business on this platform — leads, invoicing, a team,
+          attendance, payroll — they get their own organization and become its <b>admin</b>. Getting CRM
+          access and becoming an admin are the same event, not two separate ones.
+        </p>
+        <div className="callout warn">
+          <div className="callout-label">Why it works this way</div>
+          <p>
+            Every CRM tool hands its holder unrestricted, org-wide access to a business&apos;s operational and
+            HR data — every employee&apos;s salary, bank account, PAN and Aadhaar included. That is the right
+            level of trust for someone inside the company&apos;s own staff hierarchy, and the wrong level for
+            a customer, who by definition sits outside it. So rather than lending a customer a subset of
+            those tools, the platform gives them a workspace of their own where they are the admin and the
+            data is theirs.
+          </p>
+        </div>
+
+        <div className="step-flow">
+          <div className="step-card">
+            <div className="step-num">1</div>
+            <h5>They buy a plan</h5>
+            <p>Eligibility is simply having paid for something — any plan, bought online or set up for them on <b>Buy Plan for Customer</b>. A free-tier customer with no completed purchase can&apos;t request a workspace.</p>
+          </div>
+          <div className="step-card">
+            <div className="step-num">2</div>
+            <h5>They request a workspace</h5>
+            <p>On <b>Request CRM Access</b> the customer types their business name and submits. They can track the status — pending, approved, rejected — on that same page.</p>
+          </div>
+          <div className="step-card">
+            <div className="step-num">3</div>
+            <h5>A platform operator approves</h5>
+            <p>Only Legal Efilings&apos; own operators see this queue, under <b>Platform → CRM Requests</b>. Approving creates the new organization; rejecting requires a reason, which the customer sees.</p>
+          </div>
+          <div className="step-card">
+            <div className="step-num">4</div>
+            <h5>They become its admin</h5>
+            <p>Their existing login — same email, same password — is promoted to <b>admin</b> of the brand-new organization. Nothing new to set up or remember, and they keep their old order history.</p>
+          </div>
+        </div>
+
+        <p><b>What the new admin does first.</b> The workspace starts empty apart from two starter leave types, so the running order is:</p>
+        <ol className="steps">
+          <li><b>Business Settings</b> — address, GSTIN, PAN, state, and bank or UPI details. This is mandatory: every invoice-generating action stays blocked until it&apos;s filled in, because those details print on the invoice itself.</li>
+          <li><b>Invoice Item Catalog</b> — the products or services they sell, each with its HSN/SAC code and GST rate, so invoice lines auto-fill correctly instead of being retyped.</li>
+          <li><b>Create User</b> — their staff, as Rater / Leader / Group Leader, with who reports to whom. That reporting chain is what scopes leads, attendance and leave approvals.</li>
+          <li><b>Departments</b>, <b>Leave Types</b> and <b>Holidays</b> — optional, but attendance and payroll read from them, so worth doing before the first payroll run.</li>
+        </ol>
+        <p>
+          From that point they have the same toolset described throughout this Admin section — the org they
+          administer is simply their own rather than Legal Efilings&apos;.
+        </p>
+        <div className="callout">
+          <div className="callout-label">It&apos;s time-boxed</div>
+          <p>A workspace comes bundled with a plan purchase for one year, not permanently. When it lapses the org&apos;s users land on an &quot;access expired&quot; screen rather than being locked out entirely, and buying another plan makes them eligible to request again.</p>
+        </div>
+        <div className="callout">
+          <div className="callout-label">Worked example in this environment</div>
+          <p>
+            Rishabh Khanna bought a Business annual plan from Legal Efilings as a paid customer, paid the
+            ₹58,998.82 invoice, and requested a workspace for <b>Chatak Singh</b>, his mukhwas business in
+            Kanpur. Nandini Iyer approved it, which created the organization and made him its admin. He then
+            set up his GSTIN and bank details, loaded a twelve-line mouth-freshener catalog, hired five staff,
+            and started invoicing his own retail and wholesale buyers.
+          </p>
+        </div>
       </article>
 
       <article className="usecase" id="admin-payroll">

@@ -1,24 +1,22 @@
 import { test as setup, expect } from "@playwright/test";
 
-// Logs in every seeded demo account once and saves its storage state to
+// Logs in every seeded account once and saves its storage state to
 // tests/e2e/.auth/<role>.json — every other spec reuses these instead of
-// re-logging-in per test. Demo password/accounts come straight from
-// src/components/DemoLoginCredentials.tsx (seeded by scripts/seed-database.mjs).
-const DEMO_PASSWORD = "Demo@12345";
+// re-logging-in per test. All of these are created by
+// scripts/seed-demo.mjs; the role names here are the suite's own labels,
+// not anything the product knows about.
+const DEMO_PASSWORD = "Chatak@2026";
 export const ACCOUNTS = {
-  admin: "admin@legalefilings.com",
-  groupLeader: "groupleader@legalefilings.com",
-  leader: "leader@legalefilings.com",
-  rater: "rater@legalefilings.com",
-  customerFree: "customer.free@legalefilings.com",
-  customerPaid: "customer.paid@legalefilings.com",
-  // Dedicated is_platform_admin=true test account (not one of the seeded
-  // org-scoped demo accounts above) — provisioned once via a one-off
-  // admin script, same password as every other demo account. Needed for
-  // /dashboard/platform/organizations, which the regular seeded admin
-  // account is deliberately NOT allowed into (org-scoped admin, not
-  // platform admin).
-  platformAdmin: "platformadmin.e2e@legalefilings.com",
+  admin: "arvind.menon@legalefilings.com",
+  groupLeader: "kavya.reddy@legalefilings.com",
+  leader: "farhan.qureshi@legalefilings.com",
+  rater: "sneha.kulkarni@legalefilings.com",
+  customerFree: "imran.shaikh@crescenttraders.co.in",
+  customerPaid: "aarti.deshpande@deshpandetextiles.in",
+  // is_platform_admin=true — a separate axis from account_type, needed
+  // for /dashboard/platform/*, which an ordinary org admin (Arvind
+  // above) is deliberately NOT allowed into.
+  platformAdmin: "nandini.iyer@legalefilings.com",
 } as const;
 
 for (const [role, email] of Object.entries(ACCOUNTS)) {

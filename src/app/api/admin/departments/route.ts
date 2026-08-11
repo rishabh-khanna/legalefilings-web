@@ -10,7 +10,9 @@ import { hasToolAccess } from "@/lib/tool-grants";
 // as well as the admin-only Departments management page).
 export async function GET() {
   const profile = await getCurrentProfile();
-  if (!profile || profile.account_type === "customer") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!profile || profile.account_type === "customer") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const supabase = getSupabaseAdmin();
   // organizations(name) only actually matters for a platform_admin, who

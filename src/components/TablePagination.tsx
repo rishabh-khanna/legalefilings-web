@@ -29,7 +29,7 @@ export function TablePagination({
 }) {
   return (
     <div
-      className="my-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white px-4 py-2.5 dark:bg-[var(--color-paper-raised)]"
+      className="my-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white px-4 py-3 shadow-sm dark:bg-[var(--color-paper-raised)]"
       style={{ borderColor: "var(--color-line)" }}
     >
       <div className="flex items-center gap-2">
@@ -39,7 +39,7 @@ export function TablePagination({
         <select
           value={pageSize}
           onChange={(e) => onPageSizeChange(Number(e.target.value))}
-          className="rounded-lg border bg-white px-2 py-1 text-sm font-semibold outline-none focus:border-[var(--color-action)] dark:bg-[var(--color-paper-raised)]"
+          className="rounded-lg border bg-white px-2 py-1 text-sm font-semibold outline-none transition-colors focus:border-[var(--color-action)] dark:bg-[var(--color-paper-raised)]"
           style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
         >
           {PAGE_SIZE_OPTIONS.map((n) => (
@@ -51,24 +51,28 @@ export function TablePagination({
         <span className="text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>
           {total === 0 ? `No ${itemLabel}` : `${start}–${end} of ${total} ${itemLabel}`}
         </span>
+        {/* Pill-shaped nav, matching the rounded-full language every other
+            control in the app already uses (filters, badges, buttons) —
+            the previous rounded-lg pair was the one place still using a
+            squarer radius, a small inconsistency once you notice it. */}
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => onPageChange(page - 1)}
             disabled={page <= 1}
-            className="rounded-lg border bg-white px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-[var(--color-accent-tint)] disabled:pointer-events-none disabled:opacity-40 dark:bg-[var(--color-paper-raised)]"
+            className="rounded-full border bg-white px-3 py-1 text-xs font-semibold transition-colors hover:border-[var(--color-action)] hover:text-[var(--color-action-dark)] disabled:pointer-events-none disabled:opacity-40 dark:bg-[var(--color-paper-raised)]"
             style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
           >
             Prev
           </button>
-          <span className="px-1.5 text-xs font-bold" style={{ color: "var(--color-ink)" }}>
+          <span className="px-2 text-xs font-semibold tabular-nums" style={{ color: "var(--color-ink)" }}>
             Page {page} of {totalPages}
           </span>
           <button
             type="button"
             onClick={() => onPageChange(page + 1)}
             disabled={page >= totalPages}
-            className="rounded-lg border bg-white px-2.5 py-1 text-xs font-semibold transition-colors hover:bg-[var(--color-accent-tint)] disabled:pointer-events-none disabled:opacity-40 dark:bg-[var(--color-paper-raised)]"
+            className="rounded-full border bg-white px-3 py-1 text-xs font-semibold transition-colors hover:border-[var(--color-action)] hover:text-[var(--color-action-dark)] disabled:pointer-events-none disabled:opacity-40 dark:bg-[var(--color-paper-raised)]"
             style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
           >
             Next

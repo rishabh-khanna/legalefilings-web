@@ -43,9 +43,7 @@ export default function ToolAccessPage() {
     return () => clearTimeout(kickoff);
   }, []);
 
-  // "customer" included so a paid customer can be delegated real CRM
-  // tool access without ever being promoted off account_type=customer.
-  const staffOnly = useMemo(() => (staff ?? []).filter((s) => s.account_type === "staff" || s.account_type === "customer"), [staff]);
+  const staffOnly = useMemo(() => (staff ?? []).filter((s) => s.account_type === "staff"), [staff]);
   const staffById = useMemo(() => new Map((staff ?? []).map((s) => [s.id, s])), [staff]);
   const activeGrants = useMemo(() => (grants ?? []).filter(isGrantActive), [grants]);
 
@@ -144,7 +142,7 @@ export default function ToolAccessPage() {
     <div>
       <DashboardPageHero
         title="Delegated Access"
-        subtitle="Grant a specific staff member or paid customer access to one admin-only tool, without changing their account type."
+        subtitle="Grant a specific staff member access to one admin-only tool, without promoting them to admin."
       >
         <div className="relative mt-6 grid grid-cols-1 gap-4 sm:max-w-xs">
           <HeroKpi icon={KeyRound} label="Active Grants" value={activeGrants.length} />
@@ -161,7 +159,7 @@ export default function ToolAccessPage() {
           <select value={selectedStaff} onChange={(e) => setSelectedStaff(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }}>
             <option value="">Select staff member…</option>
             {staffOnly.map((s) => (
-              <option key={s.id} value={s.id}>{s.full_name ?? "Unnamed"}{s.account_type === "customer" ? " (Customer)" : ""}</option>
+              <option key={s.id} value={s.id}>{s.full_name ?? "Unnamed"}</option>
             ))}
           </select>
           <select value={selectedTool} onChange={(e) => setSelectedTool(e.target.value as ToolKey)} className={inputClass} style={{ borderColor: "var(--color-line)" }}>
@@ -202,6 +200,7 @@ export default function ToolAccessPage() {
           itemLabel="grants"
           emptyMessage={grants.length === 0 ? "No delegated access granted yet." : "No grants match this filter."}
           filteredEmptyMessage="No grants match this filter."
+          search={{ placeholder: "Search staff member…", filter: (g, q) => (staffById.get(g.staff_id)?.full_name ?? "").toLowerCase().includes(q) }}
           exportFilename="delegated-access"
           toolbar={
             <>

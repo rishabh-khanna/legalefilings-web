@@ -9,6 +9,7 @@ import { DashboardPageHero, HeroAction, HeroKpi } from "@/components/crm/Dashboa
 import { LoadingBlock } from "@/components/Spinner";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { MultiSelect } from "@/components/MultiSelect";
+import { TruncatedText } from "@/components/TruncatedText";
 
 type CorrectionRequest = {
   id: string;
@@ -120,7 +121,7 @@ export default function AttendanceCorrectionsPage() {
     { key: "requestedBy", header: "Requested By", render: (c) => c.profiles?.full_name ?? "You", exportValue: (c) => c.profiles?.full_name ?? "", sortValue: (c) => c.profiles?.full_name ?? "You" },
     { key: "checkIn", header: "Requested Check In", render: (c) => c.requested_check_in ?? "—", exportValue: (c) => c.requested_check_in ?? "" },
     { key: "checkOut", header: "Requested Check Out", render: (c) => c.requested_check_out ?? "—", exportValue: (c) => c.requested_check_out ?? "" },
-    { key: "reason", header: "Reason", render: (c) => <span className="max-w-xs italic" style={{ color: "var(--color-ink-soft)" }}>&ldquo;{c.reason}&rdquo;</span>, className: "max-w-xs", exportValue: (c) => c.reason },
+    { key: "reason", header: "Reason", render: (c) => <TruncatedText text={`“${c.reason}”`} italic className="max-w-xs" style={{ color: "var(--color-ink-soft)" }} />, className: "max-w-xs", exportValue: (c) => c.reason },
     {
       key: "status",
       header: "Status",
@@ -132,9 +133,11 @@ export default function AttendanceCorrectionsPage() {
               {c.status}
             </span>
             {c.status === "rejected" && c.review_note && (
-              <p className="mt-1.5 max-w-[200px] whitespace-normal rounded-lg px-2 py-1 text-xs" style={{ backgroundColor: "#fde2e2", color: "#b42318" }}>
-                {c.review_note}
-              </p>
+              <TruncatedText
+                text={c.review_note}
+                className="mt-1.5 max-w-[160px] rounded-lg px-2 py-1"
+                style={{ backgroundColor: "#fde2e2", color: "#b42318" }}
+              />
             )}
           </>
         );
@@ -207,7 +210,11 @@ export default function AttendanceCorrectionsPage() {
         getRowKey={(c) => c.id}
         itemLabel="requests"
         emptyMessage={corrections.length === 0 ? "No correction requests yet." : "No requests match this filter."}
-        search={{ placeholder: "Search date, reason…", filter: (c, q) => `${c.date} ${c.reason}`.toLowerCase().includes(q) }}
+        search={{
+          placeholder: "Search name, date, reason…",
+          filter: (c, q) => `${c.profiles?.full_name ?? ""} ${c.date} ${c.reason}`.toLowerCase().includes(q),
+        }}
+        dateFilter={{ getDate: (c) => c.date }}
         exportFilename="my-correction-requests"
         toolbar={
           <MultiSelect

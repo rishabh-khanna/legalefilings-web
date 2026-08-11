@@ -56,8 +56,8 @@ test("API: a rater cannot fetch another staff member's documents by staffId", as
   const adminCtx = await browser.newContext({ storageState: "tests/e2e/.auth/admin.json" });
   const meRes = await adminCtx.request.get("/api/admin/tool-grants");
   const { staff } = await meRes.json();
-  const admin = staff.find((s: { full_name: string | null }) => s.full_name === "Asha Admin");
-  expect(admin, "seeded admin 'Asha Admin' not found").toBeTruthy();
+  const admin = staff.find((s: { full_name: string | null }) => s.full_name === "Arvind Menon");
+  expect(admin, "seeded admin 'Arvind Menon' not found").toBeTruthy();
   await adminCtx.close();
 
   const raterCtx = await browser.newContext({ storageState: "tests/e2e/.auth/rater.json" });

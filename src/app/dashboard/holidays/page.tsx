@@ -219,6 +219,7 @@ export default function HolidaysPage() {
         itemLabel="holidays"
         emptyMessage={holidays.length === 0 ? "No holidays added yet." : "No holidays match this filter."}
         filteredEmptyMessage="No holidays match this filter."
+        search={{ placeholder: "Search holiday name…", filter: (h, q) => h.name.toLowerCase().includes(q) }}
         exportFilename="holidays"
         toolbar={
           <>

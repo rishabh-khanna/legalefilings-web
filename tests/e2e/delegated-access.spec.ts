@@ -15,13 +15,13 @@ test.describe("Delegated Access", () => {
     await adminPage.goto("/dashboard/admin/tool-access");
     await expect(adminPage.getByRole("heading", { name: "Delegated Access" })).toBeVisible({ timeout: 15000 });
 
-    // Grant Rahul Rater access to Employees via the real form.
-    await adminPage.locator("select").nth(0).selectOption({ label: "Rahul Rater" });
+    // Grant Sneha Kulkarni access to Employees via the real form.
+    await adminPage.locator("select").nth(0).selectOption({ label: "Sneha Kulkarni" });
     await adminPage.locator("select").nth(1).selectOption({ label: "Employees" });
     await adminPage.getByRole("button", { name: "Grant", exact: true }).click();
     await expect(adminPage.getByText("Access granted.")).toBeVisible({ timeout: 10000 });
 
-    const grantRow = adminPage.locator("tr", { hasText: "Rahul Rater" }).filter({ hasText: "Employees" });
+    const grantRow = adminPage.locator("tr", { hasText: "Sneha Kulkarni" }).filter({ hasText: "Employees" });
     await expect(grantRow).toBeVisible({ timeout: 10000 });
     await expect(grantRow.getByText("Active", { exact: true })).toBeVisible();
 
@@ -48,7 +48,7 @@ test.describe("Delegated Access", () => {
     adminPage.once("dialog", (dialog) => dialog.accept());
     await grantRow.getByRole("button", { name: "Revoke access" }).click();
     await expect(adminPage.getByText("Access revoked.")).toBeVisible({ timeout: 10000 });
-    await expect(adminPage.locator("tr", { hasText: "Rahul Rater" }).filter({ hasText: "Employees" })).toHaveCount(0, { timeout: 10000 });
+    await expect(adminPage.locator("tr", { hasText: "Sneha Kulkarni" }).filter({ hasText: "Employees" })).toHaveCount(0, { timeout: 10000 });
 
     // As Rahul again, fresh navigation: access should be gone — bounced
     // back to /dashboard by proxy.ts, same as before the grant existed.
@@ -70,8 +70,8 @@ test.describe("Delegated Access", () => {
     const grantsRes = await api.get("/api/admin/tool-grants");
     expect(grantsRes.ok()).toBeTruthy();
     const { staff } = await grantsRes.json();
-    const rahul = staff.find((s: { full_name: string | null }) => s.full_name === "Rahul Rater");
-    expect(rahul, "seeded staff member 'Rahul Rater' not found").toBeTruthy();
+    const rahul = staff.find((s: { full_name: string | null }) => s.full_name === "Sneha Kulkarni");
+    expect(rahul, "seeded staff member 'Sneha Kulkarni' not found").toBeTruthy();
 
     const pastDate = "2020-01-01";
     const createRes = await api.post("/api/admin/tool-grants", {

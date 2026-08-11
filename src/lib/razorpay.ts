@@ -5,6 +5,19 @@ import crypto from "crypto";
 // signatures) is small enough that a dependency isn't worth it.
 const RAZORPAY_API_BASE = "https://api.razorpay.com/v1";
 
+// Plain === on a computed HMAC leaks how many leading bytes of a guess
+// are correct via comparison time — crypto.timingSafeEqual is the
+// standard defense, but it throws on unequal-length buffers rather than
+// just returning false, so the length check has to happen first. That
+// early return is safe to do in variable time: a signature's length
+// isn't secret, only its content is.
+function timingSafeEqualHex(expectedHex: string, candidate: string): boolean {
+  const expectedBuf = Buffer.from(expectedHex, "utf8");
+  const candidateBuf = Buffer.from(candidate, "utf8");
+  if (expectedBuf.length !== candidateBuf.length) return false;
+  return crypto.timingSafeEqual(expectedBuf, candidateBuf);
+}
+
 function getCredentials() {
   const keyId = process.env.RAZORPAY_KEY_ID;
   const keySecret = process.env.RAZORPAY_KEY_SECRET;
@@ -102,7 +115,7 @@ export async function listCapturedPaymentsForOrder(orderId: string): Promise<Raz
 export function verifyPaymentSignature(input: { orderId: string; paymentId: string; signature: string }): boolean {
   const { keySecret } = getCredentials();
   const expected = crypto.createHmac("sha256", keySecret).update(`${input.orderId}|${input.paymentId}`).digest("hex");
-  return expected === input.signature;
+  return timingSafeEqualHex(expected, input.signature);
 }
 
 // The webhook is the durable backstop for the client-side verify call above
@@ -114,5 +127,5 @@ export function verifyWebhookSignature(rawBody: string, signature: string): bool
   const webhookSecret = process.env.RAZORPAY_WEBHOOK_SECRET;
   if (!webhookSecret) throw new Error("Missing RAZORPAY_WEBHOOK_SECRET env var");
   const expected = crypto.createHmac("sha256", webhookSecret).update(rawBody).digest("hex");
-  return expected === signature;
+  return timingSafeEqualHex(expected, signature);
 }

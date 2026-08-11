@@ -9,7 +9,9 @@ import { hasToolAccess } from "@/lib/tool-grants";
 // everyone's (optionally filtered by ?staffId=).
 export async function GET(request: Request) {
   const profile = await getCurrentProfile();
-  if (!profile || profile.account_type === "customer") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!profile || profile.account_type === "customer") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const { searchParams } = new URL(request.url);
   const requestedStaffId = searchParams.get("staffId");

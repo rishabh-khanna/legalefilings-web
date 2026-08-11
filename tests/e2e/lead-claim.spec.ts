@@ -63,7 +63,7 @@ test("UI: claiming a lead on the Pipeline board removes the Claim button and sho
   await expect(adminPage.getByText("Lead claimed.")).toBeVisible({ timeout: 10000 });
 
   await expect(card.getByRole("button", { name: "Claim" })).toHaveCount(0);
-  await expect(card.getByText("Asha Admin")).toBeVisible();
+  await expect(card.getByText("Arvind Menon")).toBeVisible();
 
   await adminCtx.close();
 });

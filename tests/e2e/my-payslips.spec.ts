@@ -1,6 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-// My Payslips (staff self-view) — Rahul Rater has at least one real
+// My Payslips (staff self-view) — Sneha Kulkarni has at least one real
 // generated payslip from payroll-lop.spec.ts, so this exercises the
 // real list + download flow rather than an empty-state smoke test.
 test.use({ storageState: "tests/e2e/.auth/rater.json" });
@@ -26,8 +26,8 @@ test("API: a rater cannot fetch another staff member's payslips by staffId", asy
   const adminCtx = await browser.newContext({ storageState: "tests/e2e/.auth/admin.json" });
   const meRes = await adminCtx.request.get("/api/admin/tool-grants");
   const { staff } = await meRes.json();
-  const admin = staff.find((s: { full_name: string | null }) => s.full_name === "Asha Admin");
-  expect(admin, "seeded admin 'Asha Admin' not found").toBeTruthy();
+  const admin = staff.find((s: { full_name: string | null }) => s.full_name === "Arvind Menon");
+  expect(admin, "seeded admin 'Arvind Menon' not found").toBeTruthy();
   await adminCtx.close();
 
   const raterCtx = await browser.newContext({ storageState: "tests/e2e/.auth/rater.json" });

@@ -8,6 +8,8 @@ import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { MultiSelect } from "@/components/MultiSelect";
+import { TruncatedText } from "@/components/TruncatedText";
+import { Tooltip } from "@/components/Tooltip";
 import { toISTDateString } from "@/lib/ist-date";
 
 const CORRECTION_STATUS_STYLE: Record<CorrectionRow["status"], { bg: string; fg: string }> = {
@@ -17,8 +19,22 @@ const CORRECTION_STATUS_STYLE: Record<CorrectionRow["status"], { bg: string; fg:
 };
 
 type StaffOption = { id: string; name: string };
-type AttendanceEvent = { event_type: "check_in" | "check_out"; occurred_at: string; location: string | null };
-type DayEntry = [string, { checkIn?: string; checkInLoc?: string | null; checkOut?: string; checkOutLoc?: string | null }];
+type AttendanceEvent = { event_type: "check_in" | "check_out"; occurred_at: string; location: string | null; note: string | null };
+type DayEntry = [
+  string,
+  { checkIn?: string; checkInLoc?: string | null; checkOut?: string; checkOutLoc?: string | null; checkInNote?: string | null; checkOutNote?: string | null },
+];
+
+// Mirrors AUTO_CLOSE_NOTE in api/cron/close-open-shifts/route.ts — kept as
+// a literal here rather than imported, since that file is a server route
+// handler and this is a "use client" page. api/attendance already
+// `select("*")`s this column, but nothing on this page ever read it —
+// the cron route's own comment claims "the UI badges it," which was
+// never actually wired up. Worth knowing on a team-wide attendance log
+// specifically: an auto-closed row's check-out time is the moment the
+// cleanup job ran (up to 14h after the real shift), not when the person
+// actually left.
+const AUTO_CLOSE_NOTE = "auto-closed: no check-out recorded";
 type CorrectionRow = {
   id: string;
   staff_id: string;
@@ -44,7 +60,7 @@ function mapLink(location: string | null) {
 }
 
 function groupByDay(events: AttendanceEvent[]) {
-  const byDay = new Map<string, { checkIn?: string; checkInLoc?: string | null; checkOut?: string; checkOutLoc?: string | null }>();
+  const byDay = new Map<string, DayEntry[1]>();
   for (const ev of events) {
     // IST calendar day, not the UTC slice. A punch between IST midnight
     // and 5:30 AM falls on the previous UTC day, so slicing the
@@ -55,10 +71,12 @@ function groupByDay(events: AttendanceEvent[]) {
     if (ev.event_type === "check_in" && !entry.checkIn) {
       entry.checkIn = ev.occurred_at;
       entry.checkInLoc = ev.location;
+      entry.checkInNote = ev.note;
     }
     if (ev.event_type === "check_out") {
       entry.checkOut = ev.occurred_at;
       entry.checkOutLoc = ev.location;
+      entry.checkOutNote = ev.note;
     }
     byDay.set(day, entry);
   }
@@ -189,6 +207,50 @@ export default function AdminAttendancePage() {
       render: ([, entry]) => (entry.checkIn && entry.checkOut ? formatHoursMinutes(new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime()) : "—"),
       exportValue: ([, entry]) => (entry.checkIn && entry.checkOut ? formatHoursMinutes(new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime()) : ""),
     },
+    {
+      key: "status",
+      header: "Status",
+      render: ([, entry]) => {
+        if (entry.checkOutNote === AUTO_CLOSE_NOTE) {
+          return (
+            <Tooltip content="No check-out was ever recorded — this is when the nightly cleanup job auto-closed the shift, not when they actually left.">
+              <span className="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "#fde2e2", color: "#b42318" }}>
+                Auto-closed
+              </span>
+            </Tooltip>
+          );
+        }
+        if (entry.checkInNote === "regularized" || entry.checkOutNote === "regularized") {
+          return (
+            <Tooltip content="Corrected via an approved attendance correction request.">
+              <span className="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "#dbe7ff", color: "#1d4fb8" }}>
+                Regularized
+              </span>
+            </Tooltip>
+          );
+        }
+        if (entry.checkIn && !entry.checkOut) {
+          return (
+            <span className="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}>
+              No check-out yet
+            </span>
+          );
+        }
+        return (
+          <span className="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "#dcfce3", color: "#116a2c" }}>
+            Present
+          </span>
+        );
+      },
+      exportValue: ([, entry]) =>
+        entry.checkOutNote === AUTO_CLOSE_NOTE
+          ? "Auto-closed"
+          : entry.checkInNote === "regularized" || entry.checkOutNote === "regularized"
+            ? "Regularized"
+            : entry.checkIn && !entry.checkOut
+              ? "No check-out yet"
+              : "Present",
+    },
   ];
 
   // Every column here except Actions is shown for every status, not
@@ -197,10 +259,10 @@ export default function AdminAttendancePage() {
   // record on this page at all once decided.
   const correctionColumns: DataTableColumn<CorrectionRow>[] = [
     { key: "employee", header: "Employee", render: (c) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>{c.profiles?.full_name ?? "Staff"}</span>, exportValue: (c) => c.profiles?.full_name ?? "", sortValue: (c) => c.profiles?.full_name },
-    { key: "date", header: "Date", className: "w-[8%] whitespace-nowrap", render: (c) => c.date, exportValue: (c) => c.date, sortValue: (c) => c.date },
-    { key: "checkIn", header: "Requested Check In", className: "w-[12%]", render: (c) => c.requested_check_in ?? "—", exportValue: (c) => c.requested_check_in ?? "" },
-    { key: "checkOut", header: "Requested Check Out", className: "w-[12%]", render: (c) => c.requested_check_out ?? "—", exportValue: (c) => c.requested_check_out ?? "" },
-    { key: "reason", header: "Reason", render: (c) => <span className="max-w-xs italic" style={{ color: "var(--color-ink-soft)" }}>&ldquo;{c.reason}&rdquo;</span>, exportValue: (c) => c.reason },
+    { key: "date", header: "Date", className: "w-[10%] whitespace-nowrap", render: (c) => c.date, exportValue: (c) => c.date, sortValue: (c) => c.date },
+    { key: "checkIn", header: "Requested Check In", className: "w-[14%] whitespace-nowrap", render: (c) => c.requested_check_in ?? "—", exportValue: (c) => c.requested_check_in ?? "" },
+    { key: "checkOut", header: "Requested Check Out", className: "w-[14%] whitespace-nowrap", render: (c) => c.requested_check_out ?? "—", exportValue: (c) => c.requested_check_out ?? "" },
+    { key: "reason", header: "Reason", className: "max-w-[180px]", render: (c) => <TruncatedText text={`“${c.reason}”`} italic style={{ color: "var(--color-ink-soft)" }} />, exportValue: (c) => c.reason },
     ...(correctionsSpanMultipleOrgs
       ? [{ key: "org", header: "Organization", render: (c: CorrectionRow) => c.organizations?.name ?? "—", exportValue: (c: CorrectionRow) => c.organizations?.name ?? "Unknown organization" } as DataTableColumn<CorrectionRow>]
       : []),

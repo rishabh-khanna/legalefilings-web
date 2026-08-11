@@ -11,7 +11,7 @@ import { loadInvoiceForStaffAccess } from "@/lib/organization";
 // the invoice total (a few paise of rounding slack either way).
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await getCurrentProfile();
-  if (!isStaffOrAdmin(profile) || !profile) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!profile || !isStaffOrAdmin(profile)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const { id } = await params;
   const body = await request.json().catch(() => null);

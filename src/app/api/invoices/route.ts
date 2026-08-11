@@ -6,7 +6,6 @@ import { isStaffOrAdmin } from "@/lib/roles";
 import { canSeeAllOrgs } from "@/lib/organization";
 import { createBilledInvoice, type CreateBilledInvoiceInput } from "@/lib/create-billed-invoice";
 import { getMissingBusinessSettingsFields } from "@/lib/business-settings-completeness";
-import { hasToolAccess } from "@/lib/tool-grants";
 
 // GET /api/invoices — a customer sees their own; a rater sees only
 // invoices they created; a leader/group_leader sees their own plus their
@@ -61,10 +60,7 @@ export async function GET() {
 // relatedInvoiceId pointing at the original.
 export async function POST(request: Request) {
   const profile = await getCurrentProfile();
-  // A customer delegated the invoice_crm tool operates this exact same
-  // route as their org's own staff would — see the comment above.
-  const isCustomerOperator = profile?.account_type === "customer" && (await hasToolAccess(profile, "invoice_crm"));
-  if (!profile || (!isStaffOrAdmin(profile) && !isCustomerOperator)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!profile || !isStaffOrAdmin(profile)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json().catch(() => null);
   if (!body || typeof body !== "object") {

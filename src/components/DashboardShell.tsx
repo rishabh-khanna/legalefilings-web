@@ -137,12 +137,6 @@ const TEAM_MANAGEMENT_ITEMS: NavItem[] = [
   { href: "/dashboard/admin/leave-requests", label: "Team Leave Requests", section: "Team Management", toolKey: "team_leave" },
 ];
 
-// Only used for the customer-with-grant path below — a staff/admin
-// always gets Invoice CRM unconditionally via STAFF_BASE_ITEMS, so this
-// duplicate exists purely so a granted customer can get the same link
-// without account_type ever changing.
-const CUSTOMER_INVOICE_CRM_ITEM: NavItem = { href: "/dashboard/invoice-crm", label: "Invoice CRM", section: "CRM Access", toolKey: "invoice_crm" };
-
 // Company-wide financials/headcount — group_leader and admin only.
 const ANALYTICS_ITEM: NavItem = { href: "/dashboard/admin/analytics", label: "Analytics", section: "Team Management", toolKey: "analytics" };
 
@@ -165,23 +159,11 @@ const PLATFORM_ITEMS: NavItem[] = [
 // Management the same way leader/group_leader always has, without
 // needing those exact three names.
 function buildNavItems(profile: Profile, isManagerLevel: boolean, grantedTools: Set<ToolKey>): NavItem[] {
-  if (!isStaffOrAdmin(profile)) {
-    if (profile.account_type !== "customer" || grantedTools.size === 0) return CUSTOMER_NAV_ITEMS;
-    // A customer delegated real CRM tools (Leads/Invoice CRM/Team
-    // Attendance/Team Leave, plus anything else grantable like
-    // Employees/Payroll) gets those folded into their normal customer
-    // nav — the same pages staff use, without account_type ever
-    // changing from "customer".
-    const items = [...CUSTOMER_NAV_ITEMS];
-    for (const item of TEAM_MANAGEMENT_ITEMS) {
-      if (item.toolKey && grantedTools.has(item.toolKey)) items.push(item);
-    }
-    if (grantedTools.has("invoice_crm")) items.push(CUSTOMER_INVOICE_CRM_ITEM);
-    for (const item of ADMIN_ONLY_ITEMS) {
-      if (item.toolKey && grantedTools.has(item.toolKey)) items.push(item);
-    }
-    return items;
-  }
+  // A customer account can never hold a delegated tool (see
+  // hasToolAccess() in src/lib/tool-grants.ts) — real CRM capability for
+  // a customer comes only from Request CRM Access, which promotes them
+  // to admin of their own organization, a different branch below.
+  if (!isStaffOrAdmin(profile)) return CUSTOMER_NAV_ITEMS;
 
   const isAdmin = profile.account_type === "admin";
   const items = [...STAFF_BASE_ITEMS];

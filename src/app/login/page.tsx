@@ -4,7 +4,6 @@ import { BUSINESS_STATS, SITE_NAME } from "@/config/site";
 import { Logo } from "@/components/Logo";
 import { LoginForm } from "@/components/LoginForm";
 import { TrustBadge } from "@/components/TrustBadge";
-import { DemoLoginCredentials } from "@/components/DemoLoginCredentials";
 
 export const metadata: Metadata = {
   title: `Login — ${SITE_NAME}`,
@@ -154,8 +153,6 @@ export default function LoginPage() {
             </Link>{" "}
             to see what each account type can do.
           </p>
-
-          <DemoLoginCredentials />
         </div>
       </div>
     </div>

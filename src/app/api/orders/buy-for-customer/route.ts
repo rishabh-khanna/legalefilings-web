@@ -17,7 +17,7 @@ import { SITE_URL } from "@/config/site";
 // it's a day-to-day sales action, not a sensitive org-management one.
 export async function POST(request: Request) {
   const profile = await getCurrentProfile();
-  if (!isStaffOrAdmin(profile) || !profile) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!profile || !isStaffOrAdmin(profile)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json().catch(() => null);
   const { customerId, service, plan, price, taxRate } = body ?? {};

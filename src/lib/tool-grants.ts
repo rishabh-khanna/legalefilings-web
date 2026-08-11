@@ -58,6 +58,16 @@ export function isGrantActive(grant: Pick<StaffToolGrant, "expires_at">): boolea
 export async function hasToolAccess(profile: Pick<Profile, "id" | "account_type"> | null, toolKey: ToolKey): Promise<boolean> {
   if (!profile) return false;
   if (profile.account_type === "admin") return true;
+  // A customer account can never hold any delegable tool — every one of
+  // these 15 tools assumes its grantee is staff (unrestricted, org-wide
+  // access to a business's own operational/financial/HR data), and a
+  // customer isn't part of that org's staff at all. A customer who wants
+  // real CRM capability goes through Request CRM Access instead, which
+  // promotes them to admin of their own separate organization — not
+  // this delegation path. Enforced here (the actual data-access choke
+  // point every one of these tools' routes calls through), not just at
+  // grant-creation time, so even a pre-existing bad grant can't be used.
+  if (profile.account_type === "customer") return false;
 
   const supabase = getSupabaseAdmin();
   const { data } = await supabase

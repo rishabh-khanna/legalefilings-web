@@ -8,6 +8,23 @@ import { TablePagination } from "@/components/TablePagination";
 import { ExportButton } from "@/components/ExportButton";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
 
+// Same rotating tint set used for the sidebar's nav icons and the leads
+// board's avatars (see DashboardShell.tsx, admin/leads/page.tsx) — reused
+// here rather than a fourth palette, so a table's row numbers read as
+// part of the same app instead of introducing their own color language.
+// Row number, not row identity, drives the rotation: it's a stable,
+// always-available integer every table already has, and the point here
+// is decorative rhythm down the column, not per-record color-coding.
+const ROW_NUMBER_TINTS = [
+  { bg: "#fff1cc", fg: "#8a6700" },
+  { bg: "#dbe7ff", fg: "#1d4fb8" },
+  { bg: "#dcfce3", fg: "#116a2c" },
+  { bg: "#fde2e2", fg: "#b42318" },
+  { bg: "#ede9fe", fg: "#5b21b6" },
+  { bg: "#fce7f3", fg: "#9d174d" },
+  { bg: "#e0f2fe", fg: "#075985" },
+];
+
 export type DataTableColumn<T> = {
   key: string;
   header: ReactNode;
@@ -161,12 +178,12 @@ export function DataTable<T>({
           <div className="flex flex-wrap items-end gap-2">
             {search && (
               <div className="relative w-full max-w-sm">
-                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--color-ink-soft)" }} />
+                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--color-ink-soft)" }} />
                 <input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={search.placeholder}
-                  className="w-full rounded-lg border py-2 pl-9 pr-3 text-sm outline-none focus:border-[var(--color-action)]"
+                  className="w-full rounded-lg border py-2 pl-9 pr-3 text-sm outline-none transition-shadow focus:border-[var(--color-action)] focus:shadow-[0_0_0_3px_var(--color-action-tint)]"
                   style={{ borderColor: "var(--color-line)" }}
                 />
               </div>
@@ -203,7 +220,13 @@ export function DataTable<T>({
             total={total}
             itemLabel={itemLabel}
           />
-          <div className="mt-3 overflow-x-auto rounded-2xl border bg-white dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
+          {/* shadow-sm instead of a flat border-only card — a hint of
+              elevation is what separates "a table with a border around
+              it" from "a table that looks like a designed surface." Kept
+              deliberately soft (Tailwind's own shadow-sm token, not a
+              custom heavier one) so it reads as considered rather than
+              skeuomorphic. */}
+          <div className="mt-3 overflow-x-auto rounded-2xl border bg-white shadow-sm dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
             <table className="dt-table w-full text-left text-sm" style={{ minWidth, tableLayout: fixedLayout ? "fixed" : undefined }}>
               <thead>
                 <tr>
@@ -256,14 +279,35 @@ export function DataTable<T>({
                 {pageItems.map((row, i) => {
                   const rowNumber = start + i;
                   const expanded = renderExpanded && isExpanded?.(row);
+                  // rowNumber - 1: start is 1-based, so the very first row
+                  // on every page always lands on the same tint otherwise.
+                  const tint = ROW_NUMBER_TINTS[(rowNumber - 1) % ROW_NUMBER_TINTS.length];
                   return (
                     <Fragment key={getRowKey(row)}>
                       <tr
                         onClick={onRowClick ? () => onRowClick(row) : undefined}
-                        className={onRowClick ? "cursor-pointer transition-colors hover:bg-[var(--color-paper)]" : undefined}
+                        // Hover comes entirely from the .dt-table tbody
+                        // tr:hover rule in globals.css now — a duplicate
+                        // Tailwind hover class here previously raced it
+                        // for the same specificity, and which one won was
+                        // effectively arbitrary based on stylesheet order.
+                        className={onRowClick ? "cursor-pointer transition-colors" : undefined}
                         style={rowStyle?.(row)}
                       >
-                        <td className="whitespace-nowrap" style={{ color: "var(--color-ink-soft)" }}>{rowNumber}</td>
+                        <td className="whitespace-nowrap">
+                          {/* min-w-6 + px-1.5, not a fixed w-6 — a 3-digit
+                              row number (rows-per-page goes up to 100)
+                              would overflow a hard-circular badge; this
+                              stays circular for 1-2 digits and gracefully
+                              becomes a small pill once a number needs the
+                              extra room. */}
+                          <span
+                            className="inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold"
+                            style={{ backgroundColor: tint.bg, color: tint.fg }}
+                          >
+                            {rowNumber}
+                          </span>
+                        </td>
                         {columns.map((c) => (
                           <td key={c.key} className={c.className}>
                             {c.render(row, rowNumber)}

@@ -8,6 +8,7 @@ import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { TruncatedText } from "@/components/TruncatedText";
 import { MultiSelect } from "@/components/MultiSelect";
 
 type LeaveRow = {
@@ -149,7 +150,7 @@ export default function AdminLeaveRequestsPage() {
     { key: "staff", header: "Staff", render: (r) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>{r.profiles?.full_name ?? "Staff"}</span>, exportValue: (r) => r.profiles?.full_name ?? "", sortValue: (r) => r.profiles?.full_name },
     { key: "type", header: "Leave Type", className: "w-[12%] whitespace-nowrap", render: (r) => leaveRowLabel(r), exportValue: (r) => leaveRowLabel(r), sortValue: (r) => leaveRowLabel(r) },
     { key: "dates", header: "Dates", className: "w-[16%] whitespace-nowrap", render: (r) => `${r.start_date} → ${r.end_date}`, exportValue: (r) => `${r.start_date} to ${r.end_date}`, sortValue: (r) => r.start_date },
-    { key: "reason", header: "Reason", render: (r) => <span className="max-w-xs italic" style={{ color: "var(--color-ink-soft)" }}>{r.reason ? `“${r.reason}”` : "—"}</span>, exportValue: (r) => r.reason ?? "" },
+    { key: "reason", header: "Reason", className: "max-w-[180px]", render: (r) => (r.reason ? <TruncatedText text={`“${r.reason}”`} italic style={{ color: "var(--color-ink-soft)" }} /> : "—"), exportValue: (r) => r.reason ?? "" },
     ...(spansMultipleOrgs
       ? [{ key: "org", header: "Organization", render: (r: LeaveRow) => r.organizations?.name ?? "—", exportValue: (r: LeaveRow) => r.organizations?.name ?? "Unknown organization" } as DataTableColumn<LeaveRow>]
       : []),

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from "react";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { Clock, CheckCircle2, XCircle, Check, X } from "lucide-react";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { TruncatedText } from "@/components/TruncatedText";
 
 type CrmAccessRequest = {
   id: string;
@@ -137,11 +138,13 @@ export default function CrmRequestsPage() {
     {
       key: "note",
       header: "Note",
-      render: (r) => (
-        <span className="max-w-xs" style={{ color: r.status === "rejected" && r.review_note ? "#b42318" : "var(--color-ink-soft)" }}>
-          {r.status === "rejected" && r.review_note ? r.review_note : "—"}
-        </span>
-      ),
+      className: "max-w-[180px]",
+      render: (r) =>
+        r.status === "rejected" && r.review_note ? (
+          <TruncatedText text={r.review_note} style={{ color: "#b42318" }} />
+        ) : (
+          <span style={{ color: "var(--color-ink-soft)" }}>—</span>
+        ),
       exportValue: (r) => (r.status === "rejected" ? r.review_note ?? "" : ""),
     },
   ];
@@ -187,6 +190,7 @@ export default function CrmRequestsPage() {
             getRowKey={(r) => r.id}
             itemLabel="requests"
             emptyMessage="No pending requests."
+            search={{ placeholder: "Search organization…", filter: (r, q) => r.organization_name.toLowerCase().includes(q) }}
             exportFilename="pending-crm-requests"
           />
         </>

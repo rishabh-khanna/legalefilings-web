@@ -5,7 +5,6 @@ import { sendLeadAcknowledgementEmail } from "@/lib/email";
 import { getReportingChainIds } from "@/lib/reporting-chain";
 import { canSeeAllOrgs } from "@/lib/organization";
 import { isRateLimited, getClientIp } from "@/lib/rate-limit";
-import { hasToolAccess } from "@/lib/tool-grants";
 import { LEAD_STAGES, type Lead, type LeadStage } from "@/lib/leads";
 
 // DB rows are snake_case; the frontend (admin CRM board, consultation form)
@@ -74,11 +73,7 @@ async function visibleAssigneeIds(profile: { id: string }): Promise<string[]> {
 // member's whole pipeline the moment they renamed themselves.
 export async function GET() {
   const profile = await getCurrentProfile();
-  // A customer delegated the leads_crm tool (see staff_tool_grants) is
-  // the one exception to "customer never sees this" — they're operating
-  // their own org's pipeline, not just their own purchases.
-  const isCustomerOperator = profile?.account_type === "customer" && (await hasToolAccess(profile, "leads_crm"));
-  if (!profile || (profile.account_type === "customer" && !isCustomerOperator)) {
+  if (!profile || profile.account_type === "customer") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -92,11 +87,8 @@ export async function GET() {
   // assignee-narrowing below — independent axis from account_type, so a
   // platform_admin without account_type "admin" would otherwise pass the
   // org filter above (every org) and then get wrongly narrowed straight
-  // back down to their own name/chain here. A customer-operator has no
-  // reporting chain of their own either (customers are never in anyone's
-  // reports_to), so they get the same unrestricted org-wide view admin
-  // gets, not narrowed down to an empty chain.
-  if (profile.account_type !== "admin" && !canSeeAllOrgs(profile) && !isCustomerOperator) {
+  // back down to their own name/chain here.
+  if (profile.account_type !== "admin" && !canSeeAllOrgs(profile)) {
     // assigned_to.is.null is what surfaces the shared unclaimed pool.
     // Postgres IN never matches NULL, so the previous `.in(...)` alone
     // hid every unclaimed lead from exactly the raters and leaders the
@@ -155,8 +147,7 @@ export async function POST(request: Request) {
   let assignedTo: string | null = null;
   let source: string | undefined;
   let orgName: string | undefined;
-  const isCustomerOperator = profile?.account_type === "customer" && (await hasToolAccess(profile, "leads_crm"));
-  if (profile && (profile.account_type !== "customer" || isCustomerOperator)) {
+  if (profile && profile.account_type !== "customer") {
     organizationId = profile.organization_id;
     assignedTo = profile.id;
     source = "crm_manual";
@@ -227,8 +218,7 @@ export async function POST(request: Request) {
 // so two people racing to grab the same lead can't both end up owning it.
 export async function PATCH(request: Request) {
   const profile = await getCurrentProfile();
-  const isCustomerOperator = profile?.account_type === "customer" && (await hasToolAccess(profile, "leads_crm"));
-  if (!profile || (profile.account_type === "customer" && !isCustomerOperator)) {
+  if (!profile || profile.account_type === "customer") {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
@@ -263,7 +253,7 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ ok: true, lead: toLead(data as LeadRow) });
   }
 
-  if (profile.account_type !== "admin" && !canSeeAllOrgs(profile) && !isCustomerOperator) {
+  if (profile.account_type !== "admin" && !canSeeAllOrgs(profile)) {
     const { data: existing } = await supabase.from("leads").select("assigned_to").eq("id", body.id).single();
     if (!existing) return NextResponse.json({ error: "Lead not found" }, { status: 404 });
     // An unclaimed lead (NULL) is editable by anyone who can see the
@@ -292,7 +282,7 @@ export async function PATCH(request: Request) {
       patch.assigned_to = null;
     } else {
       let validIds: string[];
-      if (profile.account_type === "admin" || canSeeAllOrgs(profile) || isCustomerOperator) {
+      if (profile.account_type === "admin" || canSeeAllOrgs(profile)) {
         let staffQuery = supabase.from("profiles").select("id").in("account_type", ["staff", "admin"]);
         if (!canSeeAllOrgs(profile)) staffQuery = staffQuery.eq("organization_id", leadForOrgCheck.organization_id);
         const { data: staffProfiles } = await staffQuery;

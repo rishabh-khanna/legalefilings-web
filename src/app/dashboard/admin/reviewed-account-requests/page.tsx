@@ -7,6 +7,7 @@ import { STAFF_LEVEL_LABELS, type AccountType, type CustomerTier, type StaffLeve
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { TruncatedText } from "@/components/TruncatedText";
 
 type RequestRow = {
   id: string;
@@ -114,9 +115,11 @@ export default function ReviewedAccountRequestsPage() {
               {r.status}
             </span>
             {r.status === "rejected" && r.review_note && (
-              <p className="mt-1.5 max-w-[200px] whitespace-normal rounded-lg px-2 py-1 text-xs" style={{ backgroundColor: "#fde2e2", color: "#b42318" }}>
-                {r.review_note}
-              </p>
+              <TruncatedText
+                text={r.review_note}
+                className="mt-1.5 max-w-[160px] rounded-lg px-2 py-1"
+                style={{ backgroundColor: "#fde2e2", color: "#b42318" }}
+              />
             )}
           </>
         );

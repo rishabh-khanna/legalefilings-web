@@ -272,6 +272,10 @@ export default function InvoicesPage() {
         itemLabel="invoices"
         emptyMessage="No invoices yet."
         filteredEmptyMessage="No invoices match this filter."
+        search={{
+          placeholder: "Search invoice number, client…",
+          filter: (inv, q) => `${inv.invoice_number} ${inv.profiles?.full_name ?? ""} ${inv.profiles?.company ?? ""}`.toLowerCase().includes(q),
+        }}
         dateFilter={{ getDate: (inv) => inv.created_at }}
         exportFilename="invoices"
         minWidth={640}

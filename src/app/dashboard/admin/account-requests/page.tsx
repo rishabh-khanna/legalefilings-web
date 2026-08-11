@@ -7,6 +7,7 @@ import { STAFF_LEVEL_LABELS, type AccountType, type CustomerTier, type StaffLeve
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { TruncatedText } from "@/components/TruncatedText";
 
 type RequestRow = {
   id: string;
@@ -135,7 +136,7 @@ export default function AccountRequestsPage() {
       render: (r) => (
         <>
           <p className="font-semibold" style={{ color: "var(--color-ink)" }}>{r.full_name}</p>
-          {r.message && <p className="mt-0.5 max-w-xs text-xs italic" style={{ color: "var(--color-ink-soft)" }}>&ldquo;{r.message}&rdquo;</p>}
+          {r.message && <TruncatedText text={`“${r.message}”`} italic className="mt-0.5 max-w-xs text-xs" style={{ color: "var(--color-ink-soft)" }} />}
         </>
       ),
       exportValue: (r) => r.full_name,

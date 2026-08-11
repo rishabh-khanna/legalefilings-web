@@ -11,7 +11,9 @@ import { canApproveFor } from "@/lib/reporting-chain";
 // clock in/out.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const profile = await getCurrentProfile();
-  if (!profile || profile.account_type === "customer") return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!profile || profile.account_type === "customer") {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
 
   const { id } = await params;
   const body = await request.json().catch(() => null);

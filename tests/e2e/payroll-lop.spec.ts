@@ -16,8 +16,8 @@ test("payroll generation computes Loss of Pay from real attendance/leave data", 
   const employeesRes = await request.get("/api/admin/employees");
   expect(employeesRes.ok()).toBeTruthy();
   const { employees } = await employeesRes.json();
-  const rahul = employees.find((e: { full_name: string }) => e.full_name === "Rahul Rater");
-  expect(rahul, "seeded staff member 'Rahul Rater' not found").toBeTruthy();
+  const rahul = employees.find((e: { full_name: string }) => e.full_name === "Sneha Kulkarni");
+  expect(rahul, "seeded staff member 'Sneha Kulkarni' not found").toBeTruthy();
 
   const generateRes = await request.post("/api/payroll/generate", { data: { month: LOP_TEST_MONTH, year: LOP_TEST_YEAR } });
   expect(generateRes.ok(), `generate failed: ${await generateRes.text()}`).toBeTruthy();

@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 test.use({ storageState: "tests/e2e/.auth/admin.json" });
 
 // The company-wide payslip register — separate from Payroll (which is
-// just the salary-structure form + generate action). Rahul Rater has at
+// just the salary-structure form + generate action). Sneha Kulkarni has at
 // least one real generated payslip from payroll-lop.spec.ts, so this
 // exercises the real register + download, not an empty state.
 test("admin sees the company-wide payslip register and can download a payslip", async ({ page }) => {
@@ -12,15 +12,15 @@ test("admin sees the company-wide payslip register and can download a payslip", 
   await expect(page.getByText("No payslips generated yet.")).toHaveCount(0);
 
   // DataTable now paginates (10 rows/page) — with enough seeded/test
-  // payslips in the register, Rahul Rater's own rows aren't guaranteed
+  // payslips in the register, Sneha Kulkarni's own rows aren't guaranteed
   // to land on page 1. Search narrows it down first, same as a real
   // admin would do to find one specific employee in a long register.
   // The register is also grouped by employee (groupBy on the DataTable),
-  // which inserts a "Rahul Rater · N payslips" group-header row — that
-  // row ALSO matches a plain hasText:"Rahul Rater" filter but has no
+  // which inserts a "Sneha Kulkarni · N payslips" group-header row — that
+  // row ALSO matches a plain hasText:"Sneha Kulkarni" filter but has no
   // download link inside it, so anchor on a row that actually contains
   // the "Download PDF" link instead of on the name text.
-  await page.getByPlaceholder("Search employee…").fill("Rahul Rater");
+  await page.getByPlaceholder("Search employee…").fill("Sneha Kulkarni");
   const row = page.locator("tr", { has: page.getByRole("link", { name: "Download PDF" }) }).first();
   await expect(row).toBeVisible({ timeout: 10000 });
 

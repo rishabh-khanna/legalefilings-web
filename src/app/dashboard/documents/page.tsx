@@ -195,6 +195,10 @@ export default function DocumentsPage() {
         getRowKey={(d) => d.id}
         itemLabel="documents"
         emptyMessage="No documents uploaded yet."
+        search={{
+          placeholder: "Search file name, employee…",
+          filter: (d, q) => `${d.file_name} ${d.staff?.full_name ?? ""} ${d.document_type}`.toLowerCase().includes(q),
+        }}
         dateFilter={{ getDate: (d) => d.uploaded_at }}
         exportFilename="documents"
       />

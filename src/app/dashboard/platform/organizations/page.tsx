@@ -248,6 +248,7 @@ export default function PlatformOrganizationsPage() {
               getRowKey={(org) => org.id}
               itemLabel="organizations"
               emptyMessage="No organizations yet."
+              search={{ placeholder: "Search organization…", filter: (org, q) => org.name.toLowerCase().includes(q) }}
               dateFilter={{ getDate: (org) => org.created_at }}
               exportFilename="organizations"
               minWidth={640}

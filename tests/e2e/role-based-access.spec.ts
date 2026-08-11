@@ -3,8 +3,8 @@ import { test, expect } from "@playwright/test";
 // Every other spec in this suite drives the "manager side" of a review
 // flow (approve leave, review attendance corrections, etc.) as admin.
 // That's real coverage, but it never exercises the actual staff-level
-// hierarchy: Leena Leader (leader, reports to Gaurav Group Leader) and
-// Rahul Rater (rater, reports to Leena) are the seeded chain built
+// hierarchy: Farhan Qureshi (leader, reports to Kavya Reddy) and
+// Sneha Kulkarni (rater, reports to Leena) are the seeded chain built
 // specifically for this. This spec covers what only leader/group_leader
 // storageState can prove: the "Team Management" nav only shows for
 // manager-level roles, Analytics is group_leader-and-up only (not
@@ -76,9 +76,9 @@ test.describe("Reporting-chain scoping actually narrows staff pickers", () => {
     const res = await ctx.request.get("/api/team-members");
     const { members } = await res.json();
     const names = members.map((m: { full_name: string | null }) => m.full_name);
-    expect(names).toContain("Rahul Rater");
-    expect(names).not.toContain("Leena Leader");
-    expect(names).not.toContain("Gaurav Group Leader");
+    expect(names).toContain("Sneha Kulkarni");
+    expect(names).not.toContain("Farhan Qureshi");
+    expect(names).not.toContain("Kavya Reddy");
     await ctx.close();
   });
 
@@ -87,9 +87,9 @@ test.describe("Reporting-chain scoping actually narrows staff pickers", () => {
     const res = await ctx.request.get("/api/team-members");
     const { members } = await res.json();
     const names = members.map((m: { full_name: string | null }) => m.full_name);
-    expect(names).toContain("Leena Leader");
-    expect(names).toContain("Rahul Rater");
-    expect(names).not.toContain("Gaurav Group Leader");
+    expect(names).toContain("Farhan Qureshi");
+    expect(names).toContain("Sneha Kulkarni");
+    expect(names).not.toContain("Kavya Reddy");
     await ctx.close();
   });
 
@@ -98,9 +98,9 @@ test.describe("Reporting-chain scoping actually narrows staff pickers", () => {
     const res = await ctx.request.get("/api/team-members");
     const { members } = await res.json();
     const names = members.map((m: { full_name: string | null }) => m.full_name);
-    expect(names).toContain("Gaurav Group Leader");
-    expect(names).toContain("Leena Leader");
-    expect(names).toContain("Rahul Rater");
+    expect(names).toContain("Kavya Reddy");
+    expect(names).toContain("Farhan Qureshi");
+    expect(names).toContain("Sneha Kulkarni");
     await ctx.close();
   });
 });
@@ -118,8 +118,8 @@ test.describe("Team Attendance / Team Leave Requests are reachable and reporting
     // it right after the heading appears.
     await expect(picker.locator("option")).not.toHaveCount(0, { timeout: 10000 });
     const optionLabels = await picker.locator("option").allTextContents();
-    expect(optionLabels.some((o) => o.includes("Rahul Rater"))).toBe(true);
-    expect(optionLabels.some((o) => o.includes("Gaurav Group Leader"))).toBe(false);
+    expect(optionLabels.some((o) => o.includes("Sneha Kulkarni"))).toBe(true);
+    expect(optionLabels.some((o) => o.includes("Kavya Reddy"))).toBe(false);
     await ctx.close();
   });
 
@@ -128,7 +128,7 @@ test.describe("Team Attendance / Team Leave Requests are reachable and reporting
     const leaderRes = await leaderCtx.request.get("/api/leave-requests");
     const leaderData = await leaderRes.json();
     const leaderNames = new Set((leaderData.requests ?? []).map((r: { profiles?: { full_name: string | null } }) => r.profiles?.full_name));
-    expect([...leaderNames].every((n) => n === "Rahul Rater" || n === "Leena Leader")).toBe(true);
+    expect([...leaderNames].every((n) => n === "Sneha Kulkarni" || n === "Farhan Qureshi")).toBe(true);
     await leaderCtx.close();
 
     const groupLeaderCtx = await browser.newContext({ storageState: "tests/e2e/.auth/groupLeader.json" });

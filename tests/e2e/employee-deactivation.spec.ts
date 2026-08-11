@@ -5,8 +5,8 @@ test.use({ storageState: "tests/e2e/.auth/admin.json" });
 // Real button-click test: an employee with attendance/leave/payslip
 // history should DEACTIVATE (not hard-delete) when "Delete" is clicked —
 // see src/app/api/admin/employees/[id]/route.ts DELETE. The seeded demo
-// staff (Rahul Rater, Leena Leader, Gaurav Group Leader) all have
-// attendance + leave history from scripts/seed-database.mjs, so clicking
+// staff (Sneha Kulkarni, Farhan Qureshi, Kavya Reddy) all have
+// attendance + leave history from scripts/seed-demo.mjs, so clicking
 // Delete on any of them should hit the deactivate path, not the hard-delete
 // path — this is the actual scenario the fix was for.
 test("deleting an employee with history deactivates them instead of hard-deleting", async ({ page }) => {
@@ -15,13 +15,13 @@ test("deleting an employee with history deactivates them instead of hard-deletin
   await page.goto("/dashboard/admin/employees");
   await expect(page.getByRole("heading", { name: "Employees" })).toBeVisible();
 
-  // Employee list is a real <table> — one <tr> per person. Rahul Rater
+  // Employee list is a real <table> — one <tr> per person. Sneha Kulkarni
   // is the seeded staff member with real attendance events, isn't an
   // admin (Delete is hidden for admins), so it's a safe target.
   // DataTable paginates now — search narrows straight to him instead of
   // assuming he's on page 1.
-  await page.getByPlaceholder("Search by name, employee ID, department, designation…").fill("Rahul Rater");
-  const row = page.locator("tr", { hasText: "Rahul Rater" });
+  await page.getByPlaceholder("Search by name, employee ID, department, designation…").fill("Sneha Kulkarni");
+  const row = page.locator("tr", { hasText: "Sneha Kulkarni" });
   await expect(row).toBeVisible();
 
   const alreadyDeactivated = await row.getByText("Deactivated").count();
@@ -62,7 +62,7 @@ test("deleting an employee with history deactivates them instead of hard-deletin
 // Neither the live-session cutoff nor the auth ban was covered before.
 // Uses a brand-new throwaway staff account with one real attendance
 // event (so DELETE takes the deactivate-not-hard-delete branch) rather
-// than the shared seeded Rahul Rater, so a failure here can't leave a
+// than the shared seeded Sneha Kulkarni, so a failure here can't leave a
 // fixture other specs depend on in a broken state.
 test("deactivating (with real history) kills a live session and bans a fresh login, until reactivated", async ({ browser }) => {
   test.setTimeout(60 * 1000);
@@ -138,8 +138,8 @@ test("Reports To dropdown excludes deactivated employees", async ({ page }) => {
   // DataTable paginates now — with enough seeded/test employees, Rahul
   // Rater isn't guaranteed to land on page 1. Search narrows it down
   // first, same as a real admin looking up one specific person.
-  await page.getByPlaceholder("Search by name, employee ID, department, designation…").fill("Rahul Rater");
-  const row = page.locator("tr", { hasText: "Rahul Rater" });
+  await page.getByPlaceholder("Search by name, employee ID, department, designation…").fill("Sneha Kulkarni");
+  const row = page.locator("tr", { hasText: "Sneha Kulkarni" });
   await row.getByRole("button", { name: "Edit" }).click();
 
   // Clicking Edit expands a SEPARATE sibling <tr> (colSpan across the
@@ -152,6 +152,6 @@ test("Reports To dropdown excludes deactivated employees", async ({ page }) => {
   await expect(reportsToSelect).toBeVisible();
   const options = await reportsToSelect.locator("option").allTextContents();
   // Sanity check: the dropdown actually lists other staff, and doesn't
-  // include a "Rahul Rater" self-report option.
-  expect(options.some((o) => o.includes("Rahul Rater"))).toBe(false);
+  // include a "Sneha Kulkarni" self-report option.
+  expect(options.some((o) => o.includes("Sneha Kulkarni"))).toBe(false);
 });

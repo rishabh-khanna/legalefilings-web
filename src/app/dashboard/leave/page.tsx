@@ -8,6 +8,7 @@ import { DashboardPageHero, HeroAction, HeroKpi } from "@/components/crm/Dashboa
 import { LoadingBlock } from "@/components/Spinner";
 import { DetailPickerModal, BalanceSummary } from "@/components/DetailPickerModal";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { TruncatedText } from "@/components/TruncatedText";
 import { MultiSelect } from "@/components/MultiSelect";
 import { countWorkingDays } from "@/lib/working-days";
 
@@ -172,7 +173,7 @@ export default function LeavePage() {
   const columns: DataTableColumn<LeaveRequest>[] = [
     { key: "type", header: "Leave Type", className: "w-[14%] whitespace-nowrap", render: (r) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>{requestLabel(r)}</span>, exportValue: (r) => requestLabel(r), sortValue: (r) => requestLabel(r) },
     { key: "dates", header: "Dates", className: "w-[18%] whitespace-nowrap", render: (r) => `${r.start_date} → ${r.end_date}`, exportValue: (r) => `${r.start_date} to ${r.end_date}`, sortValue: (r) => r.start_date },
-    { key: "reason", header: "Reason", render: (r) => <span className="max-w-xs italic" style={{ color: "var(--color-ink-soft)" }}>{r.reason ? `“${r.reason}”` : "—"}</span>, exportValue: (r) => r.reason ?? "" },
+    { key: "reason", header: "Reason", className: "max-w-[180px]", render: (r) => (r.reason ? <TruncatedText text={`“${r.reason}”`} italic style={{ color: "var(--color-ink-soft)" }} /> : "—"), exportValue: (r) => r.reason ?? "" },
     {
       key: "status",
       header: "Status",
@@ -188,11 +189,13 @@ export default function LeavePage() {
     {
       key: "note",
       header: "Note",
-      render: (r) => (
-        <span className="max-w-xs" style={{ color: r.status === "rejected" && r.review_note ? "#b42318" : "var(--color-ink-soft)" }}>
-          {r.status === "rejected" && r.review_note ? r.review_note : "—"}
-        </span>
-      ),
+      className: "max-w-[160px]",
+      render: (r) =>
+        r.status === "rejected" && r.review_note ? (
+          <TruncatedText text={r.review_note} style={{ color: "#b42318" }} />
+        ) : (
+          <span style={{ color: "var(--color-ink-soft)" }}>—</span>
+        ),
       exportValue: (r) => (r.status === "rejected" ? r.review_note ?? "" : ""),
     },
     {

@@ -13,7 +13,7 @@ test.use({ storageState: "tests/e2e/.auth/admin.json" });
 
 test.describe("Invoice creation — real API, hand-verified totals", () => {
   test("inter-state GST invoice: 2 line items, 10% invoice discount, 2% TDS, freight — every stored total matches the worked-out math", async ({ request }) => {
-    // Asha Admin's org (company_settings) is Delhi, state_code 07 — a
+    // Arvind Menon's org (company_settings) is Delhi, state_code 07 — a
     // customer in a DIFFERENT state forces IGST, not CGST+SGST.
     const suffix = Date.now();
     const customerRes = await request.post("/api/admin/create-user", {

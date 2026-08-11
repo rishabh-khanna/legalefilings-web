@@ -4,13 +4,11 @@ import { getCurrentProfile } from "@/lib/current-profile";
 import { getReportingChainIds } from "@/lib/reporting-chain";
 import { isStaffOrAdmin } from "@/lib/roles";
 import { canSeeAllOrgs } from "@/lib/organization";
-import { hasToolAccess } from "@/lib/tool-grants";
 import type { CreateBilledInvoiceInput } from "@/lib/create-billed-invoice";
 
 export async function GET() {
   const profile = await getCurrentProfile();
-  const isCustomerOperator = profile?.account_type === "customer" && (await hasToolAccess(profile, "invoice_crm"));
-  if (!profile || (!isStaffOrAdmin(profile) && !isCustomerOperator)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!profile || !isStaffOrAdmin(profile)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const supabase = getSupabaseAdmin();
   // organizations(name) only actually matters for a platform_admin, who
@@ -22,10 +20,8 @@ export async function GET() {
     .order("next_run_date", { ascending: true });
   if (!canSeeAllOrgs(profile)) query = query.eq("organization_id", profile.organization_id);
   // canSeeAllOrgs (is_platform_admin) must also skip the reporting-chain
-  // narrowing below — independent axis from account_type. A
-  // customer-operator has no reporting chain of their own either, so
-  // they get the same unrestricted view admin gets.
-  if (profile.account_type !== "admin" && !canSeeAllOrgs(profile) && !isCustomerOperator) {
+  // narrowing below — independent axis from account_type.
+  if (profile.account_type !== "admin" && !canSeeAllOrgs(profile)) {
     const chain = await getReportingChainIds(profile.id);
     query = query.in("created_by", [profile.id, ...chain]);
   }
@@ -41,8 +37,7 @@ export async function GET() {
 // daily cron or a manual "Run Now".
 export async function POST(request: Request) {
   const profile = await getCurrentProfile();
-  const isCustomerOperator = profile?.account_type === "customer" && (await hasToolAccess(profile, "invoice_crm"));
-  if (!profile || (!isStaffOrAdmin(profile) && !isCustomerOperator)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!profile || !isStaffOrAdmin(profile)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const body = await request.json().catch(() => null);
   const { customerId, invoiceType, frequency, startDate, payload } = (body ?? {}) as {

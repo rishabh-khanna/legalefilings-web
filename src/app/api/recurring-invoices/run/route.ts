@@ -3,7 +3,6 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { isStaffOrAdmin } from "@/lib/roles";
 import { canSeeAllOrgs } from "@/lib/organization";
-import { hasToolAccess } from "@/lib/tool-grants";
 import { nextRunAfter } from "@/lib/invoice-calc";
 import { createBilledInvoice, type CreateBilledInvoiceInput } from "@/lib/create-billed-invoice";
 
@@ -22,8 +21,7 @@ export async function GET(request: Request) {
   let staffProfile: Awaited<ReturnType<typeof getCurrentProfile>> = null;
   if (!isCron) {
     staffProfile = await getCurrentProfile();
-    const isCustomerOperator = staffProfile?.account_type === "customer" && (await hasToolAccess(staffProfile, "invoice_crm"));
-    if (!isStaffOrAdmin(staffProfile) && !isCustomerOperator) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (!isStaffOrAdmin(staffProfile)) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   const { searchParams } = new URL(request.url);
