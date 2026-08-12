@@ -288,7 +288,7 @@ export default function AdminDashboard() {
     {
       key: "lead",
       header: "Lead",
-      className: "w-[18%]",
+      className: "w-[16%]",
       render: (lead) => {
         const avatar = avatarStyle(lead.name);
         return (
@@ -323,7 +323,7 @@ export default function AdminDashboard() {
     {
       key: "service",
       header: "Service / Plan",
-      className: "w-[13%]",
+      className: "w-[11%]",
       render: (lead) => (
         <>
           <p className="break-words" style={{ color: "var(--color-ink-soft)" }}>{lead.service ?? "—"}</p>
@@ -341,7 +341,7 @@ export default function AdminDashboard() {
     {
       key: "stage",
       header: "Stage",
-      className: "w-[13%]",
+      className: "w-[11%]",
       render: (lead) => {
         const stageStyle = STAGE_STYLES[lead.stage];
         return (
@@ -372,7 +372,7 @@ export default function AdminDashboard() {
     {
       key: "assignedTo",
       header: "Assigned to",
-      className: "w-[13%]",
+      className: "w-[11%]",
       render: (lead) =>
         !lead.assignedToId ? (
           <button
@@ -408,7 +408,7 @@ export default function AdminDashboard() {
     {
       key: "notes",
       header: "Notes",
-      className: "w-[18%]",
+      className: "w-[15%]",
       render: (lead) => {
         const draft = noteDrafts[lead.id] ?? lead.notes ?? "";
         const dirty = draft !== (lead.notes ?? "");
@@ -484,7 +484,7 @@ export default function AdminDashboard() {
     {
       key: "received",
       header: "Received",
-      className: "w-[8%] whitespace-nowrap",
+      className: "w-[7%] whitespace-nowrap",
       render: (lead) => new Date(lead.createdAt).toLocaleDateString(),
       exportValue: (lead) => new Date(lead.createdAt).toLocaleDateString(),
       sortValue: (lead) => lead.createdAt,
@@ -492,7 +492,7 @@ export default function AdminDashboard() {
     {
       key: "createdBy",
       header: "Created By",
-      className: "w-[10%] whitespace-nowrap",
+      className: "w-[9%] whitespace-nowrap",
       render: (lead) => lead.createdBy ?? <span style={{ color: "var(--color-ink-soft)" }}>Self-submitted</span>,
       exportValue: (lead) => lead.createdBy ?? "Self-submitted",
       sortValue: (lead) => lead.createdBy,
@@ -500,7 +500,7 @@ export default function AdminDashboard() {
     {
       key: "whatsapp",
       header: "",
-      className: "w-[13%]",
+      className: "w-[11%]",
       render: (lead) => (
         <a
           href={buildWhatsAppLink(lead.phone, leadWhatsAppMessage(lead))}

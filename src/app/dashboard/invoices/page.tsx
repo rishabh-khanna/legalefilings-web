@@ -160,16 +160,16 @@ export default function InvoicesPage() {
   const spansMultipleOrgs = new Set(orderInvoices.map((i) => i.organization_id)).size > 1;
 
   const invoiceColumns: DataTableColumn<InvoiceRow>[] = [
-    { key: "invoice", header: "Invoice", className: "w-[14%] whitespace-nowrap", render: (inv) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{inv.invoice_number}</span>, exportValue: (inv) => inv.invoice_number, sortValue: (inv) => inv.invoice_number },
+    { key: "invoice", header: "Invoice", className: "w-[10%] whitespace-nowrap", render: (inv) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{inv.invoice_number}</span>, exportValue: (inv) => inv.invoice_number, sortValue: (inv) => inv.invoice_number },
     ...(canManage
-      ? [{ key: "client", header: "Client", render: (inv: InvoiceRow) => inv.profiles?.full_name ?? "—", exportValue: (inv: InvoiceRow) => inv.profiles?.full_name ?? "—", sortValue: (inv: InvoiceRow) => inv.profiles?.full_name } as DataTableColumn<InvoiceRow>]
+      ? [{ key: "client", header: "Client", className: "whitespace-nowrap", render: (inv: InvoiceRow) => inv.profiles?.full_name ?? "—", exportValue: (inv: InvoiceRow) => inv.profiles?.full_name ?? "—", sortValue: (inv: InvoiceRow) => inv.profiles?.full_name } as DataTableColumn<InvoiceRow>]
       : []),
-    { key: "date", header: "Date", className: "w-[12%] whitespace-nowrap", render: (inv) => new Date(inv.created_at).toLocaleDateString("en-IN"), exportValue: (inv) => new Date(inv.created_at).toLocaleDateString("en-IN"), sortValue: (inv) => inv.created_at },
-    { key: "amount", header: "Amount", className: "w-[12%] whitespace-nowrap", render: (inv) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>₹{Number(inv.total).toLocaleString("en-IN")}</span>, exportValue: (inv) => Number(inv.total), sortValue: (inv) => Number(inv.total) },
+    { key: "date", header: "Date", className: "w-[9%] whitespace-nowrap", render: (inv) => new Date(inv.created_at).toLocaleDateString("en-IN"), exportValue: (inv) => new Date(inv.created_at).toLocaleDateString("en-IN"), sortValue: (inv) => inv.created_at },
+    { key: "amount", header: "Amount", className: "w-[10%] whitespace-nowrap", render: (inv) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>₹{Number(inv.total).toLocaleString("en-IN")}</span>, exportValue: (inv) => Number(inv.total), sortValue: (inv) => Number(inv.total) },
     {
       key: "balance",
       header: "Balance",
-      className: "w-[12%] whitespace-nowrap",
+      className: "w-[10%] whitespace-nowrap",
       render: (inv) => {
         const balance = balanceOf(inv);
         return <span style={{ color: balance > 0 ? "var(--color-danger)" : "var(--color-ink-soft)" }}>{balance > 0 ? `₹${balance.toLocaleString("en-IN")}` : "—"}</span>;
@@ -180,7 +180,7 @@ export default function InvoicesPage() {
     {
       key: "status",
       header: "Status",
-      className: "w-[10%] whitespace-nowrap",
+      className: "w-[8%] whitespace-nowrap",
       render: (inv) => (
         <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: STATUS_STYLE[inv.status].bg, color: STATUS_STYLE[inv.status].fg }}>{inv.status.replace("_", " ")}</span>
       ),
@@ -188,15 +188,15 @@ export default function InvoicesPage() {
       sortValue: (inv) => inv.status,
     },
     ...(canManage
-      ? [{ key: "createdBy", header: "Created By", className: "w-[12%] whitespace-nowrap", render: (inv: InvoiceRow) => inv.creator?.full_name ?? "—", exportValue: (inv: InvoiceRow) => inv.creator?.full_name ?? "", sortValue: (inv: InvoiceRow) => inv.creator?.full_name } as DataTableColumn<InvoiceRow>]
+      ? [{ key: "createdBy", header: "Created By", className: "w-[11%] whitespace-nowrap", render: (inv: InvoiceRow) => inv.creator?.full_name ?? "—", exportValue: (inv: InvoiceRow) => inv.creator?.full_name ?? "", sortValue: (inv: InvoiceRow) => inv.creator?.full_name } as DataTableColumn<InvoiceRow>]
       : []),
     ...(spansMultipleOrgs
-      ? [{ key: "org", header: "Organization", className: "w-[12%]", render: (inv: InvoiceRow) => inv.organizations?.name ?? "—", exportValue: (inv: InvoiceRow) => inv.organizations?.name ?? "Unknown organization" } as DataTableColumn<InvoiceRow>]
+      ? [{ key: "org", header: "Organization", className: "w-[10%] whitespace-nowrap", render: (inv: InvoiceRow) => inv.organizations?.name ?? "—", exportValue: (inv: InvoiceRow) => inv.organizations?.name ?? "Unknown organization" } as DataTableColumn<InvoiceRow>]
       : []),
     {
       key: "actions",
       header: "Action",
-      className: "w-[16%]",
+      className: "w-[12%]",
       render: (inv) => {
         const balance = balanceOf(inv);
         return (

@@ -651,15 +651,15 @@ export default function InvoiceCrmPage() {
   ];
 
   const invoiceColumns: DataTableColumn<InvoiceRow>[] = [
-    { key: "invoice", header: "Invoice", className: "w-[12%] whitespace-nowrap", render: (inv) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{inv.invoice_number}</span>, exportValue: (inv) => inv.invoice_number, sortValue: (inv) => inv.invoice_number },
-    { key: "type", header: "Type", className: "w-[9%] whitespace-nowrap", render: (inv) => TYPE_LABEL[inv.invoice_type] ?? "Invoice", exportValue: (inv) => TYPE_LABEL[inv.invoice_type] ?? "Invoice", sortValue: (inv) => TYPE_LABEL[inv.invoice_type] ?? inv.invoice_type },
-    { key: "client", header: "Client", render: (inv) => inv.profiles?.full_name ?? "—", exportValue: (inv) => inv.profiles?.full_name ?? "—", sortValue: (inv) => inv.profiles?.full_name },
-    { key: "date", header: "Date", className: "w-[10%] whitespace-nowrap", render: (inv) => new Date(inv.created_at).toLocaleDateString("en-IN"), exportValue: (inv) => new Date(inv.created_at).toLocaleDateString("en-IN"), sortValue: (inv) => inv.created_at },
-    { key: "amount", header: "Amount", className: "w-[12%] whitespace-nowrap", render: (inv) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>₹{Number(inv.total).toLocaleString("en-IN")}</span>, exportValue: (inv) => Number(inv.total), sortValue: (inv) => Number(inv.total) },
+    { key: "invoice", header: "Invoice", className: "w-[10%] whitespace-nowrap", render: (inv) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{inv.invoice_number}</span>, exportValue: (inv) => inv.invoice_number, sortValue: (inv) => inv.invoice_number },
+    { key: "type", header: "Type", className: "w-[8%] whitespace-nowrap", render: (inv) => TYPE_LABEL[inv.invoice_type] ?? "Invoice", exportValue: (inv) => TYPE_LABEL[inv.invoice_type] ?? "Invoice", sortValue: (inv) => TYPE_LABEL[inv.invoice_type] ?? inv.invoice_type },
+    { key: "client", header: "Client", className: "whitespace-nowrap", render: (inv) => inv.profiles?.full_name ?? "—", exportValue: (inv) => inv.profiles?.full_name ?? "—", sortValue: (inv) => inv.profiles?.full_name },
+    { key: "date", header: "Date", className: "w-[8%] whitespace-nowrap", render: (inv) => new Date(inv.created_at).toLocaleDateString("en-IN"), exportValue: (inv) => new Date(inv.created_at).toLocaleDateString("en-IN"), sortValue: (inv) => inv.created_at },
+    { key: "amount", header: "Amount", className: "w-[10%] whitespace-nowrap", render: (inv) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>₹{Number(inv.total).toLocaleString("en-IN")}</span>, exportValue: (inv) => Number(inv.total), sortValue: (inv) => Number(inv.total) },
     {
       key: "balance",
       header: "Balance",
-      className: "w-[12%] whitespace-nowrap",
+      className: "w-[10%] whitespace-nowrap",
       render: (inv) => {
         const balance = balanceOf(inv);
         return <span style={{ color: balance > 0 ? "var(--color-danger)" : "var(--color-ink-soft)" }}>{balance > 0 ? `₹${balance.toLocaleString("en-IN")}` : "—"}</span>;
@@ -670,14 +670,14 @@ export default function InvoiceCrmPage() {
     {
       key: "status",
       header: "Status",
-      className: "w-[10%] whitespace-nowrap",
+      className: "w-[8%] whitespace-nowrap",
       render: (inv) => <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: STATUS_STYLE[inv.status].bg, color: STATUS_STYLE[inv.status].fg }}>{inv.status.replace("_", " ")}</span>,
       exportValue: (inv) => inv.status.replace("_", " "),
       sortValue: (inv) => inv.status,
     },
-    { key: "createdBy", header: "Created By", className: "w-[12%] whitespace-nowrap", render: (inv) => inv.creator?.full_name ?? "—", exportValue: (inv) => inv.creator?.full_name ?? "", sortValue: (inv) => inv.creator?.full_name },
+    { key: "createdBy", header: "Created By", className: "w-[10%] whitespace-nowrap", render: (inv) => inv.creator?.full_name ?? "—", exportValue: (inv) => inv.creator?.full_name ?? "", sortValue: (inv) => inv.creator?.full_name },
     ...(spansMultipleOrgs
-      ? [{ key: "org", header: "Organization", className: "w-[12%]", render: (inv: InvoiceRow) => inv.organizations?.name ?? "—", exportValue: (inv: InvoiceRow) => inv.organizations?.name ?? "Unknown organization" } as DataTableColumn<InvoiceRow>]
+      ? [{ key: "org", header: "Organization", className: "w-[9%] whitespace-nowrap", render: (inv: InvoiceRow) => inv.organizations?.name ?? "—", exportValue: (inv: InvoiceRow) => inv.organizations?.name ?? "Unknown organization" } as DataTableColumn<InvoiceRow>]
       : []),
     {
       key: "actions",
