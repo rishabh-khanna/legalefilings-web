@@ -112,6 +112,14 @@ function AdminAttendancePageInner() {
   const [correctionsEmployeeFilter, setCorrectionsEmployeeFilter] = useState<Set<string>>(new Set());
   const [todayStaff, setTodayStaff] = useState<{ id: string; name: string; present: boolean; checkInAt: string | null }[]>([]);
   const [todayLoaded, setTodayLoaded] = useState(false);
+  // The Overview tiles link here with ?status=present or ?status=absent
+  // too — landing on the full 39-person alphabetical roster when you
+  // clicked a tile that said "4" meant paging through most of it to find
+  // the 4 that actually mattered. Pre-filtering to match is what makes
+  // the number and the list agree, not just the page they both point at.
+  const initialStatusParam = searchParams.get("status");
+  const initialTodayStatus = initialStatusParam === "present" || initialStatusParam === "absent" ? initialStatusParam : "all";
+  const [todayStatusFilter, setTodayStatusFilter] = useState<"all" | "present" | "absent">(initialTodayStatus);
 
   useEffect(() => {
     const kickoff = setTimeout(async () => {
@@ -368,6 +376,11 @@ function AdminAttendancePageInner() {
     },
   ];
 
+  const filteredTodayStaff = useMemo(
+    () => (todayStatusFilter === "all" ? todayStaff : todayStaff.filter((s) => (todayStatusFilter === "present" ? s.present : !s.present))),
+    [todayStaff, todayStatusFilter]
+  );
+
   return (
     <div>
       <DashboardPageHero title="Team Attendance" subtitle="Review check-ins and manage correction requests across your team.">
@@ -400,12 +413,28 @@ function AdminAttendancePageInner() {
         <DataTable
           columns={todayColumns}
           fixedLayout
-          rows={todayStaff}
+          rows={filteredTodayStaff}
           getRowKey={(s) => s.id}
           itemLabel="team members"
           emptyMessage="No team members yet."
+          filteredEmptyMessage={todayStatusFilter === "all" ? "No results match your filters." : `No one is ${todayStatusFilter} today.`}
           search={{ placeholder: "Search name…", filter: (s, q) => s.name.toLowerCase().includes(q) }}
           exportFilename="attendance-today"
+          toolbar={
+            <div className="flex items-center gap-1 rounded-full border p-1" style={{ borderColor: "var(--color-line)" }}>
+              {([["all", "All"], ["present", "Present"], ["absent", "Absent"]] as const).map(([value, label]) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setTodayStatusFilter(value)}
+                  className="rounded-full px-3 py-1.5 text-xs font-semibold transition-colors"
+                  style={todayStatusFilter === value ? { backgroundColor: "var(--color-accent)", color: "var(--color-ink)" } : { color: "var(--color-ink-soft)" }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+          }
         />
       )}
 
