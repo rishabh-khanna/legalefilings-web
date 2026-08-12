@@ -150,7 +150,7 @@ export default function HolidaysPage() {
     ...(isAdmin
       ? [{
           key: "actions",
-          header: "",
+          header: "Action",
           render: (h: Holiday) => (
             <button type="button" onClick={() => handleDelete(h.id, h.name)} className="text-xs font-semibold" style={{ color: "var(--color-danger)" }}>
               Remove

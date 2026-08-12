@@ -228,7 +228,7 @@ export default function EmployeesPage() {
       : []),
     {
       key: "actions",
-      header: "",
+      header: "Action",
       render: (emp) =>
         editingId !== emp.id ? (
           <div className="flex shrink-0 gap-2">

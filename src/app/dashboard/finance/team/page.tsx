@@ -143,7 +143,7 @@ export default function FinanceTeamPage() {
     },
     {
       key: "actions",
-      header: "",
+      header: "Action",
       className: "text-right",
       render: (m) =>
         m.role !== "owner" ? (

@@ -160,7 +160,7 @@ export default function InvoicesPage() {
   const spansMultipleOrgs = new Set(orderInvoices.map((i) => i.organization_id)).size > 1;
 
   const invoiceColumns: DataTableColumn<InvoiceRow>[] = [
-    { key: "invoice", header: "Invoice", render: (inv) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{inv.invoice_number}</span>, exportValue: (inv) => inv.invoice_number, sortValue: (inv) => inv.invoice_number },
+    { key: "invoice", header: "Invoice", className: "w-[14%] whitespace-nowrap", render: (inv) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{inv.invoice_number}</span>, exportValue: (inv) => inv.invoice_number, sortValue: (inv) => inv.invoice_number },
     ...(canManage
       ? [{ key: "client", header: "Client", render: (inv: InvoiceRow) => inv.profiles?.full_name ?? "—", exportValue: (inv: InvoiceRow) => inv.profiles?.full_name ?? "—", sortValue: (inv: InvoiceRow) => inv.profiles?.full_name } as DataTableColumn<InvoiceRow>]
       : []),
@@ -195,7 +195,8 @@ export default function InvoicesPage() {
       : []),
     {
       key: "actions",
-      header: "",
+      header: "Action",
+      className: "w-[16%]",
       render: (inv) => {
         const balance = balanceOf(inv);
         return (

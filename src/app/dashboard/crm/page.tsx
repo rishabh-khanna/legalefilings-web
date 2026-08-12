@@ -150,7 +150,7 @@ export default function CrmPage() {
     },
     {
       key: "actions",
-      header: "",
+      header: "Action",
       className: "whitespace-nowrap",
       render: (l) => (
         <a

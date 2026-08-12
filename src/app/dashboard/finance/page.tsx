@@ -251,7 +251,7 @@ export default function FinancePage() {
     },
     {
       key: "actions",
-      header: "",
+      header: "Action",
       className: "text-right",
       render: (t) => (
         <div className="flex items-center justify-end gap-2">

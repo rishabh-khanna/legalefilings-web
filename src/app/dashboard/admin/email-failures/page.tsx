@@ -124,7 +124,7 @@ export default function EmailFailuresPage() {
       : []),
     {
       key: "actions",
-      header: "",
+      header: "Action",
       render: (f) =>
         f.resolved ? null : (
           <button

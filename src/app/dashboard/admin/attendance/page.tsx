@@ -385,7 +385,7 @@ function AdminAttendancePageInner() {
     },
     {
       key: "actions",
-      header: "",
+      header: "Action",
       render: (c) =>
         c.status === "pending" ? (
           <div className="flex shrink-0 gap-2">
@@ -517,6 +517,15 @@ function AdminAttendancePageInner() {
               <label className="block text-xs font-medium mb-1" style={{ color: "var(--color-ink-soft)" }}>Month</label>
               <MonthPicker value={month} onChange={setMonth} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm" />
             </div>
+            {/* When narrowed to one person, the table itself has no Staff
+                column (every row is already known to be theirs) — this is
+                the one place their name still shows, so scrolling past the
+                dropdown doesn't lose track of whose log is on screen. */}
+            {staffId && (
+              <p className="pb-2 text-sm" style={{ color: "var(--color-ink-soft)" }}>
+                Showing <span className="font-semibold" style={{ color: "var(--color-ink)" }}>{staffOptions.find((s) => s.id === staffId)?.name ?? "this person"}</span>&apos;s attendance
+              </p>
+            )}
           </div>
 
           {/* PDF used to be its own button up here, sitting right beside

@@ -143,7 +143,7 @@ export default function ProductCatalogPage() {
       : []),
     {
       key: "actions",
-      header: "",
+      header: "Action",
       render: (item) => (
         <div className="whitespace-nowrap">
           <button type="button" onClick={() => startEdit(item)} className="mr-3 text-xs font-semibold" style={{ color: "var(--color-action-dark)" }}>Edit</button>

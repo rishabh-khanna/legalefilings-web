@@ -195,7 +195,7 @@ export default function FinanceRecurringPage() {
     },
     {
       key: "actions",
-      header: "",
+      header: "Action",
       className: "text-right",
       render: (t) =>
         canManage ? (

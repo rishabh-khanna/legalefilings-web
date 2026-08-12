@@ -234,7 +234,7 @@ export default function LeavePage() {
     },
     {
       key: "actions",
-      header: "",
+      header: "Action",
       className: "w-[12%] whitespace-nowrap",
       render: (r) =>
         canCancel(r) ? (

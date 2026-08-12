@@ -99,7 +99,7 @@ export default function AdminPayslipsPage() {
       : []),
     {
       key: "actions",
-      header: "",
+      header: "Action",
       render: (p) => (
         <a href={`/api/payroll/payslips/${p.id}/download`} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>
           Download PDF

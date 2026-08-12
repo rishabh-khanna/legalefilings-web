@@ -118,7 +118,7 @@ export default function DocumentsPage() {
     { key: "uploaded", header: "Uploaded", className: "w-[12%] whitespace-nowrap", render: (d) => new Date(d.uploaded_at).toLocaleDateString("en-IN"), exportValue: (d) => new Date(d.uploaded_at).toLocaleDateString("en-IN"), sortValue: (d) => d.uploaded_at },
     {
       key: "actions",
-      header: "",
+      header: "Action",
       render: (d) => (
         <a href={`/api/employee-documents/${d.id}/download`} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>
           Download

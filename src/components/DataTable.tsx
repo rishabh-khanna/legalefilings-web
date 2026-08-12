@@ -507,11 +507,24 @@ export function DataTable<T>({
                             {rowNumber}
                           </span>
                         </td>
-                        {columns.map((c) => (
-                          <td key={c.key} className={c.className}>
-                            {c.render(row, rowNumber)}
-                          </td>
-                        ))}
+                        {columns.map((c) => {
+                          // A column whose content is hard-clipped
+                          // (.dt-table's overflow: hidden + ellipsis on
+                          // whitespace-nowrap cells) has no other way to
+                          // read the full value short of dragging the
+                          // column wider — the native title attribute
+                          // surfaces it as a hover tooltip instead,
+                          // sourced from exportValue since that's already
+                          // the plain-text form of whatever render()
+                          // draws, JSX included.
+                          const clips = c.className?.includes("whitespace-nowrap");
+                          const full = clips && c.exportValue ? c.exportValue(row) : undefined;
+                          return (
+                            <td key={c.key} className={c.className} title={full != null && full !== "" ? String(full) : undefined}>
+                              {c.render(row, rowNumber)}
+                            </td>
+                          );
+                        })}
                       </tr>
                       {expanded && (
                         <tr>

@@ -82,7 +82,7 @@ export default function MyPayslipsPage() {
     { key: "generated", header: "Generated On", className: "w-[14%] whitespace-nowrap", render: (p) => new Date(p.generated_at).toLocaleDateString("en-IN"), exportValue: (p) => new Date(p.generated_at).toLocaleDateString("en-IN"), sortValue: (p) => p.generated_at },
     {
       key: "actions",
-      header: "",
+      header: "Action",
       render: (p) => (
         <a href={`/api/payroll/payslips/${p.id}/download`} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>
           Download PDF

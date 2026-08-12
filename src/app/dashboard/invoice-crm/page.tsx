@@ -651,8 +651,8 @@ export default function InvoiceCrmPage() {
   ];
 
   const invoiceColumns: DataTableColumn<InvoiceRow>[] = [
-    { key: "invoice", header: "Invoice", render: (inv) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{inv.invoice_number}</span>, exportValue: (inv) => inv.invoice_number, sortValue: (inv) => inv.invoice_number },
-    { key: "type", header: "Type", className: "w-[10%] whitespace-nowrap", render: (inv) => TYPE_LABEL[inv.invoice_type] ?? "Invoice", exportValue: (inv) => TYPE_LABEL[inv.invoice_type] ?? "Invoice", sortValue: (inv) => TYPE_LABEL[inv.invoice_type] ?? inv.invoice_type },
+    { key: "invoice", header: "Invoice", className: "w-[12%] whitespace-nowrap", render: (inv) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{inv.invoice_number}</span>, exportValue: (inv) => inv.invoice_number, sortValue: (inv) => inv.invoice_number },
+    { key: "type", header: "Type", className: "w-[9%] whitespace-nowrap", render: (inv) => TYPE_LABEL[inv.invoice_type] ?? "Invoice", exportValue: (inv) => TYPE_LABEL[inv.invoice_type] ?? "Invoice", sortValue: (inv) => TYPE_LABEL[inv.invoice_type] ?? inv.invoice_type },
     { key: "client", header: "Client", render: (inv) => inv.profiles?.full_name ?? "—", exportValue: (inv) => inv.profiles?.full_name ?? "—", sortValue: (inv) => inv.profiles?.full_name },
     { key: "date", header: "Date", className: "w-[10%] whitespace-nowrap", render: (inv) => new Date(inv.created_at).toLocaleDateString("en-IN"), exportValue: (inv) => new Date(inv.created_at).toLocaleDateString("en-IN"), sortValue: (inv) => inv.created_at },
     { key: "amount", header: "Amount", className: "w-[12%] whitespace-nowrap", render: (inv) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>₹{Number(inv.total).toLocaleString("en-IN")}</span>, exportValue: (inv) => Number(inv.total), sortValue: (inv) => Number(inv.total) },
@@ -681,7 +681,8 @@ export default function InvoiceCrmPage() {
       : []),
     {
       key: "actions",
-      header: "",
+      header: "Action",
+      className: "w-[15%] whitespace-nowrap",
       render: (inv) => {
         const balance = balanceOf(inv);
         const shareUrl = typeof window !== "undefined" ? `${window.location.origin}/pay/${inv.id}` : `/pay/${inv.id}`;
@@ -781,7 +782,7 @@ export default function InvoiceCrmPage() {
       : []),
     {
       key: "actions",
-      header: "",
+      header: "Action",
       render: (t) => (
         <button type="button" onClick={() => handleRunTemplate(t.id)} disabled={runningTemplateId === t.id} className="flex items-center gap-1 text-xs font-semibold underline disabled:opacity-60" style={{ color: "var(--color-action-dark)" }}>
           <Repeat className="h-3 w-3" /> {runningTemplateId === t.id ? "Running…" : "Run Now"}

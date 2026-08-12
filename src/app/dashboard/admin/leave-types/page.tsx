@@ -156,7 +156,7 @@ export default function LeaveTypesPage() {
     },
     {
       key: "actions",
-      header: "",
+      header: "Action",
       render: (t) => (
         <button
           type="button"
