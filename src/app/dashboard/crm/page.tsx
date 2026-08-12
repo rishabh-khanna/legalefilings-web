@@ -14,6 +14,8 @@ import { DashboardPageHero, HeroAction, HeroKpi } from "@/components/crm/Dashboa
 import { LoadingBlock } from "@/components/Spinner";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { MultiSelect } from "@/components/MultiSelect";
+import { SearchButton } from "@/components/SearchButton";
+import { Modal } from "@/components/Modal";
 
 type LeadRow = {
   id: string;
@@ -24,6 +26,7 @@ type LeadRow = {
   city: string | null;
   state: string | null;
   status: LeadStage;
+  created_at: string;
 };
 
 const STATUS_STYLE: Record<LeadStage, { bg: string; fg: string }> = {
@@ -38,7 +41,9 @@ export default function CrmPage() {
   const [leads, setLeads] = useState<LeadRow[]>([]);
   const [staffId, setStaffId] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [draftStatusFilter, setDraftStatusFilter] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
+  const statusFilterDirty = draftStatusFilter.size !== statusFilter.size || [...draftStatusFilter].some((v) => !statusFilter.has(v));
   const [selectedState, setSelectedState] = useState("");
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -124,6 +129,14 @@ export default function CrmPage() {
     { key: "contact", header: "Contact", render: (l) => <><div>{l.email}</div><div>{l.phone}</div></>, exportValue: (l) => `${l.email} ${l.phone}`, sortValue: (l) => l.email },
     { key: "location", header: "Location", render: (l) => [l.city, l.state].filter(Boolean).join(", ") || "—", exportValue: (l) => [l.city, l.state].filter(Boolean).join(", ") },
     {
+      key: "receivedOn",
+      header: "Received On",
+      className: "w-[10%] whitespace-nowrap",
+      render: (l) => new Date(l.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+      exportValue: (l) => new Date(l.created_at).toLocaleDateString("en-IN"),
+      sortValue: (l) => l.created_at,
+    },
+    {
       key: "status",
       header: "Status",
       className: "w-[14%] whitespace-nowrap",
@@ -177,10 +190,10 @@ export default function CrmPage() {
       </div>
 
       {showForm && (
+        <Modal title="Add Lead" onClose={() => setShowForm(false)}>
         <form
           onSubmit={handleAdd}
-          className="mt-5 grid gap-3 rounded-2xl border bg-white p-5 sm:grid-cols-2 dark:bg-[var(--color-paper-raised)]"
-          style={{ borderColor: "var(--color-line)" }}
+          className="grid gap-3 sm:grid-cols-2"
         >
           <input name="name" required placeholder="Name" className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]" style={{ borderColor: "var(--color-line)" }} />
           <input name="company" placeholder="Company" className="rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]" style={{ borderColor: "var(--color-line)" }} />
@@ -219,6 +232,7 @@ export default function CrmPage() {
             </button>
           </div>
         </form>
+        </Modal>
       )}
 
       <DataTable
@@ -230,15 +244,19 @@ export default function CrmPage() {
         emptyMessage={leads.length === 0 ? "No leads assigned to you yet." : "No leads match this filter."}
         filteredEmptyMessage="No leads match this filter."
         search={{ placeholder: "Search name, email, phone, company…", filter: (l, q) => `${l.name} ${l.email} ${l.phone} ${l.company ?? ""}`.toLowerCase().includes(q) }}
+        dateFilter={{ getDate: (l) => l.created_at }}
         exportFilename="crm-leads"
         minWidth={560}
         toolbar={
-          <MultiSelect
-            options={Object.entries(LEAD_STAGE_LABELS).map(([value, label]) => ({ value, label }))}
-            selected={statusFilter}
-            onChange={setStatusFilter}
-            placeholder="All statuses"
-          />
+          <>
+            <MultiSelect
+              options={Object.entries(LEAD_STAGE_LABELS).map(([value, label]) => ({ value, label }))}
+              selected={draftStatusFilter}
+              onChange={setDraftStatusFilter}
+              placeholder="All statuses"
+            />
+            <SearchButton onClick={() => setStatusFilter(draftStatusFilter)} dirty={statusFilterDirty} />
+          </>
         }
       />
     </div>

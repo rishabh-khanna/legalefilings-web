@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
 import { useActionMessage } from "@/lib/use-action-message";
+import { useConfirm } from "@/lib/use-confirm";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero } from "@/components/crm/DashboardPageHero";
 import { RequiredMark } from "@/components/RequiredMark";
@@ -54,6 +55,7 @@ export default function BusinessSettingsPage() {
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [uploadingSignature, setUploadingSignature] = useState(false);
   const { message, showSuccess, showError } = useActionMessage();
+  const { confirm, confirmDialog } = useConfirm();
 
   const [registrations, setRegistrations] = useState<GstRegistration[]>([]);
   const [regLabel, setRegLabel] = useState("");
@@ -88,7 +90,7 @@ export default function BusinessSettingsPage() {
   }
 
   async function handleRemoveRegistration(id: string, label: string) {
-    if (!window.confirm(`Remove the GST registration "${label}"? This can't be undone.`)) return;
+    if (!(await confirm(`Remove the GST registration "${label}"? This can't be undone.`, { confirmLabel: "Remove", danger: true }))) return;
     const res = await fetch(`/api/company-gst-registrations/${id}`, { method: "DELETE" });
     if (res.ok) {
       await loadRegistrations();
@@ -240,6 +242,7 @@ export default function BusinessSettingsPage() {
       <div className="mt-3">
         <ActionMessage message={message} />
       </div>
+      {confirmDialog}
 
       {settings && (
         <div

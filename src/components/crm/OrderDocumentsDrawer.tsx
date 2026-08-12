@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { X, Upload, FileText, Trash2, CheckCircle2, XCircle, ArrowRight, Ban } from "lucide-react";
 import { LoadingBlock } from "@/components/Spinner";
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, ORDER_STATUS_FLOW, type OrderStatus } from "@/lib/order-status";
+import { useConfirm } from "@/lib/use-confirm";
 
 export type OrderDocumentStatus = "awaiting" | "submitted" | "verified" | "not_required";
 
@@ -67,6 +68,7 @@ export function OrderDocumentsDrawer({
   onOrderStatusChange: (orderId: string, status: OrderStatus) => void;
 }) {
   const [changingStatus, setChangingStatus] = useState(false);
+  const { confirm, confirmDialog } = useConfirm();
 
   async function handleProcessStatusChange(status: OrderStatus) {
     if (!orderId) return;
@@ -131,7 +133,7 @@ export function OrderDocumentsDrawer({
 
   async function handleDelete(docId: string, fileName: string) {
     if (!orderId) return;
-    if (!window.confirm(`Delete "${fileName}"? This can't be undone.`)) return;
+    if (!(await confirm(`Delete "${fileName}"? This can't be undone.`, { confirmLabel: "Delete", danger: true }))) return;
     await fetch(`/api/orders/${orderId}/documents/${docId}`, { method: "DELETE" });
     await load();
   }
@@ -170,6 +172,8 @@ export function OrderDocumentsDrawer({
   }
 
   return (
+    <>
+    {confirmDialog}
     <AnimatePresence>
       {orderId && (
         <>
@@ -242,8 +246,8 @@ export function OrderDocumentsDrawer({
                       <button
                         type="button"
                         disabled={changingStatus}
-                        onClick={() => {
-                          if (confirm("Cancel this order? The customer will see it as cancelled.")) handleProcessStatusChange("cancelled");
+                        onClick={async () => {
+                          if (await confirm("Cancel this order? The customer will see it as cancelled.", { confirmLabel: "Cancel Order", danger: true })) handleProcessStatusChange("cancelled");
                         }}
                         className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium disabled:opacity-60"
                         style={{ borderColor: "var(--color-line)", color: "var(--color-danger)" }}
@@ -361,5 +365,6 @@ export function OrderDocumentsDrawer({
         </>
       )}
     </AnimatePresence>
+    </>
   );
 }

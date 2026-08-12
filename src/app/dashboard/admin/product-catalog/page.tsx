@@ -3,11 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Package, Plus, Wrench } from "lucide-react";
 import { useActionMessage } from "@/lib/use-action-message";
+import { useConfirm } from "@/lib/use-confirm";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroAction, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
+import { Modal } from "@/components/Modal";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { MultiSelect } from "@/components/MultiSelect";
+import { SearchButton } from "@/components/SearchButton";
 
 type CatalogItem = {
   id: string;
@@ -31,6 +34,7 @@ export default function ProductCatalogPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const { message, showSuccess, showError } = useActionMessage();
+  const { confirm, confirmDialog } = useConfirm();
 
   async function load() {
     const res = await fetch("/api/product-service-master");
@@ -90,7 +94,7 @@ export default function ProductCatalogPage() {
   }
 
   async function handleRemove(id: string) {
-    if (!confirm("Remove this item from the catalog? Past invoices that used it are unaffected.")) return;
+    if (!(await confirm("Remove this item from the catalog? Past invoices that used it are unaffected.", { confirmLabel: "Remove", danger: true }))) return;
     const res = await fetch(`/api/product-service-master/${id}`, { method: "DELETE" });
     if (res.ok) {
       await load();
@@ -103,7 +107,12 @@ export default function ProductCatalogPage() {
   const inputClass = "w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]";
   const labelClass = "block text-xs font-medium mb-1";
 
+  // Type is a status-like filter, so it applies on Search rather than
+  // the instant an option is checked — draftTypeFilter is what the
+  // MultiSelect is bound to, typeFilter is what actually filters.
+  const [draftTypeFilter, setDraftTypeFilter] = useState<Set<string>>(new Set());
   const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set());
+  const typeFilterDirty = draftTypeFilter.size !== typeFilter.size || [...draftTypeFilter].some((v) => !typeFilter.has(v));
   const typeFilteredItems = useMemo(() => {
     return (items ?? []).filter((item) => typeFilter.size === 0 || typeFilter.has(item.type));
   }, [items, typeFilter]);
@@ -168,9 +177,11 @@ export default function ProductCatalogPage() {
       <div className="mt-3">
         <ActionMessage message={message} />
       </div>
+      {confirmDialog}
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="mt-4 rounded-2xl border bg-white p-5 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
+        <Modal title={editingId ? "Edit Item" : "Add Item"} onClose={() => setShowForm(false)} maxWidth="max-w-2xl">
+        <form onSubmit={handleSubmit}>
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <label className={labelClass} style={{ color: "var(--color-ink-soft)" }}>Type</label>
@@ -218,6 +229,7 @@ export default function ProductCatalogPage() {
             </button>
           </div>
         </form>
+        </Modal>
       )}
 
       <DataTable
@@ -231,15 +243,18 @@ export default function ProductCatalogPage() {
         search={{ placeholder: "Search name, HSN/SAC…", filter: (item, q) => `${item.name} ${item.hsn_sac_code ?? ""}`.toLowerCase().includes(q) }}
         exportFilename="product-catalog"
         toolbar={
-          <MultiSelect
-            options={[
-              { value: "product", label: "Product" },
-              { value: "service", label: "Service" },
-            ]}
-            selected={typeFilter}
-            onChange={setTypeFilter}
-            placeholder="All types"
-          />
+          <>
+            <MultiSelect
+              options={[
+                { value: "product", label: "Product" },
+                { value: "service", label: "Service" },
+              ]}
+              selected={draftTypeFilter}
+              onChange={setDraftTypeFilter}
+              placeholder="All types"
+            />
+            <SearchButton onClick={() => setTypeFilter(draftTypeFilter)} dirty={typeFilterDirty} />
+          </>
         }
       />
     </div>

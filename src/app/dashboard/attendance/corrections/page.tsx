@@ -9,7 +9,9 @@ import { DashboardPageHero, HeroAction, HeroKpi } from "@/components/crm/Dashboa
 import { LoadingBlock } from "@/components/Spinner";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { MultiSelect } from "@/components/MultiSelect";
+import { SearchButton } from "@/components/SearchButton";
 import { TruncatedText } from "@/components/TruncatedText";
+import { Modal } from "@/components/Modal";
 
 type CorrectionRequest = {
   id: string;
@@ -19,6 +21,7 @@ type CorrectionRequest = {
   reason: string;
   status: "pending" | "approved" | "rejected";
   review_note: string | null;
+  created_at: string;
   updated_at: string;
   profiles?: { full_name: string | null } | null;
   reviewer?: { full_name: string | null } | null;
@@ -45,7 +48,9 @@ export default function AttendanceCorrectionsPage() {
   const [corrOut, setCorrOut] = useState("");
   const [corrReason, setCorrReason] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [draftStatusFilter, setDraftStatusFilter] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
+  const statusFilterDirty = draftStatusFilter.size !== statusFilter.size || [...draftStatusFilter].some((v) => !statusFilter.has(v));
   // Admin/platform_admin see every correction request here, not just
   // their own — a leader/group_leader (or any lower role) still only
   // sees their own, even though the underlying API would otherwise
@@ -117,7 +122,15 @@ export default function AttendanceCorrectionsPage() {
   const statusFilteredCorrections = corrections.filter((c) => statusFilter.size === 0 || statusFilter.has(c.status));
 
   const columns: DataTableColumn<CorrectionRequest>[] = [
-    { key: "date", header: "Date", render: (c) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{c.date}</span>, exportValue: (c) => c.date, sortValue: (c) => c.date },
+    { key: "date", header: "For Date", className: "whitespace-nowrap", render: (c) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{c.date}</span>, exportValue: (c) => c.date, sortValue: (c) => c.date },
+    {
+      key: "requestedOn",
+      header: "Requested On",
+      className: "whitespace-nowrap",
+      render: (c) => new Date(c.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+      exportValue: (c) => new Date(c.created_at).toLocaleDateString("en-IN"),
+      sortValue: (c) => c.created_at,
+    },
     { key: "requestedBy", header: "Requested By", render: (c) => c.profiles?.full_name ?? "You", exportValue: (c) => c.profiles?.full_name ?? "", sortValue: (c) => c.profiles?.full_name ?? "You" },
     { key: "checkIn", header: "Requested Check In", render: (c) => c.requested_check_in ?? "—", exportValue: (c) => c.requested_check_in ?? "" },
     { key: "checkOut", header: "Requested Check Out", render: (c) => c.requested_check_out ?? "—", exportValue: (c) => c.requested_check_out ?? "" },
@@ -182,7 +195,8 @@ export default function AttendanceCorrectionsPage() {
       </div>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="mt-4 grid gap-3 rounded-2xl border bg-white p-5 sm:grid-cols-2 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
+        <Modal title="Request a Correction" onClose={() => setShowForm(false)}>
+        <form onSubmit={handleSubmit} className="grid gap-3 sm:grid-cols-2">
           <input required type="date" value={corrDate} onChange={(e) => setCorrDate(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
           <div />
           <input type="time" placeholder="Check in" value={corrIn} onChange={(e) => setCorrIn(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
@@ -202,6 +216,7 @@ export default function AttendanceCorrectionsPage() {
             </button>
           </div>
         </form>
+        </Modal>
       )}
 
       <DataTable
@@ -217,16 +232,19 @@ export default function AttendanceCorrectionsPage() {
         dateFilter={{ getDate: (c) => c.date }}
         exportFilename="my-correction-requests"
         toolbar={
-          <MultiSelect
-            options={[
-              { value: "pending", label: "Pending" },
-              { value: "approved", label: "Approved" },
-              { value: "rejected", label: "Rejected" },
-            ]}
-            selected={statusFilter}
-            onChange={setStatusFilter}
-            placeholder="All statuses"
-          />
+          <>
+            <MultiSelect
+              options={[
+                { value: "pending", label: "Pending" },
+                { value: "approved", label: "Approved" },
+                { value: "rejected", label: "Rejected" },
+              ]}
+              selected={draftStatusFilter}
+              onChange={setDraftStatusFilter}
+              placeholder="All statuses"
+            />
+            <SearchButton onClick={() => setStatusFilter(draftStatusFilter)} dirty={statusFilterDirty} />
+          </>
         }
       />
     </div>

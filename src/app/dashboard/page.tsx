@@ -10,6 +10,7 @@ import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { GettingStartedChecklist } from "@/components/crm/GettingStartedChecklist";
 import { getMissingBusinessSettingsFields } from "@/lib/business-settings-completeness";
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, type OrderStatus } from "@/lib/order-status";
+import { startOfTodayIST } from "@/lib/ist-date";
 
 const LEAVE_STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
   pending: { bg: "var(--color-action-tint)", fg: "var(--color-action-dark)" },
@@ -150,8 +151,13 @@ export default async function DashboardOverviewPage() {
   if (isAdmin) {
     const admin = getSupabaseAdmin();
     const now = new Date();
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
+    // IST midnight, not server-local midnight — this runs on Vercel's UTC
+    // runtime, where a plain `new Date().setHours(0,0,0,0)` lands ~5.5h
+    // off from the actual IST business day. Bounded above by tomorrow's
+    // IST midnight too, so a stray future-dated row (test/seed data)
+    // can't count as "still checked in today" indefinitely.
+    const todayStart = startOfTodayIST();
+    const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
     const month = now.getMonth() + 1;
     const year = now.getFullYear();
 
@@ -161,7 +167,7 @@ export default async function DashboardOverviewPage() {
     const orgScope = canSeeAllOrgs(profile!) ? null : profile!.organization_id;
 
     let totalEmployeesQuery = admin.from("profiles").select("id", { count: "exact", head: true }).in("account_type", ["staff", "admin"]);
-    let checkinsQuery = admin.from("attendance_events").select("staff_id").eq("event_type", "check_in").gte("occurred_at", todayStart.toISOString());
+    let checkinsQuery = admin.from("attendance_events").select("staff_id").eq("event_type", "check_in").gte("occurred_at", todayStart.toISOString()).lt("occurred_at", tomorrowStart.toISOString());
     let birthdaysQuery = admin.from("profiles").select("date_of_birth").in("account_type", ["staff", "admin"]);
     let payslipsQuery = admin.from("payslips").select("id", { count: "exact", head: true }).eq("month", month).eq("year", year);
     let attendanceRowsQuery = admin

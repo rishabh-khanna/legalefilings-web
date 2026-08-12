@@ -3,9 +3,11 @@
 import { useEffect, useState } from "react";
 import { CalendarClock, Plus } from "lucide-react";
 import { useActionMessage } from "@/lib/use-action-message";
+import { useConfirm } from "@/lib/use-confirm";
 import { ActionMessage } from "@/components/ActionMessage";
-import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
+import { DashboardPageHero, HeroAction, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
+import { Modal } from "@/components/Modal";
 import { RequiredMark } from "@/components/RequiredMark";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 
@@ -19,6 +21,7 @@ type LeaveType = { id: string; name: string; code: string; annual_credit_days: n
 // which is fixed and never shown here) on the Leave page.
 export default function LeaveTypesPage() {
   const [types, setTypes] = useState<LeaveType[] | null>(null);
+  const [showForm, setShowForm] = useState(false);
   const [name, setName] = useState("");
   const [code, setCode] = useState("");
   const [annualCreditDays, setAnnualCreditDays] = useState("12");
@@ -26,6 +29,7 @@ export default function LeaveTypesPage() {
   const [creating, setCreating] = useState(false);
   const [savingId, setSavingId] = useState<string | null>(null);
   const { message, showSuccess, showError } = useActionMessage();
+  const { confirm, confirmDialog } = useConfirm();
 
   async function load() {
     const res = await fetch("/api/leave-types");
@@ -52,6 +56,7 @@ export default function LeaveTypesPage() {
       setCode("");
       setAnnualCreditDays("12");
       setCarryForwardCap("5");
+      setShowForm(false);
       showSuccess("Leave type created.");
       await load();
     } else {
@@ -98,9 +103,15 @@ export default function LeaveTypesPage() {
           min="0"
           defaultValue={t.annual_credit_days}
           disabled={savingId === t.id}
-          onBlur={(e) => {
-            const v = Number(e.target.value);
-            if (!Number.isNaN(v) && v !== t.annual_credit_days) handleUpdate(t, { annualCreditDays: v });
+          onBlur={async (e) => {
+            const input = e.target;
+            const v = Number(input.value);
+            if (Number.isNaN(v) || v === t.annual_credit_days) return;
+            if (await confirm(`Change ${t.name}'s yearly credit from ${t.annual_credit_days} to ${v} days?`, { confirmLabel: "Save" })) {
+              handleUpdate(t, { annualCreditDays: v });
+            } else {
+              input.value = String(t.annual_credit_days);
+            }
           }}
           className="w-20 rounded-lg border px-2 py-1 text-xs"
           style={{ borderColor: "var(--color-line)" }}
@@ -119,9 +130,15 @@ export default function LeaveTypesPage() {
           min="0"
           defaultValue={t.carry_forward_cap}
           disabled={savingId === t.id}
-          onBlur={(e) => {
-            const v = Number(e.target.value);
-            if (!Number.isNaN(v) && v !== t.carry_forward_cap) handleUpdate(t, { carryForwardCap: v });
+          onBlur={async (e) => {
+            const input = e.target;
+            const v = Number(input.value);
+            if (Number.isNaN(v) || v === t.carry_forward_cap) return;
+            if (await confirm(`Change ${t.name}'s carry-forward cap from ${t.carry_forward_cap} to ${v} days?`, { confirmLabel: "Save" })) {
+              handleUpdate(t, { carryForwardCap: v });
+            } else {
+              input.value = String(t.carry_forward_cap);
+            }
           }}
           className="w-20 rounded-lg border px-2 py-1 text-xs"
           style={{ borderColor: "var(--color-line)" }}
@@ -143,8 +160,8 @@ export default function LeaveTypesPage() {
       render: (t) => (
         <button
           type="button"
-          onClick={() => {
-            if (window.confirm(`Deactivate "${t.name}"? Staff won't be able to apply for this leave type anymore, but existing leave records are unaffected.`)) handleUpdate(t, { isActive: false });
+          onClick={async () => {
+            if (await confirm(`Deactivate "${t.name}"? Staff won't be able to apply for this leave type anymore, but existing leave records are unaffected.`, { confirmLabel: "Deactivate", danger: true })) handleUpdate(t, { isActive: false });
           }}
           disabled={savingId === t.id}
           className="rounded-full border px-3 py-1.5 text-xs font-semibold text-red-600 transition-colors hover:bg-red-50 disabled:opacity-60"
@@ -158,7 +175,15 @@ export default function LeaveTypesPage() {
 
   return (
     <div>
-      <DashboardPageHero title="Leave Types" subtitle="Define the leave types your team can apply for, with a yearly credit and carry-forward cap.">
+      <DashboardPageHero
+        title="Leave Types"
+        subtitle="Define the leave types your team can apply for, with a yearly credit and carry-forward cap."
+        action={
+          <HeroAction icon={showForm ? undefined : Plus} onClick={() => setShowForm((v) => !v)}>
+            {showForm ? "Cancel" : "Add Leave Type"}
+          </HeroAction>
+        }
+      >
         <div className="relative mt-6 grid grid-cols-1 gap-4 sm:max-w-xs">
           <HeroKpi icon={CalendarClock} label="Active Types" value={(types ?? []).filter((t) => t.is_active).length} />
         </div>
@@ -167,32 +192,40 @@ export default function LeaveTypesPage() {
       <div className="mt-3">
         <ActionMessage message={message} />
       </div>
+      {confirmDialog}
 
-      <div className="mt-3 rounded-2xl border bg-white p-4 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-        <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Add Leave Type</p>
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
-          <div>
-            <label className="mb-1 block text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>Name<RequiredMark /></label>
-            <input placeholder="e.g. Earned Leave" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+      {showForm && (
+        <Modal title="Add Leave Type" onClose={() => setShowForm(false)}>
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-2">
+            <div>
+              <label className="mb-1 block text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>Name<RequiredMark /></label>
+              <input placeholder="e.g. Earned Leave" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>Code<RequiredMark /></label>
+              <input placeholder="e.g. EL" value={code} onChange={(e) => setCode(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>Days/Year</label>
+              <input type="number" min="0" placeholder="Days/year" value={annualCreditDays} onChange={(e) => setAnnualCreditDays(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} title="Credited monthly (annual / 12), computed automatically" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>Carry-Forward Cap</label>
+              <input type="number" min="0" placeholder="Carry-forward cap" value={carryForwardCap} onChange={(e) => setCarryForwardCap(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} title="Max unused days that carry into next year; 0 = no carry-forward" />
+            </div>
           </div>
-          <div>
-            <label className="mb-1 block text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>Code<RequiredMark /></label>
-            <input placeholder="e.g. EL" value={code} onChange={(e) => setCode(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
-          </div>
-          <input type="number" min="0" placeholder="Days/year" value={annualCreditDays} onChange={(e) => setAnnualCreditDays(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} title="Credited monthly (annual / 12), computed automatically" />
-          <input type="number" min="0" placeholder="Carry-forward cap" value={carryForwardCap} onChange={(e) => setCarryForwardCap(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} title="Max unused days that carry into next year; 0 = no carry-forward" />
+          <p className="mt-2 text-xs" style={{ color: "var(--color-ink-soft)" }}>Days/year accrues monthly automatically. Carry-forward cap is the max unused balance that rolls into next year — the rest lapses.</p>
           <button
             type="button"
             onClick={handleCreate}
             disabled={creating || !name.trim() || !code.trim()}
-            className="inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
+            className="mt-4 inline-flex items-center justify-center gap-1.5 rounded-full px-4 py-2 text-sm font-semibold text-white disabled:opacity-60"
             style={{ backgroundColor: "var(--color-action)" }}
           >
             <Plus className="h-4 w-4" /> Add
           </button>
-        </div>
-        <p className="mt-2 text-xs" style={{ color: "var(--color-ink-soft)" }}>Days/year accrues monthly automatically. Carry-forward cap is the max unused balance that rolls into next year — the rest lapses.</p>
-      </div>
+        </Modal>
+      )}
 
       {types === null ? (
         <LoadingBlock className="mt-6" />

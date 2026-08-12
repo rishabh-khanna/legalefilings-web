@@ -5,9 +5,11 @@ import { Users } from "lucide-react";
 import { STAFF_LEVEL_LABELS, roleLabel, type Profile, type StaffLevel, type Department, type DepartmentRole } from "@/lib/roles";
 import { RequiredMark } from "@/components/RequiredMark";
 import { useActionMessage } from "@/lib/use-action-message";
+import { useConfirm } from "@/lib/use-confirm";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
+import { Modal } from "@/components/Modal";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 
 type DepartmentWithRoles = Department & { department_roles: DepartmentRole[] };
@@ -61,6 +63,7 @@ export default function EmployeesPage() {
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const { message, showSuccess, showError } = useActionMessage();
+  const { confirm, confirmDialog } = useConfirm();
 
   async function load() {
     const res = await fetch("/api/admin/employees");
@@ -152,7 +155,7 @@ export default function EmployeesPage() {
     // deactivate (anyone with attendance/leave/payroll/document history
     // gets deactivated instead — their records have to survive them
     // leaving) — the confirm dialog can't promise one or the other.
-    if (!confirm(`Remove ${emp.full_name ?? "this employee"}'s account? If they have any attendance, leave, payroll, or document history, they'll be deactivated (login blocked, history kept) instead of deleted outright.`)) return;
+    if (!(await confirm(`Remove ${emp.full_name ?? "this employee"}'s account? If they have any attendance, leave, payroll, or document history, they'll be deactivated (login blocked, history kept) instead of deleted outright.`, { confirmLabel: "Remove", danger: true }))) return;
     setDeletingId(emp.id);
     const res = await fetch(`/api/admin/employees/${emp.id}`, { method: "DELETE" });
     setDeletingId(null);
@@ -266,17 +269,14 @@ export default function EmployeesPage() {
 
   function renderEditForm(emp: EmployeeRow) {
     return (
-      <div className="m-3 rounded-2xl border p-5" style={{ borderColor: "var(--color-accent)", backgroundColor: "var(--color-paper)" }}>
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-sm font-bold" style={{ color: "var(--color-ink)" }}>
-            Editing {emp.full_name ?? "employee"}
-          </p>
+      <div>
+        <div className="flex items-center justify-end gap-3">
           <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>
             <span style={{ color: "var(--color-danger)" }}>*</span> Required
           </p>
         </div>
 
-        <div className="mt-4 rounded-xl border bg-white p-4 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
+        <div className="mt-3 rounded-xl border bg-white p-4 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
           <FieldGroupTitle>Employment Details</FieldGroupTitle>
           <div className="grid gap-3 sm:grid-cols-3">
             <div>
@@ -501,6 +501,7 @@ export default function EmployeesPage() {
       <div className="mt-3">
         <ActionMessage message={message} />
       </div>
+      {confirmDialog}
 
       {employees === null ? (
         <LoadingBlock className="mt-6" />
@@ -519,10 +520,18 @@ export default function EmployeesPage() {
           }}
           exportFilename="employees"
           minWidth={760}
-          renderExpanded={renderEditForm}
-          isExpanded={(emp) => editingId === emp.id}
         />
       )}
+
+      {editingId && (() => {
+        const emp = (employees ?? []).find((e) => e.id === editingId);
+        if (!emp) return null;
+        return (
+          <Modal title={`Editing ${emp.full_name ?? "employee"}`} onClose={() => setEditingId(null)} maxWidth="max-w-3xl">
+            {renderEditForm(emp)}
+          </Modal>
+        );
+      })()}
     </div>
   );
 }

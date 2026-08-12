@@ -326,7 +326,7 @@ export function DataTable<T>({
               </div>
             )}
             {dateFilter && (
-              <DateRangeFilter from={dr.from} to={dr.to} onFromChange={dr.setFrom} onToChange={dr.setTo} onClear={dr.clear} active={dr.active} />
+              <DateRangeFilter from={dr.from} to={dr.to} onFromChange={dr.setFrom} onToChange={dr.setTo} onClear={dr.clear} onSearch={dr.search} dirty={dr.dirty} active={dr.active} />
             )}
             {toolbar}
           </div>

@@ -7,6 +7,7 @@ import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { MultiSelect } from "@/components/MultiSelect";
+import { SearchButton } from "@/components/SearchButton";
 
 type PayslipRow = {
   id: string;
@@ -27,7 +28,9 @@ type PayslipRow = {
 // payslips doesn't mean scrolling past a form every time.
 export default function AdminPayslipsPage() {
   const [payslips, setPayslips] = useState<PayslipRow[] | null>(null);
+  const [draftEmployeeFilter, setDraftEmployeeFilter] = useState<Set<string>>(new Set());
   const [employeeFilter, setEmployeeFilter] = useState<Set<string>>(new Set());
+  const employeeFilterDirty = draftEmployeeFilter.size !== employeeFilter.size || [...draftEmployeeFilter].some((v) => !employeeFilter.has(v));
 
   useEffect(() => {
     const kickoff = setTimeout(async () => {
@@ -124,13 +127,16 @@ export default function AdminPayslipsPage() {
         dateFilter={{ getDate: (p) => p.generated_at }}
         exportFilename="payslips"
         toolbar={
-          <MultiSelect
-            options={employeeOptions.map(([id, name]) => ({ value: id, label: name }))}
-            selected={employeeFilter}
-            onChange={setEmployeeFilter}
-            placeholder="All employees"
-            searchable
-          />
+          <>
+            <MultiSelect
+              options={employeeOptions.map(([id, name]) => ({ value: id, label: name }))}
+              selected={draftEmployeeFilter}
+              onChange={setDraftEmployeeFilter}
+              placeholder="All employees"
+              searchable
+            />
+            <SearchButton onClick={() => setEmployeeFilter(draftEmployeeFilter)} dirty={employeeFilterDirty} />
+          </>
         }
       />
     </div>

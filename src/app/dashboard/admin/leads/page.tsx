@@ -138,6 +138,13 @@ export default function AdminDashboard() {
   const dateFilter = useDateRangeFilter(visibleLeads, (l) => l.createdAt);
   const dateFilteredLeads = dateFilter.filtered;
 
+  // Stage is a status filter, so it gets the same "pick, then Search"
+  // treatment as the date range rather than filtering the instant a
+  // stage is checked — draftStageFilter is what the MultiSelect is
+  // bound to, stageFilter is what actually filters, and the two only
+  // sync up when Search runs (shared with the date range's own Search,
+  // via combinedSearch below, so one click applies both).
+  const [draftStageFilter, setDraftStageFilter] = useState<Set<string>>(new Set());
   const [stageFilter, setStageFilter] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState("");
   const filteredLeads = useMemo(() => {
@@ -151,6 +158,12 @@ export default function AdminDashboard() {
       return true;
     });
   }, [dateFilteredLeads, stageFilter, search]);
+
+  const stageFilterDirty = draftStageFilter.size !== stageFilter.size || [...draftStageFilter].some((v) => !stageFilter.has(v));
+  function combinedSearch() {
+    dateFilter.search();
+    setStageFilter(draftStageFilter);
+  }
 
   const stats = useMemo(() => {
     const all = leads ?? [];
@@ -569,8 +582,8 @@ export default function AdminDashboard() {
           />
           <MultiSelect
             options={LEAD_STAGES.map((s) => ({ value: s, label: LEAD_STAGE_LABELS[s] }))}
-            selected={stageFilter}
-            onChange={setStageFilter}
+            selected={draftStageFilter}
+            onChange={setDraftStageFilter}
             placeholder="All stages"
           />
           <DateRangeFilter
@@ -578,14 +591,21 @@ export default function AdminDashboard() {
             to={dateFilter.to}
             onFromChange={dateFilter.setFrom}
             onToChange={dateFilter.setTo}
-            onClear={dateFilter.clear}
-            active={dateFilter.active}
+            onClear={() => {
+              dateFilter.clear();
+              setDraftStageFilter(new Set());
+              setStageFilter(new Set());
+            }}
+            onSearch={combinedSearch}
+            dirty={dateFilter.dirty || stageFilterDirty}
+            active={dateFilter.active || stageFilter.size > 0}
           />
           {(search.trim() || stageFilter.size > 0) && (
             <button
               type="button"
               onClick={() => {
                 setSearch("");
+                setDraftStageFilter(new Set());
                 setStageFilter(new Set());
               }}
               className="rounded-lg px-2 py-2 text-xs font-semibold"

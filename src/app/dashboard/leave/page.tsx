@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, CheckCircle2, Clock, Plus, XCircle } from "lucide-react";
 import { useActionMessage } from "@/lib/use-action-message";
+import { useConfirm } from "@/lib/use-confirm";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroAction, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
@@ -10,6 +11,7 @@ import { DetailPickerModal, BalanceSummary } from "@/components/DetailPickerModa
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { TruncatedText } from "@/components/TruncatedText";
 import { MultiSelect } from "@/components/MultiSelect";
+import { SearchButton } from "@/components/SearchButton";
 import { countWorkingDays } from "@/lib/working-days";
 
 type LeaveRequest = {
@@ -23,6 +25,10 @@ type LeaveRequest = {
   status: "pending" | "approved" | "rejected" | "cancelled";
   review_note: string | null;
   created_at: string;
+  // Working days in the range × the half-day fraction — computed
+  // server-side (see /api/leave-requests) so this and the admin queue
+  // never disagree on what a request actually costs.
+  requestedDays: number;
 };
 
 type LeaveTypeOption = { id: string; name: string; code: string; is_active: boolean };
@@ -66,6 +72,7 @@ export default function LeavePage() {
   const [halfDay, setHalfDay] = useState(false);
   const [halfDayPeriod, setHalfDayPeriod] = useState<"first_half" | "second_half">("first_half");
   const { message, showSuccess, showError } = useActionMessage();
+  const { confirm, confirmDialog } = useConfirm();
 
   async function load() {
     const [reqRes, balancesRes, holidaysRes] = await Promise.all([
@@ -99,7 +106,7 @@ export default function LeavePage() {
     const confirmText = isPending
       ? "Withdraw this leave request?"
       : "Cancel this approved leave? The days go back to your balance.";
-    if (!window.confirm(confirmText)) return;
+    if (!(await confirm(confirmText, { confirmLabel: isPending ? "Withdraw" : "Cancel Leave", danger: true }))) return;
     setCancellingId(r.id);
     const res = await fetch(`/api/leave-requests/${r.id}`, {
       method: "PATCH",
@@ -161,7 +168,9 @@ export default function LeavePage() {
     };
   }, [requests]);
 
+  const [draftStatusFilter, setDraftStatusFilter] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
+  const statusFilterDirty = draftStatusFilter.size !== statusFilter.size || [...draftStatusFilter].some((v) => !statusFilter.has(v));
   const filteredRequests = useMemo(() => {
     return requests.filter((r) => statusFilter.size === 0 || statusFilter.has(r.status));
   }, [requests, statusFilter]);
@@ -172,7 +181,23 @@ export default function LeavePage() {
 
   const columns: DataTableColumn<LeaveRequest>[] = [
     { key: "type", header: "Leave Type", className: "w-[14%] whitespace-nowrap", render: (r) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>{requestLabel(r)}</span>, exportValue: (r) => requestLabel(r), sortValue: (r) => requestLabel(r) },
-    { key: "dates", header: "Dates", className: "w-[18%] whitespace-nowrap", render: (r) => `${r.start_date} → ${r.end_date}`, exportValue: (r) => `${r.start_date} to ${r.end_date}`, sortValue: (r) => r.start_date },
+    { key: "dates", header: "Dates", className: "w-[16%] whitespace-nowrap", render: (r) => `${r.start_date} → ${r.end_date}`, exportValue: (r) => `${r.start_date} to ${r.end_date}`, sortValue: (r) => r.start_date },
+    {
+      key: "totalDays",
+      header: "Total Days",
+      className: "w-[8%] whitespace-nowrap",
+      render: (r) => <span className="font-semibold tabular-nums" style={{ color: "var(--color-ink)" }}>{r.requestedDays}</span>,
+      exportValue: (r) => r.requestedDays,
+      sortValue: (r) => r.requestedDays,
+    },
+    {
+      key: "requestedOn",
+      header: "Requested On",
+      className: "w-[12%] whitespace-nowrap",
+      render: (r) => new Date(r.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+      exportValue: (r) => new Date(r.created_at).toLocaleDateString("en-IN"),
+      sortValue: (r) => r.created_at,
+    },
     { key: "reason", header: "Reason", className: "max-w-[180px]", render: (r) => (r.reason ? <TruncatedText text={`“${r.reason}”`} italic style={{ color: "var(--color-ink-soft)" }} /> : "—"), exportValue: (r) => r.reason ?? "" },
     {
       key: "status",
@@ -258,6 +283,7 @@ export default function LeavePage() {
       <div className="mt-3">
         <ActionMessage message={message} />
       </div>
+      {confirmDialog}
 
       {showForm && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4" onClick={() => setShowForm(false)}>
@@ -384,14 +410,15 @@ export default function LeavePage() {
                 { value: "rejected", label: "Rejected" },
                 { value: "cancelled", label: "Cancelled" },
               ]}
-              selected={statusFilter}
-              onChange={setStatusFilter}
+              selected={draftStatusFilter}
+              onChange={setDraftStatusFilter}
               placeholder="All statuses"
             />
+            <SearchButton onClick={() => setStatusFilter(draftStatusFilter)} dirty={statusFilterDirty} />
             {statusFilter.size > 0 && (
               <button
                 type="button"
-                onClick={() => setStatusFilter(new Set())}
+                onClick={() => { setDraftStatusFilter(new Set()); setStatusFilter(new Set()); }}
                 className="text-xs font-semibold"
                 style={{ color: "var(--color-action-dark)" }}
               >

@@ -8,6 +8,7 @@ import { isStaffOrAdmin, roleLabel, type Profile } from "@/lib/roles";
 import { isGrantActive, type ToolKey } from "@/lib/tool-grants";
 import { BrandSpinner } from "@/components/BrandSpinner";
 import { Logo } from "@/components/Logo";
+import { Tooltip } from "@/components/Tooltip";
 import { ProfileCompletionBanner } from "@/components/dashboard/ProfileCompletionBanner";
 import { BusinessSettingsCompletionBanner } from "@/components/dashboard/BusinessSettingsCompletionBanner";
 import { NotificationBell } from "@/components/dashboard/NotificationBell";
@@ -999,7 +1000,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                     >
                       <Icon className="h-[15px] w-[15px]" />
                     </span>
-                    <span className="truncate">{entry.label}</span>
+                    <Tooltip content={entry.label} className="min-w-0 flex-1 truncate">
+                      {entry.label}
+                    </Tooltip>
                   </Link>
                 );
               }
@@ -1038,7 +1041,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                     >
                       <Icon className="h-[15px] w-[15px]" />
                     </span>
-                    <span className="min-w-0 flex-1 truncate">{entry.section}</span>
+                    <Tooltip content={entry.section} className="min-w-0 flex-1 truncate">
+                      {entry.section}
+                    </Tooltip>
                     <svg
                       viewBox="0 0 24 24"
                       className="h-3.5 w-3.5 shrink-0 transition-transform duration-200"
@@ -1110,7 +1115,9 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                               >
                                 <ItemIcon className="h-3.5 w-3.5" />
                               </span>
-                              <span className="truncate">{item.label}</span>
+                              <Tooltip content={item.label} className="min-w-0 flex-1 truncate">
+                                {item.label}
+                              </Tooltip>
                             </Link>
                           );
                           })}

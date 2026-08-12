@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { KeyRound, Trash2 } from "lucide-react";
 import { useActionMessage } from "@/lib/use-action-message";
+import { useConfirm } from "@/lib/use-confirm";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
 import { DELEGABLE_TOOLS, isGrantActive, type ToolKey } from "@/lib/tool-grants";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { MultiSelect } from "@/components/MultiSelect";
+import { SearchButton } from "@/components/SearchButton";
 
 type StaffRow = { id: string; full_name: string | null; account_type: string; staff_level: string | null };
 type GrantRow = { id: string; staff_id: string; tool_key: ToolKey; granted_by: string | null; expires_at: string | null; created_at: string };
@@ -28,6 +30,7 @@ export default function ToolAccessPage() {
   const [granting, setGranting] = useState(false);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const { message, showSuccess, showError } = useActionMessage();
+  const { confirm, confirmDialog } = useConfirm();
 
   async function load() {
     const res = await fetch("/api/admin/tool-grants");
@@ -47,8 +50,16 @@ export default function ToolAccessPage() {
   const staffById = useMemo(() => new Map((staff ?? []).map((s) => [s.id, s])), [staff]);
   const activeGrants = useMemo(() => (grants ?? []).filter(isGrantActive), [grants]);
 
+  // Both apply on Search rather than the instant an option is checked —
+  // draft* is what the MultiSelects are bound to, the non-draft pair is
+  // what actually filters.
+  const [draftToolFilter, setDraftToolFilter] = useState<Set<string>>(new Set());
   const [toolFilter, setToolFilter] = useState<Set<string>>(new Set());
+  const [draftStatusFilter, setDraftStatusFilter] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
+  const filtersDirty =
+    draftToolFilter.size !== toolFilter.size || [...draftToolFilter].some((v) => !toolFilter.has(v)) ||
+    draftStatusFilter.size !== statusFilter.size || [...draftStatusFilter].some((v) => !statusFilter.has(v));
   const filteredGrants = useMemo(() => {
     return (grants ?? []).filter((g) => {
       if (toolFilter.size > 0 && !toolFilter.has(g.tool_key)) return false;
@@ -82,7 +93,7 @@ export default function ToolAccessPage() {
   }
 
   async function handleRevoke(grant: GrantRow) {
-    if (!confirm("Revoke this delegated access?")) return;
+    if (!(await confirm("Revoke this delegated access?", { confirmLabel: "Revoke", danger: true }))) return;
     setRevokingId(grant.id);
     const res = await fetch(`/api/admin/tool-grants/${grant.id}`, { method: "DELETE" });
     setRevokingId(null);
@@ -152,6 +163,7 @@ export default function ToolAccessPage() {
       <div className="mt-3">
         <ActionMessage message={message} />
       </div>
+      {confirmDialog}
 
       <div className="mt-3 rounded-2xl border bg-white p-4 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
         <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Grant Access</p>
@@ -206,8 +218,8 @@ export default function ToolAccessPage() {
             <>
               <MultiSelect
                 options={DELEGABLE_TOOLS.map((t) => ({ value: t.key, label: t.label }))}
-                selected={toolFilter}
-                onChange={setToolFilter}
+                selected={draftToolFilter}
+                onChange={setDraftToolFilter}
                 placeholder="All tools"
               />
               <MultiSelect
@@ -215,14 +227,23 @@ export default function ToolAccessPage() {
                   { value: "active", label: "Active" },
                   { value: "expired", label: "Expired" },
                 ]}
-                selected={statusFilter}
-                onChange={setStatusFilter}
+                selected={draftStatusFilter}
+                onChange={setDraftStatusFilter}
                 placeholder="All statuses"
+              />
+              <SearchButton
+                onClick={() => {
+                  setToolFilter(draftToolFilter);
+                  setStatusFilter(draftStatusFilter);
+                }}
+                dirty={filtersDirty}
               />
               {(toolFilter.size > 0 || statusFilter.size > 0) && (
                 <button
                   type="button"
                   onClick={() => {
+                    setDraftToolFilter(new Set());
+                    setDraftStatusFilter(new Set());
                     setToolFilter(new Set());
                     setStatusFilter(new Set());
                   }}

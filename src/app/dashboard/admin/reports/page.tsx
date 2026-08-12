@@ -1,8 +1,15 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Clock, IndianRupee, CalendarCheck, Users, Building2, Receipt, Download, CalendarRange } from "lucide-react";
+import { Clock, IndianRupee, CalendarCheck, Users, Building2, Receipt, Download } from "lucide-react";
 import { DashboardPageHero } from "@/components/crm/DashboardPageHero";
+import { MonthPicker } from "@/components/MonthPicker";
+import { DatePicker } from "@/components/DatePicker";
+
+function currentMonth() {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+}
 
 // Same rotating tint set the row-number badges and lead avatars use
 // elsewhere in the app, so this page's icons read as part of the same
@@ -41,7 +48,19 @@ const REPORT_GROUPS = [
 ];
 
 export default function ReportsPage() {
-  const [month, setMonth] = useState("");
+  // Defaults to the current month rather than "everything" — an export
+  // page that opens unfiltered on a live production dataset (years of
+  // attendance events, every payslip ever generated) makes "just this
+  // month" the thing you have to remember to set every single time,
+  // when it's actually what you want almost always.
+  const [month, setMonth] = useState(currentMonth());
+  // Attendance is event-based (a punch has a real timestamp), so unlike
+  // Salary — which only exists at month granularity, one payslip per
+  // month — it can support an arbitrary day range. Sets aside the Month
+  // control above the moment either end is filled in.
+  const [rangeFrom, setRangeFrom] = useState("");
+  const [rangeTo, setRangeTo] = useState("");
+  const hasCustomRange = Boolean(rangeFrom || rangeTo);
   // Cheap way to tell whether this viewer is a platform_admin without a
   // dedicated "who am I" endpoint — /api/team-members already pools every
   // org's staff for one and stays scoped to just this org otherwise, so
@@ -61,7 +80,10 @@ export default function ReportsPage() {
 
   function reportHref(type: string) {
     const params = new URLSearchParams({ type });
-    if (month) {
+    if (type === "attendance" && hasCustomRange) {
+      if (rangeFrom) params.set("from", rangeFrom);
+      if (rangeTo) params.set("to", rangeTo);
+    } else if (month) {
       const [y, m] = month.split("-");
       if (type === "attendance") params.set("month", month);
       if (type === "salary") {
@@ -86,27 +108,41 @@ export default function ReportsPage() {
             plain label+input sitting under it — it drives two of the six
             cards below, so it reads as part of the same unit instead of a
             page setting. */}
-        <div className="relative mt-5 flex flex-wrap items-center gap-3">
-          <label
-            htmlFor="report-month"
-            className="flex items-center gap-2 rounded-full border px-3.5 py-2"
-            style={{ borderColor: "var(--gold-200)", backgroundColor: "color-mix(in srgb, var(--color-paper-raised) 70%, transparent)" }}
-          >
-            <CalendarRange className="h-4 w-4" style={{ color: "var(--color-action-dark)" }} />
-            <span className="text-xs font-semibold" style={{ color: "var(--color-ink)" }}>
-              Month
-            </span>
-            <input
-              id="report-month"
-              type="month"
+        <div className="relative mt-5 flex flex-wrap items-end gap-3">
+          <div>
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-soft)" }}>Month</p>
+            <MonthPicker
               value={month}
-              onChange={(e) => setMonth(e.target.value)}
-              className="bg-transparent text-sm font-medium outline-none"
-              style={{ color: "var(--color-ink)" }}
+              onChange={setMonth}
+              className="inline-flex h-9 items-center gap-2 rounded-full border px-3.5 text-sm font-semibold outline-none"
             />
-          </label>
-          <span className="text-xs" style={{ color: "var(--color-ink-soft)" }}>
-            Applies to Attendance &amp; Salary only — every other report below always covers everything.
+          </div>
+
+          <div className="flex items-end gap-2">
+            <div>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-soft)" }}>From</p>
+              <DatePicker value={rangeFrom} onChange={setRangeFrom} max={rangeTo || undefined} placeholder="Any" />
+            </div>
+            <div>
+              <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-soft)" }}>To</p>
+              <DatePicker value={rangeTo} onChange={setRangeTo} min={rangeFrom || undefined} placeholder="Any" />
+            </div>
+            {hasCustomRange && (
+              <button
+                type="button"
+                onClick={() => { setRangeFrom(""); setRangeTo(""); }}
+                className="h-9 text-xs font-semibold"
+                style={{ color: "var(--color-action-dark)" }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          <span className="pb-2 text-xs" style={{ color: "var(--color-ink-soft)" }}>
+            {hasCustomRange
+              ? "Custom range applies to Attendance only. Salary always uses the Month above."
+              : "Month applies to Attendance & Salary. Set a custom range for a day-level Attendance export — every other report below always covers everything."}
           </span>
         </div>
       </DashboardPageHero>
@@ -140,7 +176,15 @@ export default function ReportsPage() {
                           <p className="font-semibold" style={{ color: "var(--color-ink)" }}>
                             {r.label}
                           </p>
-                          {r.filterable && month && (
+                          {r.filterable && r.type === "attendance" && hasCustomRange && (
+                            <span
+                              className="rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums"
+                              style={{ backgroundColor: "var(--gold-100)", color: "var(--color-action-dark)" }}
+                            >
+                              {rangeFrom || "…"} – {rangeTo || "…"}
+                            </span>
+                          )}
+                          {r.filterable && !(r.type === "attendance" && hasCustomRange) && month && (
                             <span
                               className="rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums"
                               style={{ backgroundColor: "var(--gold-100)", color: "var(--color-action-dark)" }}

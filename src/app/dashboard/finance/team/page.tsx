@@ -7,6 +7,8 @@ import { DashboardPageHero } from "@/components/crm/DashboardPageHero";
 import { BookSwitcher } from "@/components/finance/BookSwitcher";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { MultiSelect } from "@/components/MultiSelect";
+import { SearchButton } from "@/components/SearchButton";
+import { useConfirm } from "@/lib/use-confirm";
 
 type Member = {
   id: string;
@@ -42,6 +44,7 @@ export default function FinanceTeamPage() {
   const [role, setRole] = useState<Member["role"]>("accountant");
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string; password?: string } | null>(null);
+  const { confirm, confirmDialog } = useConfirm();
 
   const loadMembers = useCallback(async (ownerId: string) => {
     const res = await fetch(`/api/expense-manager/members?bookOwnerId=${ownerId}`);
@@ -106,14 +109,16 @@ export default function FinanceTeamPage() {
 
   async function handleRemove(id: string, name: string) {
     if (!bookOwnerId) return;
-    if (!window.confirm(`Remove ${name} from this book's team? They'll lose access immediately.`)) return;
+    if (!(await confirm(`Remove ${name} from this book's team? They'll lose access immediately.`, { confirmLabel: "Remove", danger: true }))) return;
     const res = await fetch(`/api/expense-manager/members/${id}`, { method: "DELETE" });
     if (res.ok) loadMembers(bookOwnerId);
   }
 
   const inputClass = "w-full rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]";
 
+  const [draftRoleFilter, setDraftRoleFilter] = useState<Set<string>>(new Set());
   const [roleFilter, setRoleFilter] = useState<Set<string>>(new Set());
+  const roleFilterDirty = draftRoleFilter.size !== roleFilter.size || [...draftRoleFilter].some((v) => !roleFilter.has(v));
   const filteredMembers = useMemo(() => {
     return (members ?? []).filter((m) => roleFilter.size === 0 || roleFilter.has(m.role));
   }, [members, roleFilter]);
@@ -155,6 +160,7 @@ export default function FinanceTeamPage() {
         </Link>
       </DashboardPageHero>
 
+      {confirmDialog}
       {bookOwnerId && <BookSwitcher bookOwnerId={bookOwnerId} onChange={setBookOwnerId} />}
 
       <form onSubmit={handleInvite} className="mb-6 grid gap-3 rounded-2xl border bg-white p-5 sm:grid-cols-4 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
@@ -191,12 +197,15 @@ export default function FinanceTeamPage() {
         exportFilename="finance-team"
         minWidth={560}
         toolbar={
-          <MultiSelect
-            options={[{ value: "owner", label: "Owner" }, ...ROLE_OPTIONS.map((r) => ({ value: r.value, label: r.label }))]}
-            selected={roleFilter}
-            onChange={setRoleFilter}
-            placeholder="All roles"
-          />
+          <>
+            <MultiSelect
+              options={[{ value: "owner", label: "Owner" }, ...ROLE_OPTIONS.map((r) => ({ value: r.value, label: r.label }))]}
+              selected={draftRoleFilter}
+              onChange={setDraftRoleFilter}
+              placeholder="All roles"
+            />
+            <SearchButton onClick={() => setRoleFilter(draftRoleFilter)} dirty={roleFilterDirty} />
+          </>
         }
       />
     </div>

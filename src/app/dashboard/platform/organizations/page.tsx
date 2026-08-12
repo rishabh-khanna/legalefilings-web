@@ -5,6 +5,7 @@ import { DashboardPageHero } from "@/components/crm/DashboardPageHero";
 import { Spinner } from "@/components/Spinner";
 import { RequiredMark } from "@/components/RequiredMark";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { Modal } from "@/components/Modal";
 
 type Organization = {
   id: string;
@@ -160,7 +161,8 @@ export default function PlatformOrganizationsPage() {
       </DashboardPageHero>
 
       {showForm && (
-        <form onSubmit={handleSubmit} className="mb-6 space-y-4 rounded-2xl border bg-white p-6 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
+        <Modal title="New Organization" onClose={() => setShowForm(false)} maxWidth="max-w-2xl">
+        <form onSubmit={handleSubmit} className="space-y-4">
           <p className="text-sm font-semibold" style={{ color: "var(--color-ink)" }}>Organization</p>
           <div className="grid gap-4 sm:grid-cols-3">
             <div>
@@ -230,6 +232,7 @@ export default function PlatformOrganizationsPage() {
             </button>
           </div>
         </form>
+        </Modal>
       )}
 
       <div className="mt-6 overflow-hidden rounded-2xl border bg-white dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>

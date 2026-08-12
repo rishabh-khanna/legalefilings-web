@@ -7,6 +7,8 @@ import { DashboardPageHero } from "@/components/crm/DashboardPageHero";
 import { BookSwitcher } from "@/components/finance/BookSwitcher";
 import { formatMoney } from "@/lib/currency";
 import { LoadingBlock } from "@/components/Spinner";
+import { useConfirm } from "@/lib/use-confirm";
+import { MonthPicker } from "@/components/MonthPicker";
 
 type Category = { id: string; name: string; transaction_type: "expense" | "income" };
 type BudgetRow = { id: string; categoryId: string; categoryName: string; monthlyAmount: number; actual: number; remaining: number; percentUsed: number };
@@ -33,6 +35,7 @@ export default function FinanceBudgetsPage() {
   const [permissions, setPermissions] = useState<string[]>([]);
   const canManage = permissions.includes("manage_accounts");
   const money = (n: number) => formatMoney(n, currency);
+  const { confirm, confirmDialog } = useConfirm();
 
   const loadBudgets = useCallback(async (ownerId: string, m: string) => {
     const res = await fetch(`/api/expense-manager/budgets?bookOwnerId=${ownerId}&month=${m}`);
@@ -93,7 +96,7 @@ export default function FinanceBudgetsPage() {
 
   async function handleDelete(id: string, categoryName: string) {
     if (!bookOwnerId) return;
-    if (!window.confirm(`Remove the budget for "${categoryName}"? This can't be undone.`)) return;
+    if (!(await confirm(`Remove the budget for "${categoryName}"? This can't be undone.`, { confirmLabel: "Remove", danger: true }))) return;
     await fetch(`/api/expense-manager/budgets/${id}`, { method: "DELETE" });
     loadBudgets(bookOwnerId, month);
   }
@@ -109,11 +112,12 @@ export default function FinanceBudgetsPage() {
         </Link>
       </DashboardPageHero>
 
+      {confirmDialog}
       {bookOwnerId && <BookSwitcher bookOwnerId={bookOwnerId} onChange={setBookOwnerId} />}
 
       <div className="mb-4 flex items-center gap-2">
         <label className="text-sm font-medium" style={{ color: "var(--color-ink)" }}>Month</label>
-        <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
+        <MonthPicker value={month} onChange={setMonth} className={`inline-flex items-center gap-2 ${inputClass}`} />
       </div>
 
       {canManage ? (

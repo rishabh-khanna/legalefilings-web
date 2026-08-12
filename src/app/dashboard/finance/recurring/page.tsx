@@ -8,6 +8,8 @@ import { RequiredMark } from "@/components/RequiredMark";
 import { BookSwitcher } from "@/components/finance/BookSwitcher";
 import { formatMoney } from "@/lib/currency";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { Modal } from "@/components/Modal";
+import { useConfirm } from "@/lib/use-confirm";
 
 type Account = { id: string; bank_name: string; account_name: string; is_active: boolean };
 type Category = { id: string; name: string; transaction_type: "expense" | "income" };
@@ -49,6 +51,7 @@ export default function FinanceRecurringPage() {
   const [permissions, setPermissions] = useState<string[]>([]);
   const canManage = permissions.includes("manage_accounts");
   const money = (n: number) => formatMoney(n, currency);
+  const { confirm, confirmDialog } = useConfirm();
 
   const loadTemplates = useCallback(async (ownerId: string) => {
     const res = await fetch(`/api/expense-manager/recurring?bookOwnerId=${ownerId}`);
@@ -136,7 +139,7 @@ export default function FinanceRecurringPage() {
 
   async function handleDelete(id: string, label: string) {
     if (!bookOwnerId) return;
-    if (!window.confirm(`Delete the recurring template "${label}"? It won't post any further automatic entries. This can't be undone.`)) return;
+    if (!(await confirm(`Delete the recurring template "${label}"? It won't post any further automatic entries. This can't be undone.`, { confirmLabel: "Delete", danger: true }))) return;
     await fetch(`/api/expense-manager/recurring/${id}`, { method: "DELETE" });
     loadTemplates(bookOwnerId);
   }
@@ -209,6 +212,7 @@ export default function FinanceRecurringPage() {
         </Link>
       </DashboardPageHero>
 
+      {confirmDialog}
       {bookOwnerId && <BookSwitcher bookOwnerId={bookOwnerId} onChange={setBookOwnerId} />}
 
       {canManage ? (
@@ -227,7 +231,8 @@ export default function FinanceRecurringPage() {
       )}
 
       {canManage && showForm && (
-        <form onSubmit={handleCreate} className="mb-6 grid gap-3 rounded-2xl border bg-white p-5 sm:grid-cols-3 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
+        <Modal title="New Recurring Entry" onClose={() => setShowForm(false)} maxWidth="max-w-2xl">
+        <form onSubmit={handleCreate} className="grid gap-3 sm:grid-cols-3">
           <select value={form.transactionType} onChange={(e) => setForm((p) => ({ ...p, transactionType: e.target.value as "expense" | "income" }))} className={inputClass} style={{ borderColor: "var(--color-line)" }}>
             <option value="expense">Expense</option>
             <option value="income">Income</option>
@@ -276,6 +281,7 @@ export default function FinanceRecurringPage() {
             </button>
           </div>
         </form>
+        </Modal>
       )}
 
       <DataTable

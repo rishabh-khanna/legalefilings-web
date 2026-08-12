@@ -4,11 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { PartyPopper, Landmark, Building2, Plus } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useActionMessage } from "@/lib/use-action-message";
+import { useConfirm } from "@/lib/use-confirm";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroAction, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
+import { Modal } from "@/components/Modal";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { MultiSelect } from "@/components/MultiSelect";
+import { SearchButton } from "@/components/SearchButton";
 
 type Holiday = {
   id: string;
@@ -35,6 +38,7 @@ export default function HolidaysPage() {
   const [type, setType] = useState<Holiday["type"]>("company");
   const [submitting, setSubmitting] = useState(false);
   const { message, showSuccess, showError } = useActionMessage();
+  const { confirm, confirmDialog } = useConfirm();
 
   async function load() {
     const res = await fetch("/api/holidays");
@@ -79,7 +83,7 @@ export default function HolidaysPage() {
   }
 
   async function handleDelete(id: string, name: string) {
-    if (!window.confirm(`Remove the holiday "${name}"? This can't be undone.`)) return;
+    if (!(await confirm(`Remove the holiday "${name}"? This can't be undone.`, { confirmLabel: "Remove", danger: true }))) return;
     const res = await fetch(`/api/holidays/${id}`, { method: "DELETE" });
     if (res.ok) {
       await load();
@@ -100,7 +104,9 @@ export default function HolidaysPage() {
   }, [holidays]);
 
 
+  const [draftTypeFilter, setDraftTypeFilter] = useState<Set<string>>(new Set());
   const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set());
+  const typeFilterDirty = draftTypeFilter.size !== typeFilter.size || [...draftTypeFilter].some((v) => !typeFilter.has(v));
   const filteredHolidays = useMemo(() => {
     return holidays.filter((h) => typeFilter.size === 0 || typeFilter.has(h.type));
   }, [holidays, typeFilter]);
@@ -179,6 +185,7 @@ export default function HolidaysPage() {
       <div className="mt-3">
         <ActionMessage message={message} />
       </div>
+      {confirmDialog}
 
       {isAdmin && spansMultipleOrgs && (
         <p className="mt-3 text-xs" style={{ color: "var(--color-ink-soft)" }}>
@@ -187,7 +194,8 @@ export default function HolidaysPage() {
       )}
 
       {showForm && isAdmin && !spansMultipleOrgs && (
-        <form onSubmit={handleAdd} className="mt-3 grid gap-3 rounded-2xl border bg-white p-5 sm:grid-cols-3 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
+        <Modal title="Add Holiday" onClose={() => setShowForm(false)}>
+        <form onSubmit={handleAdd} className="grid gap-3 sm:grid-cols-3">
           <input required placeholder="Holiday name" value={name} onChange={(e) => setName(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
           <input required type="date" value={date} onChange={(e) => setDate(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
           <select value={type} onChange={(e) => setType(e.target.value as Holiday["type"])} className={inputClass} style={{ borderColor: "var(--color-line)" }}>
@@ -209,6 +217,7 @@ export default function HolidaysPage() {
             </button>
           </div>
         </form>
+        </Modal>
       )}
 
       <DataTable
@@ -229,14 +238,15 @@ export default function HolidaysPage() {
                 { value: "festival", label: "Festival" },
                 { value: "company", label: "Company" },
               ]}
-              selected={typeFilter}
-              onChange={setTypeFilter}
+              selected={draftTypeFilter}
+              onChange={setDraftTypeFilter}
               placeholder="All types"
             />
+            <SearchButton onClick={() => setTypeFilter(draftTypeFilter)} dirty={typeFilterDirty} />
             {typeFilter.size > 0 && (
               <button
                 type="button"
-                onClick={() => setTypeFilter(new Set())}
+                onClick={() => { setDraftTypeFilter(new Set()); setTypeFilter(new Set()); }}
                 className="text-xs font-semibold"
                 style={{ color: "var(--color-action-dark)" }}
               >

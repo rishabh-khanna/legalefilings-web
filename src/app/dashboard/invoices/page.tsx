@@ -11,6 +11,7 @@ import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { MultiSelect } from "@/components/MultiSelect";
+import { SearchButton } from "@/components/SearchButton";
 import { isCollectableInvoiceType } from "@/lib/invoice-calc";
 
 type InvoiceRow = {
@@ -54,6 +55,7 @@ export default function InvoicesPage() {
   const [loading, setLoading] = useState(true);
   const { message, showSuccess, showError } = useActionMessage();
 
+  const [draftStatusFilter, setDraftStatusFilter] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
   const [payingInvoice, setPayingInvoice] = useState<InvoiceRow | null>(null);
   const [payAmount, setPayAmount] = useState("");
@@ -94,7 +96,11 @@ export default function InvoicesPage() {
   // customer's own invoice list was never grouped, it's already just
   // theirs) with one dropdown to narrow the table to a single client
   // instead of the whole list visually reorganized around them.
+  const [draftClientFilter, setDraftClientFilter] = useState<Set<string>>(new Set());
   const [clientFilter, setClientFilter] = useState<Set<string>>(new Set());
+  const invoiceFiltersDirty =
+    draftStatusFilter.size !== statusFilter.size || [...draftStatusFilter].some((v) => !statusFilter.has(v)) ||
+    draftClientFilter.size !== clientFilter.size || [...draftClientFilter].some((v) => !clientFilter.has(v));
   const clientOptions = useMemo(() => {
     if (!canManage) return [];
     const byId = new Map<string, string>();
@@ -290,19 +296,26 @@ export default function InvoicesPage() {
                 { value: "overdue", label: "Overdue" },
                 { value: "cancelled", label: "Cancelled" },
               ]}
-              selected={statusFilter}
-              onChange={setStatusFilter}
+              selected={draftStatusFilter}
+              onChange={setDraftStatusFilter}
               placeholder="All statuses"
             />
             {canManage && (
               <MultiSelect
                 options={clientOptions.map(([id, name]) => ({ value: id, label: name }))}
-                selected={clientFilter}
-                onChange={setClientFilter}
+                selected={draftClientFilter}
+                onChange={setDraftClientFilter}
                 placeholder="All clients"
                 searchable
               />
             )}
+            <SearchButton
+              onClick={() => {
+                setStatusFilter(draftStatusFilter);
+                setClientFilter(draftClientFilter);
+              }}
+              dirty={invoiceFiltersDirty}
+            />
           </>
         }
       />

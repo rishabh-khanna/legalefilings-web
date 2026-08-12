@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, FileText, IndianRupee, Users } from "lucide-react";
 import { useActionMessage } from "@/lib/use-action-message";
+import { useConfirm } from "@/lib/use-confirm";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 
@@ -23,6 +24,7 @@ function currentMonth() {
 // scrolling past a form you weren't using.
 export default function PayrollPage() {
   const { message, showSuccess, showError } = useActionMessage();
+  const { confirm, confirmDialog } = useConfirm();
   const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
   const [staffId, setStaffId] = useState("");
   const [structure, setStructure] = useState<SalaryStructure>(null);
@@ -110,7 +112,7 @@ export default function PayrollPage() {
   }
 
   async function handleGenerate() {
-    if (spansMultipleOrgs && !confirm(`This generates payslips for every organization's staff with a saved salary structure for ${new Date(genYear, genMonth - 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" })} — not just one company. Continue?`)) return;
+    if (spansMultipleOrgs && !(await confirm(`This generates payslips for every organization's staff with a saved salary structure for ${new Date(genYear, genMonth - 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" })} — not just one company. Continue?`, { confirmLabel: "Generate" }))) return;
     setGenerating(true);
     const res = await fetch("/api/payroll/generate", {
       method: "POST",
@@ -159,6 +161,7 @@ export default function PayrollPage() {
       <div className="mt-3">
         <ActionMessage message={message} />
       </div>
+      {confirmDialog}
 
       <div className="mt-5 grid items-start gap-6 lg:grid-cols-2">
         <div className="rounded-2xl border bg-white p-5 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>

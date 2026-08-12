@@ -13,6 +13,7 @@ import { FinanceCharts } from "@/components/finance/FinanceCharts";
 import { formatMoney } from "@/lib/currency";
 import { LoadingBlock } from "@/components/Spinner";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
+import { useConfirm } from "@/lib/use-confirm";
 
 type Account = { id: string; bank_name: string; account_name: string; current_balance: number; opening_balance: number; is_active: boolean };
 type Transaction = EditableTransaction & {
@@ -60,6 +61,7 @@ export default function FinancePage() {
   const [newBank, setNewBank] = useState({ bankName: "", accountName: "", openingBalance: "", openingDate: new Date().toISOString().slice(0, 10) });
   const [activeDocTransaction, setActiveDocTransaction] = useState<Transaction | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const { confirm, confirmDialog } = useConfirm();
   const [chartData, setChartData] = useState<ChartData | null>(null);
   const [editingAccount, setEditingAccount] = useState<Account | null>(null);
   const [accountEditName, setAccountEditName] = useState({ bankName: "", accountName: "" });
@@ -169,7 +171,7 @@ export default function FinancePage() {
 
   async function handleDeleteTransaction(id: string) {
     if (!bookOwnerId) return;
-    if (!window.confirm("Delete this entry? This can't be undone.")) return;
+    if (!(await confirm("Delete this entry? This can't be undone.", { confirmLabel: "Delete", danger: true }))) return;
     await fetch(`/api/expense-manager/transactions/${id}`, { method: "DELETE" });
     loadSummary(bookOwnerId);
     loadTransactions(bookOwnerId, typeFilter, pendingOnly);
@@ -177,7 +179,7 @@ export default function FinancePage() {
 
   async function handleToggleAccountActive(account: Account) {
     if (!bookOwnerId) return;
-    if (account.is_active && !window.confirm(`Close ${account.bank_name} — ${account.account_name}? Its balance stays visible, but it can't be selected for new entries until reopened.`)) return;
+    if (account.is_active && !(await confirm(`Close ${account.bank_name} — ${account.account_name}? Its balance stays visible, but it can't be selected for new entries until reopened.`, { confirmLabel: "Close Account", danger: true }))) return;
     await fetch(`/api/expense-manager/accounts/${account.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -368,6 +370,7 @@ export default function FinancePage() {
           <HeroKpi icon={IndianRupee} label="Net This Month" value={money(summary.netThisMonth)} />
         </div>
       </DashboardPageHero>
+      {confirmDialog}
 
       {bookOwnerId && <BookSwitcher bookOwnerId={bookOwnerId} onChange={handleSwitchBook} />}
 

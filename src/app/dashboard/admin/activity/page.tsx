@@ -7,6 +7,7 @@ import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { MultiSelect } from "@/components/MultiSelect";
+import { SearchButton } from "@/components/SearchButton";
 
 type ActivityRow = {
   id: string;
@@ -32,7 +33,9 @@ const SOURCE_STYLE: Record<ActivityRow["source"], { bg: string; fg: string; labe
 // stops being a question only SQL could answer.
 export default function ActivityPage() {
   const [rows, setRows] = useState<ActivityRow[] | null>(null);
+  const [draftSourceFilter, setDraftSourceFilter] = useState<Set<string>>(new Set());
   const [sourceFilter, setSourceFilter] = useState<Set<string>>(new Set());
+  const sourceFilterDirty = draftSourceFilter.size !== sourceFilter.size || [...draftSourceFilter].some((v) => !sourceFilter.has(v));
 
   useEffect(() => {
     const kickoff = setTimeout(async () => {
@@ -151,17 +154,20 @@ export default function ActivityPage() {
           exportFilename="activity"
           minWidth={760}
           toolbar={
-            <MultiSelect
-              options={[
-                { value: "invoice", label: "Invoices" },
-                { value: "order", label: "Orders" },
-                { value: "lead", label: "Leads" },
-                { value: "finance", label: "Business Finance" },
-              ]}
-              selected={sourceFilter}
-              onChange={setSourceFilter}
-              placeholder="All areas"
-            />
+            <>
+              <MultiSelect
+                options={[
+                  { value: "invoice", label: "Invoices" },
+                  { value: "order", label: "Orders" },
+                  { value: "lead", label: "Leads" },
+                  { value: "finance", label: "Business Finance" },
+                ]}
+                selected={draftSourceFilter}
+                onChange={setDraftSourceFilter}
+                placeholder="All areas"
+              />
+              <SearchButton onClick={() => setSourceFilter(draftSourceFilter)} dirty={sourceFilterDirty} />
+            </>
           }
         />
       )}

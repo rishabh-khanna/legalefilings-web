@@ -157,6 +157,14 @@ export default function AccountRequestsPage() {
       sortValue: (r) => r.created_at,
     },
     {
+      key: "requestedOn",
+      header: "Requested On",
+      className: "whitespace-nowrap",
+      render: (r) => new Date(r.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+      exportValue: (r) => new Date(r.created_at).toLocaleDateString("en-IN"),
+      sortValue: (r) => r.created_at,
+    },
+    {
       key: "actions",
       header: "Actions",
       render: (r) =>
@@ -231,6 +239,7 @@ export default function AccountRequestsPage() {
         itemLabel="requests"
         emptyMessage="No pending requests."
         search={{ placeholder: "Search name, email…", filter: (r, q) => `${r.full_name} ${r.email}`.toLowerCase().includes(q) }}
+        dateFilter={{ getDate: (r) => r.created_at }}
         exportFilename="pending-account-requests"
         minWidth={760}
       />

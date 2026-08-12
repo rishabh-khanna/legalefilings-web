@@ -3,12 +3,14 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Users, CalendarCheck, ClipboardList, Check, X } from "lucide-react";
+import { MonthPicker } from "@/components/MonthPicker";
 import { formatHoursMinutes } from "@/lib/format-duration";
 import { useActionMessage } from "@/lib/use-action-message";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { MultiSelect } from "@/components/MultiSelect";
+import { SearchButton } from "@/components/SearchButton";
 import { TruncatedText } from "@/components/TruncatedText";
 import { Tooltip } from "@/components/Tooltip";
 import { toISTDateString } from "@/lib/ist-date";
@@ -21,10 +23,20 @@ const CORRECTION_STATUS_STYLE: Record<CorrectionRow["status"], { bg: string; fg:
 
 type StaffOption = { id: string; name: string };
 type AttendanceEvent = { event_type: "check_in" | "check_out"; occurred_at: string; location: string | null; note: string | null };
-type DayEntry = [
-  string,
-  { checkIn?: string; checkInLoc?: string | null; checkOut?: string; checkOutLoc?: string | null; checkInNote?: string | null; checkOutNote?: string | null },
-];
+// staffName is only ever set in "All Staff" mode (where /api/admin/
+// attendance-log already attaches it) — undefined in single-staff mode,
+// where the Staff column is hidden anyway so there's nothing to show.
+type LogRow = {
+  key: string;
+  staffName?: string;
+  date: string;
+  checkIn?: string;
+  checkInLoc?: string | null;
+  checkInNote?: string | null;
+  checkOut?: string;
+  checkOutLoc?: string | null;
+  checkOutNote?: string | null;
+};
 
 // Mirrors AUTO_CLOSE_NOTE in api/cron/close-open-shifts/route.ts — kept as
 // a literal here rather than imported, since that file is a server route
@@ -45,6 +57,7 @@ type CorrectionRow = {
   reason: string;
   status: "pending" | "approved" | "rejected";
   organization_id: string;
+  created_at: string;
   updated_at: string;
   profiles?: { full_name: string | null } | null;
   organizations?: { name: string | null } | null;
@@ -60,8 +73,8 @@ function mapLink(location: string | null) {
   return `https://www.google.com/maps?q=${location}`;
 }
 
-function groupByDay(events: AttendanceEvent[]) {
-  const byDay = new Map<string, DayEntry[1]>();
+function groupByDay(events: AttendanceEvent[]): LogRow[] {
+  const byDay = new Map<string, Omit<LogRow, "key" | "date">>();
   for (const ev of events) {
     // IST calendar day, not the UTC slice. A punch between IST midnight
     // and 5:30 AM falls on the previous UTC day, so slicing the
@@ -81,7 +94,9 @@ function groupByDay(events: AttendanceEvent[]) {
     }
     byDay.set(day, entry);
   }
-  return Array.from(byDay.entries()).sort();
+  return Array.from(byDay.entries())
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([date, entry]) => ({ key: date, date, ...entry }));
 }
 
 // useSearchParams needs a Suspense boundary around it or the whole page
@@ -108,8 +123,12 @@ function AdminAttendancePageInner() {
   const [staffId, setStaffId] = useState("");
   const [month, setMonth] = useState(currentMonth());
   const [events, setEvents] = useState<AttendanceEvent[]>([]);
+  const [allStaffRows, setAllStaffRows] = useState<{ staffId: string; staffName: string; date: string; checkIn?: string; checkInLoc?: string | null; checkInNote?: string | null; checkOut?: string; checkOutLoc?: string | null; checkOutNote?: string | null }[]>([]);
   const [corrections, setCorrections] = useState<CorrectionRow[]>([]);
+  const [draftCorrectionsEmployeeFilter, setDraftCorrectionsEmployeeFilter] = useState<Set<string>>(new Set());
   const [correctionsEmployeeFilter, setCorrectionsEmployeeFilter] = useState<Set<string>>(new Set());
+  const correctionsEmployeeFilterDirty =
+    draftCorrectionsEmployeeFilter.size !== correctionsEmployeeFilter.size || [...draftCorrectionsEmployeeFilter].some((v) => !correctionsEmployeeFilter.has(v));
   const [todayStaff, setTodayStaff] = useState<{ id: string; name: string; present: boolean; checkInAt: string | null }[]>([]);
   const [todayLoaded, setTodayLoaded] = useState(false);
   // The Overview tiles link here with ?status=present or ?status=absent
@@ -132,16 +151,26 @@ function AdminAttendancePageInner() {
         name: orgCount > 1 && p.organizationName ? `${p.full_name ?? "Unnamed"} — ${p.organizationName}` : (p.full_name ?? "Unnamed"),
       }));
       setStaffOptions(opts);
-      if (opts[0]) setStaffId(opts[0].id);
     }, 0);
     return () => clearTimeout(kickoff);
   }, []);
 
+  // staffId "" means "All Staff" — the tab's default, so it opens
+  // showing the whole team's month rather than whoever happened to be
+  // first alphabetically. A specific staff member still narrows to
+  // their own single-person log via the existing per-staff endpoint.
   useEffect(() => {
     if (!staffId) return;
     fetch(`/api/attendance?staffId=${staffId}&month=${month}`)
       .then((res) => res.json())
       .then((data) => setEvents(data.events ?? []));
+  }, [staffId, month]);
+
+  useEffect(() => {
+    if (staffId) return;
+    fetch(`/api/admin/attendance-log?month=${month}`)
+      .then((res) => res.json())
+      .then((data) => setAllStaffRows(data.rows ?? []));
   }, [staffId, month]);
 
   useEffect(() => {
@@ -191,7 +220,10 @@ function AdminAttendancePageInner() {
   // correction requests pooled together — the org tag is only worth
   // showing once it's actually ambiguous which org a row belongs to.
   const correctionsSpanMultipleOrgs = new Set(corrections.map((c) => c.organization_id)).size > 1;
-  const groupedDays = useMemo(() => groupByDay(events), [events]);
+  const groupedDays = useMemo<LogRow[]>(() => {
+    if (staffId) return groupByDay(events);
+    return allStaffRows.map((r) => ({ key: `${r.staffId}::${r.date}`, staffName: r.staffName, date: r.date, checkIn: r.checkIn, checkInLoc: r.checkInLoc, checkInNote: r.checkInNote, checkOut: r.checkOut, checkOutLoc: r.checkOutLoc, checkOutNote: r.checkOutNote }));
+  }, [staffId, events, allStaffRows]);
 
   // Replaces the old group-by-employee clustering on the corrections table
   // — one dropdown to narrow the queue to a single person instead of the
@@ -209,47 +241,61 @@ function AdminAttendancePageInner() {
     [corrections, correctionsEmployeeFilter]
   );
 
-  const dayColumns: DataTableColumn<DayEntry>[] = [
-    { key: "date", header: "Date", render: ([day]) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{day}</span>, exportValue: ([day]) => day, sortValue: ([day]) => day },
+  const dayColumns: DataTableColumn<LogRow>[] = [
+    // Only meaningful in "All Staff" mode — spread in ahead of Date so
+    // it's the same column position "All Staff" tables use elsewhere
+    // (Today's Status, Correction Requests when cross-org). Absent
+    // entirely for a single selected staff member, where every row is
+    // already known to be theirs.
+    ...(staffId
+      ? []
+      : [{
+          key: "staff",
+          header: "Staff",
+          render: (r: LogRow) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>{r.staffName}</span>,
+          exportValue: (r: LogRow) => r.staffName ?? "",
+          sortValue: (r: LogRow) => r.staffName,
+        } as DataTableColumn<LogRow>]),
+    { key: "date", header: "Date", className: "whitespace-nowrap", render: (r) => <span className="font-medium" style={{ color: "var(--color-ink)" }}>{r.date}</span>, exportValue: (r) => r.date, sortValue: (r) => r.date },
     {
       key: "checkIn",
       header: "Check In",
-      render: ([, entry]) => {
-        const link = mapLink(entry.checkInLoc ?? null);
+      render: (r) => {
+        const link = mapLink(r.checkInLoc ?? null);
         return (
           <>
-            {entry.checkIn ? new Date(entry.checkIn).toLocaleTimeString("en-IN") : "—"}
+            {r.checkIn ? new Date(r.checkIn).toLocaleTimeString("en-IN") : "—"}
             {link && <a href={link} target="_blank" rel="noopener noreferrer" className="ml-1.5 text-xs">📍</a>}
           </>
         );
       },
-      exportValue: ([, entry]) => (entry.checkIn ? new Date(entry.checkIn).toLocaleTimeString("en-IN") : ""),
+      exportValue: (r) => (r.checkIn ? new Date(r.checkIn).toLocaleTimeString("en-IN") : ""),
     },
     {
       key: "checkOut",
       header: "Check Out",
-      render: ([, entry]) => {
-        const link = mapLink(entry.checkOutLoc ?? null);
+      render: (r) => {
+        const link = mapLink(r.checkOutLoc ?? null);
         return (
           <>
-            {entry.checkOut ? new Date(entry.checkOut).toLocaleTimeString("en-IN") : "—"}
+            {r.checkOut ? new Date(r.checkOut).toLocaleTimeString("en-IN") : "—"}
             {link && <a href={link} target="_blank" rel="noopener noreferrer" className="ml-1.5 text-xs">📍</a>}
           </>
         );
       },
-      exportValue: ([, entry]) => (entry.checkOut ? new Date(entry.checkOut).toLocaleTimeString("en-IN") : ""),
+      exportValue: (r) => (r.checkOut ? new Date(r.checkOut).toLocaleTimeString("en-IN") : ""),
     },
     {
       key: "hours",
       header: "Hours",
-      render: ([, entry]) => (entry.checkIn && entry.checkOut ? formatHoursMinutes(new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime()) : "—"),
-      exportValue: ([, entry]) => (entry.checkIn && entry.checkOut ? formatHoursMinutes(new Date(entry.checkOut).getTime() - new Date(entry.checkIn).getTime()) : ""),
+      render: (r) => (r.checkIn && r.checkOut ? formatHoursMinutes(new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) : "—"),
+      exportValue: (r) => (r.checkIn && r.checkOut ? formatHoursMinutes(new Date(r.checkOut).getTime() - new Date(r.checkIn).getTime()) : ""),
     },
     {
       key: "status",
       header: "Status",
-      render: ([, entry]) => {
-        if (entry.checkOutNote === AUTO_CLOSE_NOTE) {
+      render: (r) => {
+        if (r.checkOutNote === AUTO_CLOSE_NOTE) {
           return (
             <Tooltip content="No check-out was ever recorded — this is when the nightly cleanup job auto-closed the shift, not when they actually left.">
               <span className="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "var(--color-danger-tint)", color: "var(--color-danger)" }}>
@@ -258,7 +304,7 @@ function AdminAttendancePageInner() {
             </Tooltip>
           );
         }
-        if (entry.checkInNote === "regularized" || entry.checkOutNote === "regularized") {
+        if (r.checkInNote === "regularized" || r.checkOutNote === "regularized") {
           return (
             <Tooltip content="Corrected via an approved attendance correction request.">
               <span className="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "var(--color-info-tint)", color: "var(--color-info)" }}>
@@ -267,7 +313,7 @@ function AdminAttendancePageInner() {
             </Tooltip>
           );
         }
-        if (entry.checkIn && !entry.checkOut) {
+        if (r.checkIn && !r.checkOut) {
           return (
             <span className="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}>
               No check-out yet
@@ -280,12 +326,12 @@ function AdminAttendancePageInner() {
           </span>
         );
       },
-      exportValue: ([, entry]) =>
-        entry.checkOutNote === AUTO_CLOSE_NOTE
+      exportValue: (r) =>
+        r.checkOutNote === AUTO_CLOSE_NOTE
           ? "Auto-closed"
-          : entry.checkInNote === "regularized" || entry.checkOutNote === "regularized"
+          : r.checkInNote === "regularized" || r.checkOutNote === "regularized"
             ? "Regularized"
-            : entry.checkIn && !entry.checkOut
+            : r.checkIn && !r.checkOut
               ? "No check-out yet"
               : "Present",
     },
@@ -297,7 +343,15 @@ function AdminAttendancePageInner() {
   // record on this page at all once decided.
   const correctionColumns: DataTableColumn<CorrectionRow>[] = [
     { key: "employee", header: "Employee", render: (c) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>{c.profiles?.full_name ?? "Staff"}</span>, exportValue: (c) => c.profiles?.full_name ?? "", sortValue: (c) => c.profiles?.full_name },
-    { key: "date", header: "Date", className: "w-[10%] whitespace-nowrap", render: (c) => c.date, exportValue: (c) => c.date, sortValue: (c) => c.date },
+    { key: "date", header: "For Date", className: "w-[9%] whitespace-nowrap", render: (c) => c.date, exportValue: (c) => c.date, sortValue: (c) => c.date },
+    {
+      key: "requestedOn",
+      header: "Requested On",
+      className: "w-[9%] whitespace-nowrap",
+      render: (c) => new Date(c.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+      exportValue: (c) => new Date(c.created_at).toLocaleDateString("en-IN"),
+      sortValue: (c) => c.created_at,
+    },
     { key: "checkIn", header: "Requested Check In", className: "w-[14%] whitespace-nowrap", render: (c) => c.requested_check_in ?? "—", exportValue: (c) => c.requested_check_in ?? "" },
     { key: "checkOut", header: "Requested Check Out", className: "w-[14%] whitespace-nowrap", render: (c) => c.requested_check_out ?? "—", exportValue: (c) => c.requested_check_out ?? "" },
     { key: "reason", header: "Reason", className: "max-w-[180px]", render: (c) => <TruncatedText text={`“${c.reason}”`} italic style={{ color: "var(--color-ink-soft)" }} />, exportValue: (c) => c.reason },
@@ -376,17 +430,26 @@ function AdminAttendancePageInner() {
     },
   ];
 
-  const filteredTodayStaff = useMemo(
-    () => (todayStatusFilter === "all" ? todayStaff : todayStaff.filter((s) => (todayStatusFilter === "present" ? s.present : !s.present))),
-    [todayStaff, todayStatusFilter]
-  );
+  const filteredTodayStaff = useMemo(() => {
+    if (todayStatusFilter !== "all") {
+      return todayStaff.filter((s) => (todayStatusFilter === "present" ? s.present : !s.present));
+    }
+    // "All" isn't a no-op sort-wise — the roster comes back alphabetical
+    // by name, and on any team where the present few don't happen to
+    // fall in the first page of names, "All" rendered as if it were
+    // "Absent" (present staff were real, just paginated out of view).
+    // A stable sort with Present first means the people who actually
+    // showed up today are always the first thing "All" shows, with
+    // alphabetical order preserved within each group.
+    return [...todayStaff].sort((a, b) => Number(b.present) - Number(a.present));
+  }, [todayStaff, todayStatusFilter]);
 
   return (
     <div>
       <DashboardPageHero title="Team Attendance" subtitle="Review check-ins and manage correction requests across your team.">
         <div className="relative mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           <HeroKpi icon={Users} label="Team Members" value={staffOptions.length} />
-          <HeroKpi icon={CalendarCheck} label="Days Logged" value={groupedDays.length} />
+          <HeroKpi icon={CalendarCheck} label={staffId ? "Days Logged" : "Entries Logged"} value={groupedDays.length} />
           <HeroKpi icon={ClipboardList} label="Pending Corrections" value={pendingCorrections.length} />
         </div>
       </DashboardPageHero>
@@ -444,6 +507,7 @@ function AdminAttendancePageInner() {
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: "var(--color-ink-soft)" }}>Staff</label>
               <select value={staffId} onChange={(e) => setStaffId(e.target.value)} className="rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--color-line)" }}>
+                <option value="">All Staff</option>
                 {staffOptions.map((s) => (
                   <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
@@ -451,7 +515,7 @@ function AdminAttendancePageInner() {
             </div>
             <div>
               <label className="block text-xs font-medium mb-1" style={{ color: "var(--color-ink-soft)" }}>Month</label>
-              <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--color-line)" }} />
+              <MonthPicker value={month} onChange={setMonth} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm" />
             </div>
           </div>
 
@@ -463,10 +527,10 @@ function AdminAttendancePageInner() {
           <DataTable
             columns={dayColumns}
             rows={groupedDays}
-            getRowKey={([day]) => day}
-            itemLabel="days"
+            getRowKey={(r) => r.key}
+            itemLabel={staffId ? "days" : "entries"}
             emptyMessage="No attendance for this month."
-            dateFilter={{ getDate: ([day]) => day }}
+            dateFilter={{ getDate: (r) => r.date }}
             exportFilename="attendance"
             exportExtra={staffId ? [{ label: "PDF — this staff, this month", href: `/api/admin/reports/attendance?staffId=${staffId}&month=${month}` }] : undefined}
           />
@@ -485,13 +549,16 @@ function AdminAttendancePageInner() {
           search={{ placeholder: "Search employee…", filter: (c, q) => (c.profiles?.full_name ?? "").toLowerCase().includes(q) }}
           exportFilename="correction-requests"
           toolbar={
-            <MultiSelect
-              options={correctionsEmployeeOptions.map(([id, name]) => ({ value: id, label: name }))}
-              selected={correctionsEmployeeFilter}
-              onChange={setCorrectionsEmployeeFilter}
-              placeholder="All employees"
-              searchable
-            />
+            <>
+              <MultiSelect
+                options={correctionsEmployeeOptions.map(([id, name]) => ({ value: id, label: name }))}
+                selected={draftCorrectionsEmployeeFilter}
+                onChange={setDraftCorrectionsEmployeeFilter}
+                placeholder="All employees"
+                searchable
+              />
+              <SearchButton onClick={() => setCorrectionsEmployeeFilter(draftCorrectionsEmployeeFilter)} dirty={correctionsEmployeeFilterDirty} />
+            </>
           }
         />
       )}

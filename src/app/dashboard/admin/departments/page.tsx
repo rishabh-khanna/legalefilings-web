@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Building2, Layers, Plus, Trash2, Star, Info } from "lucide-react";
 import type { Department, DepartmentRole } from "@/lib/roles";
 import { useActionMessage } from "@/lib/use-action-message";
+import { useConfirm } from "@/lib/use-confirm";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
@@ -54,6 +55,7 @@ export default function DepartmentsPage() {
   const [newRoleDraft, setNewRoleDraft] = useState<Record<string, { title: string; isManagerLevel: boolean }>>({});
   const [savingRole, setSavingRole] = useState<string | null>(null);
   const { message, showSuccess, showError } = useActionMessage();
+  const { confirm, confirmDialog } = useConfirm();
 
   async function load() {
     const res = await fetch("/api/admin/departments");
@@ -86,7 +88,7 @@ export default function DepartmentsPage() {
   }
 
   async function handleDeleteDepartment(dept: DepartmentWithRoles) {
-    if (!confirm(`Delete "${dept.name}"? Anyone assigned to it (or its roles) just loses the assignment — no accounts are affected.`)) return;
+    if (!(await confirm(`Delete "${dept.name}"? Anyone assigned to it (or its roles) just loses the assignment — no accounts are affected.`, { confirmLabel: "Delete", danger: true }))) return;
     const res = await fetch(`/api/admin/departments/${dept.id}`, { method: "DELETE" });
     if (res.ok) {
       showSuccess("Department deleted.");
@@ -132,7 +134,7 @@ export default function DepartmentsPage() {
   }
 
   async function handleDeleteRole(role: DepartmentRole) {
-    if (!confirm(`Delete the "${role.title}" role? Anyone assigned to it just loses the assignment.`)) return;
+    if (!(await confirm(`Delete the "${role.title}" role? Anyone assigned to it just loses the assignment.`, { confirmLabel: "Delete", danger: true }))) return;
     const res = await fetch(`/api/admin/department-roles/${role.id}`, { method: "DELETE" });
     if (res.ok) {
       showSuccess("Role deleted.");
@@ -182,6 +184,7 @@ export default function DepartmentsPage() {
       <div className="mt-3">
         <ActionMessage message={message} />
       </div>
+      {confirmDialog}
 
       <div className="mt-3 flex gap-3 rounded-2xl border px-4 py-3.5 text-xs leading-relaxed" style={{ borderColor: "#f0dca0", backgroundColor: "#fdf6e3", color: "#6b5215" }}>
         <Info className="mt-0.5 h-4 w-4 shrink-0" style={{ color: "#c8960c" }} />

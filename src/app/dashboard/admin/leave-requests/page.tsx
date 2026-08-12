@@ -4,12 +4,14 @@ import { useEffect, useMemo, useState } from "react";
 import { Clock, CheckCircle2, XCircle, Check, X } from "lucide-react";
 import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
 import { useActionMessage } from "@/lib/use-action-message";
+import { useConfirm } from "@/lib/use-confirm";
 import { ActionMessage } from "@/components/ActionMessage";
 import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { TruncatedText } from "@/components/TruncatedText";
 import { MultiSelect } from "@/components/MultiSelect";
+import { SearchButton } from "@/components/SearchButton";
 
 type LeaveRow = {
   id: string;
@@ -22,6 +24,11 @@ type LeaveRow = {
   status: "pending" | "approved" | "rejected" | "cancelled";
   review_note: string | null;
   organization_id: string;
+  created_at: string;
+  // Working days in the range × the half-day fraction — computed
+  // server-side (see /api/leave-requests) so this and the self-service
+  // /dashboard/leave page never disagree on what a request costs.
+  requestedDays: number;
   profiles?: { full_name: string | null } | null;
   organizations?: { name: string | null } | null;
 };
@@ -53,6 +60,7 @@ export default function AdminLeaveRequestsPage() {
   const [rejectReason, setRejectReason] = useState("");
   const [error, setError] = useState<string | null>(null);
   const { message, showSuccess, showError } = useActionMessage();
+  const { confirm, confirmDialog } = useConfirm();
 
   async function load() {
     const res = await fetch("/api/leave-requests");
@@ -72,7 +80,7 @@ export default function AdminLeaveRequestsPage() {
 
   async function cancelApproved(r: LeaveRow) {
     const who = r.profiles?.full_name ?? "this employee";
-    if (!window.confirm(`Cancel ${who}'s approved leave? The days go back to their balance.`)) return;
+    if (!(await confirm(`Cancel ${who}'s approved leave? The days go back to their balance.`, { confirmLabel: "Cancel Leave", danger: true }))) return;
     const res = await fetch(`/api/leave-requests/${r.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -117,8 +125,13 @@ export default function AdminLeaveRequestsPage() {
     };
   }, [requests]);
 
+  const [draftStatusFilter, setDraftStatusFilter] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
+  const [draftStaffFilter, setDraftStaffFilter] = useState<Set<string>>(new Set());
   const [staffFilter, setStaffFilter] = useState<Set<string>>(new Set());
+  const leaveFiltersDirty =
+    draftStatusFilter.size !== statusFilter.size || [...draftStatusFilter].some((v) => !statusFilter.has(v)) ||
+    draftStaffFilter.size !== staffFilter.size || [...draftStaffFilter].some((v) => !staffFilter.has(v));
   const statusFilteredRequests = useMemo(() => {
     return (requests ?? []).filter((r) => statusFilter.size === 0 || statusFilter.has(r.status));
   }, [requests, statusFilter]);
@@ -149,7 +162,23 @@ export default function AdminLeaveRequestsPage() {
   const columns: DataTableColumn<LeaveRow>[] = [
     { key: "staff", header: "Staff", render: (r) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>{r.profiles?.full_name ?? "Staff"}</span>, exportValue: (r) => r.profiles?.full_name ?? "", sortValue: (r) => r.profiles?.full_name },
     { key: "type", header: "Leave Type", className: "w-[12%] whitespace-nowrap", render: (r) => leaveRowLabel(r), exportValue: (r) => leaveRowLabel(r), sortValue: (r) => leaveRowLabel(r) },
-    { key: "dates", header: "Dates", className: "w-[16%] whitespace-nowrap", render: (r) => `${r.start_date} → ${r.end_date}`, exportValue: (r) => `${r.start_date} to ${r.end_date}`, sortValue: (r) => r.start_date },
+    { key: "dates", header: "Dates", className: "w-[14%] whitespace-nowrap", render: (r) => `${r.start_date} → ${r.end_date}`, exportValue: (r) => `${r.start_date} to ${r.end_date}`, sortValue: (r) => r.start_date },
+    {
+      key: "totalDays",
+      header: "Total Days",
+      className: "w-[8%] whitespace-nowrap",
+      render: (r) => <span className="font-semibold tabular-nums" style={{ color: "var(--color-ink)" }}>{r.requestedDays}</span>,
+      exportValue: (r) => r.requestedDays,
+      sortValue: (r) => r.requestedDays,
+    },
+    {
+      key: "requestedOn",
+      header: "Requested On",
+      className: "w-[10%] whitespace-nowrap",
+      render: (r) => new Date(r.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }),
+      exportValue: (r) => new Date(r.created_at).toLocaleDateString("en-IN"),
+      sortValue: (r) => r.created_at,
+    },
     { key: "reason", header: "Reason", className: "max-w-[180px]", render: (r) => (r.reason ? <TruncatedText text={`“${r.reason}”`} italic style={{ color: "var(--color-ink-soft)" }} /> : "—"), exportValue: (r) => r.reason ?? "" },
     ...(spansMultipleOrgs
       ? [{ key: "org", header: "Organization", render: (r: LeaveRow) => r.organizations?.name ?? "—", exportValue: (r: LeaveRow) => r.organizations?.name ?? "Unknown organization" } as DataTableColumn<LeaveRow>]
@@ -224,6 +253,7 @@ export default function AdminLeaveRequestsPage() {
       <div className="mt-4">
         <ActionMessage message={message} />
       </div>
+      {confirmDialog}
 
       <DataTable
         columns={columns}
@@ -248,16 +278,23 @@ export default function AdminLeaveRequestsPage() {
                 { value: "rejected", label: "Rejected" },
                 { value: "cancelled", label: "Cancelled" },
               ]}
-              selected={statusFilter}
-              onChange={setStatusFilter}
+              selected={draftStatusFilter}
+              onChange={setDraftStatusFilter}
               placeholder="All statuses"
             />
             <MultiSelect
               options={staffOptions.map(([id, name]) => ({ value: id, label: name }))}
-              selected={staffFilter}
-              onChange={setStaffFilter}
+              selected={draftStaffFilter}
+              onChange={setDraftStaffFilter}
               placeholder="All staff"
               searchable
+            />
+            <SearchButton
+              onClick={() => {
+                setStatusFilter(draftStatusFilter);
+                setStaffFilter(draftStaffFilter);
+              }}
+              dirty={leaveFiltersDirty}
             />
           </>
         }

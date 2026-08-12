@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { getCurrentProfile } from "@/lib/current-profile";
 import { canSeeAllOrgs } from "@/lib/organization";
+import { startOfTodayIST } from "@/lib/ist-date";
 
 // GET /api/admin/attendance-today — admin only. Per-staff Present/Absent
 // for today, the exact roster and "present" definition (checked in since
@@ -20,13 +21,20 @@ export async function GET() {
   let staffQuery = supabase.from("profiles").select("id, full_name").in("account_type", ["staff", "admin"]).order("full_name", { ascending: true });
   if (orgScope) staffQuery = staffQuery.eq("organization_id", orgScope);
 
-  const todayStart = new Date();
-  todayStart.setHours(0, 0, 0, 0);
+  // IST midnight, not server-local midnight — see startOfTodayIST's own
+  // comment; on Vercel's UTC runtime, plain `new Date().setHours(0,0,0,0)`
+  // lands ~5.5h off from the actual IST business day. An explicit upper
+  // bound (tomorrow's IST midnight) matters too — without one, a stray
+  // future-dated row (test/seed data, a bad correction) counts as "still
+  // checked in today" forever, not just on the day it's actually for.
+  const todayStart = startOfTodayIST();
+  const tomorrowStart = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
   let checkinsQuery = supabase
     .from("attendance_events")
     .select("staff_id, occurred_at")
     .eq("event_type", "check_in")
     .gte("occurred_at", todayStart.toISOString())
+    .lt("occurred_at", tomorrowStart.toISOString())
     .order("occurred_at", { ascending: true });
   if (orgScope) checkinsQuery = checkinsQuery.eq("organization_id", orgScope);
 

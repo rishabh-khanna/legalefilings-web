@@ -8,6 +8,7 @@ import { DashboardPageHero, HeroKpi } from "@/components/crm/DashboardPageHero";
 import { LoadingBlock } from "@/components/Spinner";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { MultiSelect } from "@/components/MultiSelect";
+import { SearchButton } from "@/components/SearchButton";
 import { TruncatedText } from "@/components/TruncatedText";
 
 type EmailFailure = {
@@ -55,8 +56,13 @@ export default function EmailFailuresPage() {
     return () => clearTimeout(kickoff);
   }, []);
 
+  const [draftTypeFilter, setDraftTypeFilter] = useState<Set<string>>(new Set());
   const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set());
+  const [draftRecipientFilter, setDraftRecipientFilter] = useState<Set<string>>(new Set());
   const [recipientFilter, setRecipientFilter] = useState<Set<string>>(new Set());
+  const emailFiltersDirty =
+    draftTypeFilter.size !== typeFilter.size || [...draftTypeFilter].some((v) => !typeFilter.has(v)) ||
+    draftRecipientFilter.size !== recipientFilter.size || [...draftRecipientFilter].some((v) => !recipientFilter.has(v));
   const typeFilteredFailures = useMemo(() => {
     return (failures ?? []).filter((f) => typeFilter.size === 0 || typeFilter.has(f.email_type));
   }, [failures, typeFilter]);
@@ -158,16 +164,23 @@ export default function EmailFailuresPage() {
             <>
               <MultiSelect
                 options={Object.entries(TYPE_LABEL).map(([value, label]) => ({ value, label }))}
-                selected={typeFilter}
-                onChange={setTypeFilter}
+                selected={draftTypeFilter}
+                onChange={setDraftTypeFilter}
                 placeholder="All types"
               />
               <MultiSelect
                 options={recipientOptions.map((email) => ({ value: email, label: email }))}
-                selected={recipientFilter}
-                onChange={setRecipientFilter}
+                selected={draftRecipientFilter}
+                onChange={setDraftRecipientFilter}
                 placeholder="All recipients"
                 searchable
+              />
+              <SearchButton
+                onClick={() => {
+                  setTypeFilter(draftTypeFilter);
+                  setRecipientFilter(draftRecipientFilter);
+                }}
+                dirty={emailFiltersDirty}
               />
             </>
           }

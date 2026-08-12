@@ -17,6 +17,7 @@ import { SITE_NAME } from "@/config/site";
 import { LoadingBlock } from "@/components/Spinner";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { MultiSelect } from "@/components/MultiSelect";
+import { SearchButton } from "@/components/SearchButton";
 import { isCollectableInvoiceType } from "@/lib/invoice-calc";
 
 type InvoiceType = "gst" | "non_gst" | "export" | "proforma" | "credit_note" | "debit_note";
@@ -616,6 +617,15 @@ export default function InvoiceCrmPage() {
     () => (invoiceClientFilter.size === 0 ? statusFilteredInvoices : statusFilteredInvoices.filter((i) => invoiceClientFilter.has(i.customer_id))),
     [statusFilteredInvoices, invoiceClientFilter]
   );
+
+  // Both status and client apply on Search rather than the instant an
+  // option is checked — draft* is what the MultiSelects are bound to,
+  // the non-draft pair above is what actually filters.
+  const [draftInvoiceStatusFilter, setDraftInvoiceStatusFilter] = useState<Set<string>>(new Set());
+  const [draftInvoiceClientFilter, setDraftInvoiceClientFilter] = useState<Set<string>>(new Set());
+  const invoiceFiltersDirty =
+    draftInvoiceStatusFilter.size !== invoiceStatusFilter.size || [...draftInvoiceStatusFilter].some((v) => !invoiceStatusFilter.has(v)) ||
+    draftInvoiceClientFilter.size !== invoiceClientFilter.size || [...draftInvoiceClientFilter].some((v) => !invoiceClientFilter.has(v));
 
   // Only a platform_admin's request ever returns more than one org's
   // invoices pooled together — the column is only worth showing once
@@ -1335,16 +1345,23 @@ export default function InvoiceCrmPage() {
                     { value: "overdue", label: "Overdue" },
                     { value: "cancelled", label: "Cancelled" },
                   ]}
-                  selected={invoiceStatusFilter}
-                  onChange={setInvoiceStatusFilter}
+                  selected={draftInvoiceStatusFilter}
+                  onChange={setDraftInvoiceStatusFilter}
                   placeholder="All statuses"
                 />
                 <MultiSelect
                   options={invoiceClientOptions.map(([id, name]) => ({ value: id, label: name }))}
-                  selected={invoiceClientFilter}
-                  onChange={setInvoiceClientFilter}
+                  selected={draftInvoiceClientFilter}
+                  onChange={setDraftInvoiceClientFilter}
                   placeholder="All clients"
                   searchable
+                />
+                <SearchButton
+                  onClick={() => {
+                    setInvoiceStatusFilter(draftInvoiceStatusFilter);
+                    setInvoiceClientFilter(draftInvoiceClientFilter);
+                  }}
+                  dirty={invoiceFiltersDirty}
                 />
               </>
             }

@@ -7,14 +7,24 @@ import { useMemo, useState } from "react";
 // inventing its own. Bounds are inclusive, compared by calendar day
 // (not exact timestamp), so picking the same day for From and To
 // includes everything recorded that day regardless of time-of-day.
+//
+// from/to are the draft values the date pickers are bound to; they
+// don't filter anything by themselves. Filtering only happens against
+// appliedFrom/appliedTo, which only change when search() runs — picking
+// a date and having the table re-filter on every click read as
+// unpredictable on a large table, and a picked-but-not-yet-applied date
+// with no visible effect read as broken. search() is the one place that
+// moves draft into applied.
 export function useDateRangeFilter<T>(items: T[], getDate: (item: T) => string | Date | null | undefined) {
   const [from, setFrom] = useState("");
   const [to, setTo] = useState("");
+  const [appliedFrom, setAppliedFrom] = useState("");
+  const [appliedTo, setAppliedTo] = useState("");
 
   const filtered = useMemo(() => {
-    if (!from && !to) return items;
-    const fromMs = from ? new Date(`${from}T00:00:00`).getTime() : null;
-    const toMs = to ? new Date(`${to}T23:59:59.999`).getTime() : null;
+    if (!appliedFrom && !appliedTo) return items;
+    const fromMs = appliedFrom ? new Date(`${appliedFrom}T00:00:00`).getTime() : null;
+    const toMs = appliedTo ? new Date(`${appliedTo}T23:59:59.999`).getTime() : null;
     return items.filter((item) => {
       const raw = getDate(item);
       if (!raw) return false;
@@ -25,12 +35,31 @@ export function useDateRangeFilter<T>(items: T[], getDate: (item: T) => string |
       return true;
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, from, to]);
+  }, [items, appliedFrom, appliedTo]);
+
+  function search() {
+    setAppliedFrom(from);
+    setAppliedTo(to);
+  }
 
   function clear() {
     setFrom("");
     setTo("");
+    setAppliedFrom("");
+    setAppliedTo("");
   }
 
-  return { from, setFrom, to, setTo, filtered, clear, active: Boolean(from || to) };
+  return {
+    from,
+    setFrom,
+    to,
+    setTo,
+    filtered,
+    clear,
+    search,
+    // Draft differs from what's actually applied — the Search button
+    // uses this to show there's a pending change to apply.
+    dirty: from !== appliedFrom || to !== appliedTo,
+    active: Boolean(appliedFrom || appliedTo),
+  };
 }

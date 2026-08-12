@@ -33,7 +33,10 @@ function toCsv(rows: string[][]) {
   return numbered.map((row) => row.map(toCsvCell).join(",")).join("\n");
 }
 
-// GET /api/reports?type=attendance|salary|leave|employees|department&month=&year=
+// GET /api/reports?type=attendance|salary|leave|employees|department&month=&year=&from=&to=
+// attendance additionally accepts from=/to= (YYYY-MM-DD), which takes
+// priority over month= when present — a day-level range instead of a
+// whole-calendar-month one.
 // Admin only. Every report exports as CSV (Excel-compatible) — matches
 // the spec's "Export: Excel" requirement without needing a real .xlsx
 // library, since CSV opens directly in Excel/Sheets.
@@ -189,13 +192,30 @@ export async function GET(request: Request) {
 
   if (type === "attendance") {
     const month = searchParams.get("month");
+    const from = searchParams.get("from");
+    const to = searchParams.get("to");
     // organizations(name) only actually matters for a platform_admin
     // export, which pools every org's attendance events together.
     let query = supabase
       .from("attendance_events")
       .select("*, profiles!attendance_events_staff_id_fkey(full_name), organizations(name)")
       .order("occurred_at", { ascending: true });
-    if (month) {
+    // Custom day-level range (from/to) takes priority over month — the
+    // Data Exports page only ever sends one or the other, never both,
+    // but from/to is the more specific request when it's there.
+    if (from || to) {
+      if (from) query = query.gte("occurred_at", from);
+      if (to) {
+        // Exclusive upper bound one day past `to` so the end date's own
+        // events (any time from 00:00 to 23:59:59 that day) are included
+        // — a plain .lte("occurred_at", to) would compare a timestamp
+        // against a bare date and silently drop everything after
+        // midnight on the end date itself.
+        const end = new Date(`${to}T00:00:00Z`);
+        end.setUTCDate(end.getUTCDate() + 1);
+        query = query.lt("occurred_at", end.toISOString().slice(0, 10));
+      }
+    } else if (month) {
       const [y, m] = month.split("-").map(Number);
       const start = `${month}-01`;
       // Date.UTC, not new Date(y, m, ...) — the latter is local time and

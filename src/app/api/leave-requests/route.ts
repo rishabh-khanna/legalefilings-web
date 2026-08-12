@@ -95,7 +95,35 @@ export async function GET(request: Request) {
 
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ requests: data });
+
+  // requestedDays — the actual number of leave days a request costs
+  // (working days in the range × the half-day fraction), computed the
+  // same way approval-time balance math already does, not the raw
+  // calendar span between start_date and end_date, which overcounts any
+  // weekend or company holiday inside the range. Both /dashboard/leave
+  // and /dashboard/admin/leave-requests share this endpoint, so the
+  // "Total Days" column on each comes from one calculation, not two
+  // that could drift apart. Holidays are org-specific, so this fetches
+  // one holiday set per org actually present in the result (covering
+  // the earliest start_date to latest end_date across that org's rows)
+  // rather than once per row.
+  const rows = data ?? [];
+  const orgIds = [...new Set(rows.map((r) => r.organization_id as string))];
+  const holidaysByOrg = new Map<string, Set<string>>();
+  await Promise.all(
+    orgIds.map(async (orgId) => {
+      const orgRows = rows.filter((r) => r.organization_id === orgId);
+      const from = orgRows.reduce((min, r) => (r.start_date < min ? r.start_date : min), orgRows[0].start_date);
+      const to = orgRows.reduce((max, r) => (r.end_date > max ? r.end_date : max), orgRows[0].end_date);
+      holidaysByOrg.set(orgId, await fetchHolidayDates(supabase, orgId, from, to));
+    })
+  );
+  const withDays = rows.map((r) => ({
+    ...r,
+    requestedDays: countWorkingDays(r.start_date, r.end_date, holidaysByOrg.get(r.organization_id) ?? new Set()) * Number(r.day_fraction ?? 1),
+  }));
+
+  return NextResponse.json({ requests: withDays });
 }
 
 // POST /api/leave-requests — either the legacy "leaveType: 'unpaid'"
