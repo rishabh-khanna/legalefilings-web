@@ -1,15 +1,43 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { Clock, IndianRupee, CalendarCheck, Users, Building2, Receipt, Download, CalendarRange } from "lucide-react";
 import { DashboardPageHero } from "@/components/crm/DashboardPageHero";
 
-const REPORTS = [
-  { type: "attendance", label: "Attendance Report", description: "Every clock in/out event, optionally filtered by month below.", filterable: true },
-  { type: "salary", label: "Salary Report", description: "Payslip totals across all employees, optionally filtered by month below.", filterable: true },
-  { type: "leave", label: "Leave Report", description: "Every leave request and its status.", filterable: false },
-  { type: "employees", label: "Employee List", description: "Every staff/admin account with core details.", filterable: false },
-  { type: "department", label: "Department-wise Report", description: "Employees grouped by department.", filterable: false },
-  { type: "invoice-ageing", label: "Invoice Ageing Report", description: "Every unpaid/overdue invoice with balance outstanding and days overdue (1-30 / 30-60 / 60-90 / 90+).", filterable: false },
+// Same rotating tint set the row-number badges and lead avatars use
+// elsewhere in the app, so this page's icons read as part of the same
+// system instead of introducing a fifth palette. Assigned by hand per
+// report rather than by array position, so a given report keeps its
+// colour if the list is ever reordered.
+const TINTS = {
+  gold: { bg: "var(--color-accent-tint)", fg: "var(--color-action-dark)" },
+  blue: { bg: "var(--color-info-tint)", fg: "var(--color-info)" },
+  green: { bg: "var(--color-success-tint)", fg: "var(--color-success)" },
+  purple: { bg: "#ede9fe", fg: "#5b21b6" },
+  pink: { bg: "#fce7f3", fg: "#9d174d" },
+  red: { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" },
+};
+
+// Grouped by what an admin is actually pulling this for — day-to-day
+// people-ops data vs. the one finance export — rather than one flat
+// list of six identical-looking cards.
+const REPORT_GROUPS = [
+  {
+    label: "People & HR",
+    reports: [
+      { type: "attendance", label: "Attendance Report", description: "Every clock in/out event, optionally filtered by month below.", filterable: true, icon: Clock, tint: TINTS.blue },
+      { type: "salary", label: "Salary Report", description: "Payslip totals across all employees, optionally filtered by month below.", filterable: true, icon: IndianRupee, tint: TINTS.green },
+      { type: "leave", label: "Leave Report", description: "Every leave request and its status.", filterable: false, icon: CalendarCheck, tint: TINTS.gold },
+      { type: "employees", label: "Employee List", description: "Every staff/admin account with core details.", filterable: false, icon: Users, tint: TINTS.purple },
+      { type: "department", label: "Department-wise Report", description: "Employees grouped by department.", filterable: false, icon: Building2, tint: TINTS.pink },
+    ],
+  },
+  {
+    label: "Finance",
+    reports: [
+      { type: "invoice-ageing", label: "Invoice Ageing Report", description: "Every unpaid/overdue invoice with balance outstanding and days overdue (1-30 / 30-60 / 60-90 / 90+).", filterable: false, icon: Receipt, tint: TINTS.red },
+    ],
+  },
 ];
 
 export default function ReportsPage() {
@@ -44,8 +72,6 @@ export default function ReportsPage() {
     return `/api/reports?${params.toString()}`;
   }
 
-  const inputClass = "rounded-lg border px-3 py-2 text-sm outline-none focus:border-[var(--color-action)]";
-
   return (
     <div>
       <DashboardPageHero
@@ -55,29 +81,92 @@ export default function ReportsPage() {
             ? "Export data as CSV — opens directly in Excel or Google Sheets. Every export below pools every organization's data together, with an Organization column to tell rows apart."
             : "Export data as CSV — opens directly in Excel or Google Sheets."
         }
-      />
+      >
+        {/* Moved inside the hero, as a real toolbar control rather than a
+            plain label+input sitting under it — it drives two of the six
+            cards below, so it reads as part of the same unit instead of a
+            page setting. */}
+        <div className="relative mt-5 flex flex-wrap items-center gap-3">
+          <label
+            htmlFor="report-month"
+            className="flex items-center gap-2 rounded-full border px-3.5 py-2"
+            style={{ borderColor: "var(--gold-200)", backgroundColor: "color-mix(in srgb, var(--color-paper-raised) 70%, transparent)" }}
+          >
+            <CalendarRange className="h-4 w-4" style={{ color: "var(--color-action-dark)" }} />
+            <span className="text-xs font-semibold" style={{ color: "var(--color-ink)" }}>
+              Month
+            </span>
+            <input
+              id="report-month"
+              type="month"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+              className="bg-transparent text-sm font-medium outline-none"
+              style={{ color: "var(--color-ink)" }}
+            />
+          </label>
+          <span className="text-xs" style={{ color: "var(--color-ink-soft)" }}>
+            Applies to Attendance &amp; Salary only — every other report below always covers everything.
+          </span>
+        </div>
+      </DashboardPageHero>
 
-      <div className="mt-4">
-        <label className="mb-1 block text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>
-          Month filter (applies to Attendance &amp; Salary reports only)
-        </label>
-        <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
-      </div>
+      <div className="space-y-8">
+        {REPORT_GROUPS.map((group) => (
+          <div key={group.label}>
+            <p className="mb-3 text-[11px] font-bold uppercase tracking-[0.1em]" style={{ color: "var(--color-ink-soft)" }}>
+              {group.label}
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {group.reports.map((r) => {
+                const Icon = r.icon;
+                return (
+                  <div
+                    key={r.type}
+                    className="group relative flex flex-col gap-4 rounded-[16px] border p-5 transition-all duration-200 hover:-translate-y-0.5"
+                    style={{ borderColor: "var(--color-line)", backgroundColor: "var(--color-paper-raised)", boxShadow: "var(--shadow-xs)" }}
+                    onMouseEnter={(e) => (e.currentTarget.style.boxShadow = "var(--shadow-md)")}
+                    onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "var(--shadow-xs)")}
+                  >
+                    <div className="flex items-start gap-3.5">
+                      <span
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] transition-transform duration-200 group-hover:scale-105"
+                        style={{ backgroundColor: r.tint.bg, color: r.tint.fg }}
+                      >
+                        <Icon className="h-[18px] w-[18px]" />
+                      </span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold" style={{ color: "var(--color-ink)" }}>
+                            {r.label}
+                          </p>
+                          {r.filterable && month && (
+                            <span
+                              className="rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums"
+                              style={{ backgroundColor: "var(--gold-100)", color: "var(--color-action-dark)" }}
+                            >
+                              {new Date(`${month}-01`).toLocaleDateString("en-IN", { month: "short", year: "numeric" })}
+                            </span>
+                          )}
+                        </div>
+                        <p className="mt-0.5 text-xs leading-relaxed" style={{ color: "var(--color-ink-soft)" }}>
+                          {r.description}
+                        </p>
+                      </div>
+                    </div>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2">
-        {REPORTS.map((r) => (
-          <div key={r.type} className="flex items-center justify-between gap-3 rounded-2xl border bg-white p-5 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-            <div>
-              <p className="font-semibold" style={{ color: "var(--color-ink)" }}>{r.label}</p>
-              <p className="mt-0.5 text-xs" style={{ color: "var(--color-ink-soft)" }}>{r.description}</p>
+                    <a
+                      href={reportHref(r.type)}
+                      className="inline-flex items-center justify-center gap-1.5 self-start rounded-full border px-3.5 py-1.5 text-xs font-semibold transition-colors duration-150 hover:border-[var(--color-action)] hover:bg-[var(--gold-50)] hover:text-[var(--color-action-dark)]"
+                      style={{ borderColor: "var(--color-line-strong)", color: "var(--color-ink)" }}
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                      Export CSV
+                    </a>
+                  </div>
+                );
+              })}
             </div>
-            <a
-              href={reportHref(r.type)}
-              className="shrink-0 rounded-full px-4 py-2 text-xs font-semibold text-white"
-              style={{ backgroundColor: "var(--color-action)" }}
-            >
-              Export CSV
-            </a>
           </div>
         ))}
       </div>

@@ -266,10 +266,16 @@ export default async function DashboardOverviewPage() {
           </h2>
           <div className="mt-3 grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
             {[
-              { label: "Total Employees", value: hrOverview.totalEmployees, href: "/dashboard/admin/users", icon: Users, tint: { bg: "var(--color-info-tint)", fg: "var(--color-info)" } },
+              // Both used to point at /dashboard/admin/users — the Create
+              // User form, not a list of anyone. Clicking "6 Total
+              // Employees" to create a 7th was backwards; both belong on
+              // the actual Employees master record instead, where the
+              // people (and their birthdates) these numbers count for
+              // actually live.
+              { label: "Total Employees", value: hrOverview.totalEmployees, href: "/dashboard/admin/employees", icon: Users, tint: { bg: "var(--color-info-tint)", fg: "var(--color-info)" } },
               { label: "Present Today", value: hrOverview.presentToday, href: "/dashboard/admin/attendance", icon: UserCheck, tint: { bg: "var(--color-success-tint)", fg: "var(--color-success)" } },
               { label: "Absent Today", value: hrOverview.absentToday, href: "/dashboard/admin/attendance", icon: UserX, tint: { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" } },
-              { label: "Today's Birthdays", value: hrOverview.birthdaysToday, href: "/dashboard/admin/users", icon: Gift, tint: { bg: "#fce7f3", fg: "#9d174d" } },
+              { label: "Today's Birthdays", value: hrOverview.birthdaysToday, href: "/dashboard/admin/employees", icon: Gift, tint: { bg: "#fce7f3", fg: "#9d174d" } },
               { label: "Payroll Due", value: hrOverview.payrollDue, href: "/dashboard/admin/payroll", icon: IndianRupee, tint: { bg: "var(--color-accent-tint)", fg: "var(--color-action-dark)" } },
             ].map((s) => (
               <Link

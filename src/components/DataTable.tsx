@@ -71,6 +71,7 @@ export function DataTable<T>({
   search,
   dateFilter,
   exportFilename,
+  exportExtra,
   itemLabel = "results",
   minWidth = 640,
   toolbar,
@@ -97,6 +98,10 @@ export function DataTable<T>({
   dateFilter?: { getDate: (row: T) => string | Date | null | undefined };
   // Omit to hide the Export button entirely (rare — e.g. sensitive data).
   exportFilename?: string;
+  // Extra formats (a formatted PDF, say) folded into the same Export
+  // control instead of sitting beside it as a second, competing button —
+  // see ExportButton for why. No-op unless exportFilename is also set.
+  exportExtra?: { label: string; href: string }[];
   itemLabel?: string;
   minWidth?: number;
   // Extra controls (a status <select>, etc.) rendered next to search.
@@ -260,6 +265,7 @@ export function DataTable<T>({
                 filename={exportFilename}
                 headers={exportableColumns.map((c) => (typeof c.header === "string" ? c.header : c.key))}
                 rows={sortedRows.map((row) => exportableColumns.map((c) => c.exportValue!(row) ?? ""))}
+                extra={exportExtra}
               />
             )}
           </div>

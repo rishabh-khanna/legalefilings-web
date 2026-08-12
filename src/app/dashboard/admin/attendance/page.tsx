@@ -353,17 +353,13 @@ export default function AdminAttendancePage() {
               <label className="block text-xs font-medium mb-1" style={{ color: "var(--color-ink-soft)" }}>Month</label>
               <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} className="rounded-lg border px-3 py-2 text-sm" style={{ borderColor: "var(--color-line)" }} />
             </div>
-            {staffId && (
-              <a
-                href={`/api/admin/reports/attendance?staffId=${staffId}&month=${month}`}
-                className="rounded-full px-4 py-2 text-sm font-semibold text-white"
-                style={{ backgroundColor: "var(--color-action)" }}
-              >
-                Download PDF
-              </a>
-            )}
           </div>
 
+          {/* PDF used to be its own button up here, sitting right beside
+              the table's own CSV Export — two controls exporting the same
+              staff+month data in different formats read as duplicated,
+              not as two real choices. Folded into the Export dropdown
+              instead, via exportExtra. */}
           <DataTable
             columns={dayColumns}
             rows={groupedDays}
@@ -372,6 +368,7 @@ export default function AdminAttendancePage() {
             emptyMessage="No attendance for this month."
             dateFilter={{ getDate: ([day]) => day }}
             exportFilename="attendance"
+            exportExtra={staffId ? [{ label: "PDF — this staff, this month", href: `/api/admin/reports/attendance?staffId=${staffId}&month=${month}` }] : undefined}
           />
         </>
       )}
