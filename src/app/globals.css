@@ -362,7 +362,14 @@ button:not(:disabled) {
   letter-spacing: 0.06em;
   color: var(--color-action-dark);
   border-bottom: 1.5px solid var(--color-muted);
+  /* Column dividers, in the head too, at the same strength as the body's
+     — a grid where the header rule is bordered but the body columns
+     aren't reads as unfinished, not deliberate. */
+  border-right: 1px solid color-mix(in srgb, var(--color-muted) 45%, transparent);
   white-space: nowrap;
+}
+.dt-table th:last-child {
+  border-right: none;
 }
 
 /* The sorted column is the one place gold belongs in a table
@@ -381,21 +388,41 @@ button:not(:disabled) {
   /* Row separation sits barely above the noise floor. At full
      --color-line strength across 20 rows the page reads as a
      grid of boxes; at ~55% the eye still tracks the row but
-     stops seeing the lines. */
+     stops seeing the lines. Column separation runs at that same
+     55% so the grid reads as one consistent structure, not a
+     bolder vertical line crossing a fainter horizontal one. */
   border-bottom: 1px solid color-mix(in srgb, var(--color-line) 55%, transparent);
+  border-right: 1px solid color-mix(in srgb, var(--color-line) 55%, transparent);
+}
+.dt-table td:last-child {
+  border-right: none;
 }
 
-/* Long unbroken values — an organization name carrying a 13-digit suffix,
-   an email address, a reference number — used to run straight out of their
-   column and print on top of the next one under table-layout: fixed, which
-   gives a cell its width up front and does not grow it back. break-word
-   only engages when the content would otherwise overflow, so ordinary
-   cells wrap at spaces exactly as before. Columns that must stay on one
-   line (dates, amounts, status pills) opt out with whitespace-nowrap,
-   which still wins here. */
+/* Two different containment problems, both under the same "don't leak
+   into the next column" ask:
+   1. Long unbroken values — an organization name carrying a 13-digit
+      suffix, an email address, a reference number — used to run
+      straight out of their column and print on top of the next one
+      under table-layout: fixed, which gives a cell its width up front
+      and does not grow it back. break-word wraps that content onto a
+      second line instead, which the grid line above then visibly
+      contains.
+   2. Columns deliberately kept to one line (dates, amounts, status
+      pills — via the whitespace-nowrap className on that column) don't
+      wrap, so break-word does nothing for them. Those get hard-clipped
+      with an ellipsis instead — content trimmed, never spilling past
+      its own cell's border, at the cost of the tail being hidden
+      (acceptable for the short, fixed-format values this is actually
+      used on; anything long enough to need the wrap path uses that
+      instead, not whitespace-nowrap). */
 .dt-table th,
 .dt-table td {
   overflow-wrap: break-word;
+}
+.dt-table td.whitespace-nowrap,
+.dt-table th.whitespace-nowrap {
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dt-table tbody tr {
