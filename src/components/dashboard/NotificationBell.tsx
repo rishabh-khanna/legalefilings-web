@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Bell } from "lucide-react";
@@ -35,7 +36,9 @@ function relativeTime(iso: string | null): string {
 export function NotificationBell() {
   const [items, setItems] = useState<NotificationItem[] | null>(null);
   const [open, setOpen] = useState(false);
+  const [panelPos, setPanelPos] = useState<{ top: number; right: number } | null>(null);
   const panelRef = useRef<HTMLDivElement>(null);
+  const buttonWrapRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
 
   async function load() {
@@ -55,14 +58,41 @@ export function NotificationBell() {
     return () => clearTimeout(kickoff);
   }, [pathname]);
 
-  // Close on outside click, matching the nav flyout's behaviour.
+  // Close on outside click, matching the nav flyout's behaviour. The
+  // panel is portaled out to <body> (see the render below), so "outside"
+  // now means outside BOTH the bell button and the portaled panel —
+  // checking just one would close it the instant a click landed inside
+  // the other.
   useEffect(() => {
     if (!open) return;
     function onDown(e: MouseEvent) {
-      if (panelRef.current && !panelRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (buttonWrapRef.current?.contains(target)) return;
+      if (panelRef.current?.contains(target)) return;
+      setOpen(false);
     }
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
+  }, [open]);
+
+  function measure() {
+    const rect = buttonWrapRef.current?.getBoundingClientRect();
+    if (rect) setPanelPos({ top: rect.bottom + 8, right: window.innerWidth - rect.right });
+  }
+
+  function toggleOpen() {
+    if (!open) measure();
+    setOpen((v) => !v);
+  }
+
+  // Fixed positioning is computed once on open, from the button's rect at
+  // that instant — a resize while the panel is open (or a mobile
+  // orientation change) would otherwise leave it pinned to stale
+  // coordinates instead of tracking the button underneath it.
+  useEffect(() => {
+    if (!open) return;
+    window.addEventListener("resize", measure);
+    return () => window.removeEventListener("resize", measure);
   }, [open]);
 
   // Only things actually blocking someone drive the badge — an
@@ -71,10 +101,10 @@ export function NotificationBell() {
   const actionable = (items ?? []).filter((i) => i.tone === "act").length;
 
   return (
-    <div className="relative" ref={panelRef}>
+    <div className="relative" ref={buttonWrapRef}>
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggleOpen}
         aria-label={actionable > 0 ? `Notifications — ${actionable} need attention` : "Notifications"}
         aria-expanded={open}
         className="relative inline-flex h-11 w-11 items-center justify-center rounded-full border bg-white/70 backdrop-blur transition-colors hover:bg-white"
@@ -91,11 +121,19 @@ export function NotificationBell() {
         )}
       </button>
 
-      {open && (
-        <div
-          className="absolute right-0 z-50 mt-2 w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border bg-white shadow-xl dark:bg-[var(--color-paper-raised)]"
-          style={{ borderColor: "var(--color-line)" }}
-        >
+      {/* Portaled to <body> with position: fixed rather than CSS-absolute
+          inside this component's own DOM position — the bell sits inside
+          the dashboard's welcome band, which has overflow-hidden (to
+          contain its own decorative glow orb), and that clipped this
+          panel the instant it grew taller than the band itself. Same
+          fix, same reasoning, as Tooltip.tsx. */}
+      {open && panelPos &&
+        createPortal(
+          <div
+            ref={panelRef}
+            className="fixed z-[200] w-[min(22rem,calc(100vw-2rem))] overflow-hidden rounded-2xl border bg-white shadow-xl dark:bg-[var(--color-paper-raised)]"
+            style={{ top: panelPos.top, right: panelPos.right, borderColor: "var(--color-line)" }}
+          >
           <div className="border-b px-4 py-3" style={{ borderColor: "var(--color-line)" }}>
             <p className="text-sm font-bold" style={{ color: "var(--color-ink)" }}>Needs your attention</p>
             <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>
@@ -133,8 +171,9 @@ export function NotificationBell() {
               </Link>
             ))}
           </div>
-        </div>
-      )}
+          </div>,
+          document.body
+        )}
     </div>
   );
 }
