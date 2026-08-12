@@ -146,6 +146,10 @@ export default function AdminDashboard() {
   // via combinedSearch below, so one click applies both).
   const [draftStageFilter, setDraftStageFilter] = useState<Set<string>>(new Set());
   const [stageFilter, setStageFilter] = useState<Set<string>>(new Set());
+  // Text search applies on the same shared Search click too now, not
+  // live per keystroke — draftSearch is what the box is bound to,
+  // search is what actually filters.
+  const [draftSearch, setDraftSearch] = useState("");
   const [search, setSearch] = useState("");
   const filteredLeads = useMemo(() => {
     return dateFilteredLeads.filter((l) => {
@@ -160,9 +164,11 @@ export default function AdminDashboard() {
   }, [dateFilteredLeads, stageFilter, search]);
 
   const stageFilterDirty = draftStageFilter.size !== stageFilter.size || [...draftStageFilter].some((v) => !stageFilter.has(v));
+  const searchDirty = draftSearch !== search;
   function combinedSearch() {
     dateFilter.search();
     setStageFilter(draftStageFilter);
+    setSearch(draftSearch);
   }
 
   const stats = useMemo(() => {
@@ -574,8 +580,11 @@ export default function AdminDashboard() {
           />
           <input
             type="search"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={draftSearch}
+            onChange={(e) => setDraftSearch(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") combinedSearch();
+            }}
             placeholder="Search name, email, phone, service…"
             className="w-full max-w-xs rounded-lg border bg-white/70 px-3 py-2 text-sm outline-none backdrop-blur focus:border-[var(--color-action)]"
             style={{ borderColor: "var(--color-line)" }}
@@ -595,15 +604,18 @@ export default function AdminDashboard() {
               dateFilter.clear();
               setDraftStageFilter(new Set());
               setStageFilter(new Set());
+              setDraftSearch("");
+              setSearch("");
             }}
             onSearch={combinedSearch}
-            dirty={dateFilter.dirty || stageFilterDirty}
+            dirty={dateFilter.dirty || stageFilterDirty || searchDirty}
             active={dateFilter.active || stageFilter.size > 0}
           />
           {(search.trim() || stageFilter.size > 0) && (
             <button
               type="button"
               onClick={() => {
+                setDraftSearch("");
                 setSearch("");
                 setDraftStageFilter(new Set());
                 setStageFilter(new Set());

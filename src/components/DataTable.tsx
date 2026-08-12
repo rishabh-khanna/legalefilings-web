@@ -1,12 +1,13 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties } from "react";
-import { Search, ChevronUp, ChevronDown, ChevronsUpDown, Rows3, Rows4, Inbox, SearchX } from "lucide-react";
+import { Search as SearchIcon, ChevronUp, ChevronDown, ChevronsUpDown, Rows3, Rows4, Inbox, SearchX } from "lucide-react";
 import { usePagination } from "@/lib/use-pagination";
 import { useDateRangeFilter } from "@/lib/use-date-range-filter";
 import { TablePagination } from "@/components/TablePagination";
 import { ExportButton } from "@/components/ExportButton";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
+import { SearchButton } from "@/components/SearchButton";
 
 export type DataTableColumn<T> = {
   key: string;
@@ -139,12 +140,15 @@ export function DataTable<T>({
   // of the others, by spec, not by hint.
   fixedLayout?: boolean;
 }) {
+  // searchQuery is the draft value the search box is bound to;
+  // appliedSearchQuery is what actually filters. They only sync up when
+  // the shared Search button (or Enter in the box) runs — typing used to
+  // filter live on a 300ms debounce, which meant every keystroke
+  // re-filtered a table that might have thousands of rows, and read as
+  // inconsistent next to the date/status filters below which already
+  // required a deliberate Search click.
   const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
-  useEffect(() => {
-    const t = setTimeout(() => setDebouncedQuery(searchQuery), 300);
-    return () => clearTimeout(t);
-  }, [searchQuery]);
+  const [appliedSearchQuery, setAppliedSearchQuery] = useState("");
 
   // Density starts at the SSR-safe default and is corrected from
   // localStorage after mount — reading storage during render would
@@ -178,10 +182,17 @@ export function DataTable<T>({
 
   const filteredRows = useMemo(() => {
     if (!search) return dateFiltered;
-    const q = debouncedQuery.trim().toLowerCase();
+    const q = appliedSearchQuery.trim().toLowerCase();
     if (!q) return dateFiltered;
     return dateFiltered.filter((r) => search.filter(r, q));
-  }, [dateFiltered, search, debouncedQuery]);
+  }, [dateFiltered, search, appliedSearchQuery]);
+
+  const searchDirty = Boolean(search) && searchQuery !== appliedSearchQuery;
+  const filtersDirty = searchDirty || (Boolean(dateFilter) && dr.dirty);
+  function applyFilters() {
+    if (search) setAppliedSearchQuery(searchQuery);
+    if (dateFilter) dr.search();
+  }
 
   const sortColumn = sortKey ? columns.find((c) => c.key === sortKey) : undefined;
   const sortedRows = useMemo(() => {
@@ -315,10 +326,13 @@ export function DataTable<T>({
           <div className="flex flex-wrap items-end gap-2">
             {search && (
               <div className="relative w-full max-w-sm">
-                <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--color-ink-soft)" }} />
+                <SearchIcon className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: "var(--color-ink-soft)" }} />
                 <input
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") applyFilters();
+                  }}
                   placeholder={search.placeholder}
                   className="h-9 w-full rounded-[10px] border bg-[var(--color-paper-raised)] pl-9 pr-3 text-sm outline-none"
                   style={{ borderColor: "var(--color-line)" }}
@@ -326,8 +340,9 @@ export function DataTable<T>({
               </div>
             )}
             {dateFilter && (
-              <DateRangeFilter from={dr.from} to={dr.to} onFromChange={dr.setFrom} onToChange={dr.setTo} onClear={dr.clear} onSearch={dr.search} dirty={dr.dirty} active={dr.active} />
+              <DateRangeFilter from={dr.from} to={dr.to} onFromChange={dr.setFrom} onToChange={dr.setTo} onClear={dr.clear} onSearch={dr.search} dirty={dr.dirty} active={dr.active} hideSearchButton />
             )}
+            {(search || dateFilter) && <SearchButton onClick={applyFilters} dirty={filtersDirty} />}
             {toolbar}
           </div>
           <div className="flex items-center gap-2">

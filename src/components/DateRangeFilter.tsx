@@ -25,6 +25,7 @@ export function DateRangeFilter({
   onSearch,
   dirty,
   active,
+  hideSearchButton,
 }: {
   from: string;
   to: string;
@@ -34,6 +35,12 @@ export function DateRangeFilter({
   onSearch: () => void;
   dirty: boolean;
   active: boolean;
+  // DataTable renders one combined Search button covering its search
+  // box and this date range together — set when this is rendered
+  // inside DataTable so there isn't a second, redundant button right
+  // next to it. Standalone usages (outside DataTable) leave this unset
+  // and keep their own button.
+  hideSearchButton?: boolean;
 }) {
   return (
     <div className="flex flex-wrap items-end gap-2">
@@ -45,16 +52,18 @@ export function DateRangeFilter({
         <label className="mb-1 block text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>To</label>
         <DatePicker value={to} onChange={onToChange} min={from || undefined} placeholder="Any" />
       </div>
-      <button
-        type="button"
-        onClick={onSearch}
-        disabled={!dirty}
-        className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-white transition-opacity disabled:cursor-default disabled:opacity-40"
-        style={{ backgroundColor: "var(--color-action)" }}
-      >
-        <Search className="h-3.5 w-3.5" />
-        Search
-      </button>
+      {!hideSearchButton && (
+        <button
+          type="button"
+          onClick={onSearch}
+          disabled={!dirty}
+          className="inline-flex h-9 items-center gap-1.5 rounded-lg px-3 text-sm font-semibold text-white transition-opacity disabled:cursor-default disabled:opacity-40"
+          style={{ backgroundColor: "var(--color-action)" }}
+        >
+          <Search className="h-3.5 w-3.5" />
+          Search
+        </button>
+      )}
       {active && (
         <button
           type="button"

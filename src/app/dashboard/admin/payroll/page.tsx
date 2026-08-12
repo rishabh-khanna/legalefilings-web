@@ -55,7 +55,6 @@ export default function PayrollPage() {
         name: orgCount > 1 && p.organizationName ? `${p.full_name ?? "Unnamed"} — ${p.organizationName}` : (p.full_name ?? "Unnamed"),
       }));
       setStaffOptions(opts);
-      if (opts[0]) setStaffId(opts[0].id);
       await loadPayslipSummary();
     }, 0);
     return () => clearTimeout(kickoff);
@@ -169,6 +168,7 @@ export default function PayrollPage() {
           <div className="mt-3">
             <label className={labelClass} style={{ color: "var(--color-ink-soft)" }}>Employee</label>
             <select value={staffId} onChange={(e) => setStaffId(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }}>
+              <option value="">— Select Employee —</option>
               {staffOptions.map((s) => (
                 <option key={s.id} value={s.id}>{s.name}</option>
               ))}
@@ -179,6 +179,11 @@ export default function PayrollPage() {
               Current structure effective from {structure.effective_from}. Saving below adds a new structure (history is preserved).
             </p>
           )}
+          {!staffId ? (
+            <p className="mt-4 text-sm" style={{ color: "var(--color-ink-soft)" }}>
+              Select an employee above to view or set their salary structure.
+            </p>
+          ) : (
           <form onSubmit={handleSaveStructure} className="mt-3 grid grid-cols-2 gap-3">
             <div>
               <label className={labelClass} style={{ color: "var(--color-ink-soft)" }}>Basic (₹)</label>
@@ -209,6 +214,7 @@ export default function PayrollPage() {
               {savingStructure ? "Saving…" : "Save Salary Structure"}
             </button>
           </form>
+          )}
         </div>
 
         <div className="rounded-2xl border bg-white p-5 dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
