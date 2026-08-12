@@ -28,6 +28,7 @@ type InvoiceRow = {
   profiles?: { full_name: string | null; company: string | null } | null;
   invoice_payments?: { amount: number }[];
   organizations?: { name: string | null } | null;
+  creator?: { full_name: string | null } | null;
 };
 
 const STATUS_STYLE: Record<InvoiceRow["status"], { bg: string; fg: string }> = {
@@ -186,6 +187,9 @@ export default function InvoicesPage() {
       exportValue: (inv) => inv.status.replace("_", " "),
       sortValue: (inv) => inv.status,
     },
+    ...(canManage
+      ? [{ key: "createdBy", header: "Created By", className: "w-[12%] whitespace-nowrap", render: (inv: InvoiceRow) => inv.creator?.full_name ?? "—", exportValue: (inv: InvoiceRow) => inv.creator?.full_name ?? "", sortValue: (inv: InvoiceRow) => inv.creator?.full_name } as DataTableColumn<InvoiceRow>]
+      : []),
     ...(spansMultipleOrgs
       ? [{ key: "org", header: "Organization", className: "w-[12%]", render: (inv: InvoiceRow) => inv.organizations?.name ?? "—", exportValue: (inv: InvoiceRow) => inv.organizations?.name ?? "Unknown organization" } as DataTableColumn<InvoiceRow>]
       : []),

@@ -20,6 +20,7 @@ type Holiday = {
   type: "national" | "festival" | "company";
   organization_id: string;
   organizations?: { name: string | null } | null;
+  creator?: { full_name: string | null } | null;
 };
 
 const TYPE_STYLE: Record<Holiday["type"], { bg: string; fg: string }> = {
@@ -142,6 +143,7 @@ export default function HolidaysPage() {
       exportValue: (h) => h.type,
       sortValue: (h) => h.type,
     },
+    { key: "createdBy", header: "Created By", className: "w-[12%] whitespace-nowrap", render: (h) => h.creator?.full_name ?? "—", exportValue: (h) => h.creator?.full_name ?? "", sortValue: (h) => h.creator?.full_name },
     ...(spansMultipleOrgs
       ? [{ key: "org", header: "Organization", render: (h: Holiday) => h.organizations?.name ?? "—", exportValue: (h: Holiday) => h.organizations?.name ?? "Unknown organization" } as DataTableColumn<Holiday>]
       : []),

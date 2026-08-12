@@ -31,6 +31,7 @@ type LeaveRow = {
   requestedDays: number;
   profiles?: { full_name: string | null } | null;
   organizations?: { name: string | null } | null;
+  reviewer?: { full_name: string | null } | null;
 };
 
 const LEAVE_TYPE_FALLBACK_LABELS: Record<string, string> = { sick: "Sick Leave", casual: "Casual Leave", paid: "Paid Leave", unpaid: "Unpaid Leave" };
@@ -192,6 +193,14 @@ export default function AdminLeaveRequestsPage() {
       ),
       exportValue: (r) => r.status,
       sortValue: (r) => r.status,
+    },
+    {
+      key: "reviewedBy",
+      header: "Reviewed By",
+      className: "w-[12%] whitespace-nowrap",
+      render: (r) => (r.status === "pending" ? <span style={{ color: "var(--color-ink-soft)" }}>—</span> : r.reviewer?.full_name ?? "—"),
+      exportValue: (r) => (r.status === "pending" ? "" : r.reviewer?.full_name ?? ""),
+      sortValue: (r) => r.reviewer?.full_name,
     },
     {
       key: "actions",

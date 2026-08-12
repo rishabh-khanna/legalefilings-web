@@ -21,7 +21,7 @@ export async function GET() {
   // render as indistinguishable duplicates.
   let query = supabase
     .from("product_service_master")
-    .select("*, organizations(name)")
+    .select("*, organizations(name), creator:profiles!product_service_master_created_by_fkey(full_name)")
     .eq("active", true)
     .order("name", { ascending: true });
   if (!canSeeAllOrgs(profile)) query = query.eq("organization_id", profile.organization_id);

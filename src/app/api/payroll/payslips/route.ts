@@ -20,9 +20,12 @@ export async function GET(request: Request) {
   // organizations(name) only actually matters for a platform_admin, who
   // sees every org's payslips pooled together here — without it, rows
   // from different orgs are indistinguishable in the list.
+  // Two FKs to profiles (staff_id, generated_by) — both need the
+  // explicit profiles!payslips_<column>_fkey form, PostgREST can't
+  // infer either from "profiles" alone with two on the same table.
   let query = supabase
     .from("payslips")
-    .select("*, profiles!payslips_staff_id_fkey(full_name), organizations(name)")
+    .select("*, profiles!payslips_staff_id_fkey(full_name), organizations(name), generator:profiles!payslips_generated_by_fkey(full_name)")
     .order("year", { ascending: false })
     .order("month", { ascending: false });
 

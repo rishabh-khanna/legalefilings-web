@@ -13,7 +13,7 @@ import { MultiSelect } from "@/components/MultiSelect";
 import { SearchButton } from "@/components/SearchButton";
 
 type StaffRow = { id: string; full_name: string | null; account_type: string; staff_level: string | null };
-type GrantRow = { id: string; staff_id: string; tool_key: ToolKey; granted_by: string | null; expires_at: string | null; created_at: string };
+type GrantRow = { id: string; staff_id: string; tool_key: ToolKey; granted_by: string | null; expires_at: string | null; created_at: string; granter?: { full_name: string | null } | null };
 
 // Admin-only. Lets an org admin hand a specific staff member (not a
 // whole role tier) access to one normally admin-only section — e.g.
@@ -112,6 +112,7 @@ export default function ToolAccessPage() {
     { key: "staff", header: "Staff Member", render: (g) => staffById.get(g.staff_id)?.full_name ?? "Unknown", exportValue: (g) => staffById.get(g.staff_id)?.full_name ?? "Unknown", sortValue: (g) => staffById.get(g.staff_id)?.full_name },
     { key: "tool", header: "Tool", render: (g) => DELEGABLE_TOOLS.find((t) => t.key === g.tool_key)?.label ?? g.tool_key, exportValue: (g) => DELEGABLE_TOOLS.find((t) => t.key === g.tool_key)?.label ?? g.tool_key, sortValue: (g) => DELEGABLE_TOOLS.find((t) => t.key === g.tool_key)?.label ?? g.tool_key },
     { key: "expires", header: "Expires", className: "w-[14%] whitespace-nowrap", render: (g) => (g.expires_at ? new Date(g.expires_at).toLocaleDateString("en-IN") : "No expiry"), exportValue: (g) => (g.expires_at ? new Date(g.expires_at).toLocaleDateString("en-IN") : "No expiry"), sortValue: (g) => g.expires_at },
+    { key: "grantedBy", header: "Granted By", className: "w-[14%] whitespace-nowrap", render: (g) => g.granter?.full_name ?? "—", exportValue: (g) => g.granter?.full_name ?? "", sortValue: (g) => g.granter?.full_name },
     {
       key: "status",
       header: "Status",

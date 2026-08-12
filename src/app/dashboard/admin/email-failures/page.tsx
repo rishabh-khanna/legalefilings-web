@@ -21,6 +21,7 @@ type EmailFailure = {
   created_at: string;
   organization_id: string;
   organizations?: { name: string | null } | null;
+  resolver?: { full_name: string | null } | null;
 };
 
 const TYPE_LABEL: Record<string, string> = {
@@ -43,18 +44,19 @@ const TYPE_LABEL: Record<string, string> = {
 export default function EmailFailuresPage() {
   const [failures, setFailures] = useState<EmailFailure[] | null>(null);
   const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const [showResolved, setShowResolved] = useState(false);
   const { message, showSuccess, showError } = useActionMessage();
 
-  async function load() {
-    const res = await fetch("/api/admin/email-failures");
+  async function load(includeResolved: boolean) {
+    const res = await fetch(`/api/admin/email-failures${includeResolved ? "?includeResolved=true" : ""}`);
     const data = await res.json();
     if (res.ok) setFailures(data.failures);
   }
 
   useEffect(() => {
-    const kickoff = setTimeout(load, 0);
+    const kickoff = setTimeout(() => load(showResolved), 0);
     return () => clearTimeout(kickoff);
-  }, []);
+  }, [showResolved]);
 
   const [draftTypeFilter, setDraftTypeFilter] = useState<Set<string>>(new Set());
   const [typeFilter, setTypeFilter] = useState<Set<string>>(new Set());
@@ -83,7 +85,7 @@ export default function EmailFailuresPage() {
     setResolvingId(null);
     if (res.ok) {
       showSuccess("Marked resolved.");
-      await load();
+      await load(showResolved);
     } else {
       const data = await res.json().catch(() => ({}));
       showError(data.error ?? "Failed to update.");
@@ -107,23 +109,34 @@ export default function EmailFailuresPage() {
       exportValue: (f) => f.error_message ?? "",
     },
     { key: "sentAt", header: "Sent At", className: "w-[14%] whitespace-nowrap", render: (f) => new Date(f.created_at).toLocaleString("en-IN"), exportValue: (f) => new Date(f.created_at).toLocaleString("en-IN"), sortValue: (f) => f.created_at },
+    ...(showResolved
+      ? [{
+          key: "resolvedBy",
+          header: "Resolved By",
+          className: "w-[12%] whitespace-nowrap",
+          render: (f: EmailFailure) => f.resolver?.full_name ?? "—",
+          exportValue: (f: EmailFailure) => f.resolver?.full_name ?? "",
+          sortValue: (f: EmailFailure) => f.resolver?.full_name,
+        } as DataTableColumn<EmailFailure>]
+      : []),
     ...(spansMultipleOrgs
       ? [{ key: "org", header: "Organization", className: "w-[14%]", render: (f: EmailFailure) => f.organizations?.name ?? "—", exportValue: (f: EmailFailure) => f.organizations?.name ?? "Unknown organization" } as DataTableColumn<EmailFailure>]
       : []),
     {
       key: "actions",
       header: "",
-      render: (f) => (
-        <button
-          type="button"
-          onClick={() => handleResolve(f.id)}
-          disabled={resolvingId === f.id}
-          className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-[var(--color-accent-tint)] disabled:opacity-60"
-          style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
-        >
-          <CheckCircle2 className="h-3.5 w-3.5" /> Resolve
-        </button>
-      ),
+      render: (f) =>
+        f.resolved ? null : (
+          <button
+            type="button"
+            onClick={() => handleResolve(f.id)}
+            disabled={resolvingId === f.id}
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-[var(--color-accent-tint)] disabled:opacity-60"
+            style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
+          >
+            <CheckCircle2 className="h-3.5 w-3.5" /> Resolve
+          </button>
+        ),
     },
   ];
 
@@ -182,6 +195,14 @@ export default function EmailFailuresPage() {
                 }}
                 dirty={emailFiltersDirty}
               />
+              <button
+                type="button"
+                onClick={() => setShowResolved((v) => !v)}
+                className="inline-flex h-9 items-center gap-1.5 rounded-lg border px-3 text-xs font-semibold transition-colors"
+                style={showResolved ? { backgroundColor: "var(--color-accent-tint)", borderColor: "var(--color-accent)", color: "var(--color-action-dark)" } : { borderColor: "var(--color-line)", color: "var(--color-ink-soft)" }}
+              >
+                {showResolved ? "Showing resolved too" : "Show resolved"}
+              </button>
             </>
           }
         />

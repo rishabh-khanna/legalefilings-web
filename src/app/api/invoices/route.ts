@@ -22,7 +22,9 @@ export async function GET() {
   // be no way to tell which tenant issued a given row.
   let query = supabase
     .from("invoices")
-    .select("*, profiles!invoices_customer_id_fkey(full_name, company), invoice_payments(*), organizations(name)")
+    // Two FKs to profiles (customer_id, created_by) — creator needs the
+    // explicit profiles!invoices_created_by_fkey form.
+    .select("*, profiles!invoices_customer_id_fkey(full_name, company), invoice_payments(*), organizations(name), creator:profiles!invoices_created_by_fkey(full_name)")
     .order("created_at", { ascending: false });
 
   if (profile.account_type === "customer") {

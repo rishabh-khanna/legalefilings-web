@@ -23,6 +23,7 @@ type CatalogItem = {
   description: string | null;
   organization_id: string;
   organizations?: { name: string | null } | null;
+  creator?: { full_name: string | null } | null;
 };
 
 const EMPTY_FORM = { type: "service" as "product" | "service", name: "", hsnSacCode: "", gstRate: "18", unit: "Nos", defaultRate: "", description: "" };
@@ -136,6 +137,7 @@ export default function ProductCatalogPage() {
     { key: "gst", header: "GST %", className: "w-[8%] whitespace-nowrap", render: (item) => `${item.gst_rate}%`, exportValue: (item) => item.gst_rate, sortValue: (item) => item.gst_rate },
     { key: "unit", header: "Unit", className: "w-[8%] whitespace-nowrap", render: (item) => item.unit, exportValue: (item) => item.unit },
     { key: "rate", header: "Rate", className: "w-[12%] whitespace-nowrap", render: (item) => (item.default_rate != null ? `₹${Number(item.default_rate).toLocaleString("en-IN")}` : "—"), exportValue: (item) => (item.default_rate != null ? Number(item.default_rate) : ""), sortValue: (item) => item.default_rate },
+    { key: "createdBy", header: "Created By", className: "w-[12%] whitespace-nowrap", render: (item) => item.creator?.full_name ?? "—", exportValue: (item) => item.creator?.full_name ?? "", sortValue: (item) => item.creator?.full_name },
     ...(spansMultipleOrgs
       ? [{ key: "org", header: "Organization", render: (item: CatalogItem) => item.organizations?.name ?? "—", exportValue: (item: CatalogItem) => item.organizations?.name ?? "Unknown organization" } as DataTableColumn<CatalogItem>]
       : []),

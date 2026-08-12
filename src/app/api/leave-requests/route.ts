@@ -82,7 +82,9 @@ export async function GET(request: Request) {
   // rows from different orgs are indistinguishable in the list.
   let query = supabase
     .from("leave_requests")
-    .select("*, profiles!leave_requests_staff_id_fkey(full_name), leave_types(name, code), organizations(name)")
+    // Two FKs to profiles (staff_id, reviewed_by) — reviewer needs the
+    // explicit profiles!leave_requests_reviewed_by_fkey form.
+    .select("*, profiles!leave_requests_staff_id_fkey(full_name), leave_types(name, code), organizations(name), reviewer:profiles!leave_requests_reviewed_by_fkey(full_name)")
     .order("created_at", { ascending: false });
 
   if (!canSeeAllOrgs(profile)) query = query.eq("organization_id", profile.organization_id);

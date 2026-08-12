@@ -29,6 +29,7 @@ type LeaveRequest = {
   // server-side (see /api/leave-requests) so this and the admin queue
   // never disagree on what a request actually costs.
   requestedDays: number;
+  reviewer?: { full_name: string | null } | null;
 };
 
 type LeaveTypeOption = { id: string; name: string; code: string; is_active: boolean };
@@ -222,6 +223,14 @@ export default function LeavePage() {
           <span style={{ color: "var(--color-ink-soft)" }}>—</span>
         ),
       exportValue: (r) => (r.status === "rejected" ? r.review_note ?? "" : ""),
+    },
+    {
+      key: "reviewedBy",
+      header: "Reviewed By",
+      className: "w-[10%] whitespace-nowrap",
+      render: (r) => (r.status === "pending" ? <span style={{ color: "var(--color-ink-soft)" }}>—</span> : r.reviewer?.full_name ?? "—"),
+      exportValue: (r) => (r.status === "pending" ? "" : r.reviewer?.full_name ?? ""),
+      sortValue: (r) => r.reviewer?.full_name,
     },
     {
       key: "actions",

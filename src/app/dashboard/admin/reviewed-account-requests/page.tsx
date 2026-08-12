@@ -26,6 +26,7 @@ type RequestRow = {
   review_note: string | null;
   created_at: string;
   profiles?: { full_name: string | null } | null;
+  reviewer?: { full_name: string | null } | null;
 };
 
 function describeRequest(r: RequestRow) {
@@ -126,6 +127,14 @@ export default function ReviewedAccountRequestsPage() {
       },
       exportValue: (r) => r.status,
       sortValue: (r) => r.status,
+    },
+    {
+      key: "reviewedBy",
+      header: "Reviewed By",
+      className: "w-[14%] whitespace-nowrap",
+      render: (r) => r.reviewer?.full_name ?? "—",
+      exportValue: (r) => r.reviewer?.full_name ?? "",
+      sortValue: (r) => r.reviewer?.full_name,
     },
   ];
 

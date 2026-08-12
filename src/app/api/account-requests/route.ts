@@ -31,7 +31,9 @@ export async function GET(request: Request) {
 
   let query = supabase
     .from("account_requests")
-    .select("*, profiles!account_requests_requested_by_fkey(full_name)")
+    // Two FKs to profiles (requested_by, reviewed_by) — reviewer needs
+    // the explicit profiles!account_requests_reviewed_by_fkey form.
+    .select("*, profiles!account_requests_requested_by_fkey(full_name), reviewer:profiles!account_requests_reviewed_by_fkey(full_name)")
     .order("created_at", { ascending: false });
   if (!canSeeAllOrgs(profile)) query = query.eq("organization_id", profile.organization_id);
   const { data, error } = await query;

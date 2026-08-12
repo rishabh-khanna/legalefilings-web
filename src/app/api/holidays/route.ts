@@ -15,7 +15,7 @@ export async function GET() {
   // organizations(name) only actually matters for a platform_admin, who
   // sees every org's calendar pooled together here — without it, two
   // orgs' identically-named holidays (e.g. "Diwali") are indistinguishable.
-  let query = supabase.from("holidays").select("*, organizations(name)").order("date", { ascending: true });
+  let query = supabase.from("holidays").select("*, organizations(name), creator:profiles!holidays_created_by_fkey(full_name)").order("date", { ascending: true });
   if (!canSeeAllOrgs(profile)) query = query.eq("organization_id", profile.organization_id);
   const { data, error } = await query;
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });

@@ -35,6 +35,7 @@ type InvoiceRow = {
   profiles?: { full_name: string | null; company: string | null } | null;
   invoice_payments?: { amount: number }[];
   organizations?: { name: string | null } | null;
+  creator?: { full_name: string | null } | null;
 };
 type CatalogItem = { id: string; type: "product" | "service"; name: string; hsn_sac_code: string | null; gst_rate: number; unit: string; default_rate: number | null };
 type Customer = {
@@ -674,6 +675,7 @@ export default function InvoiceCrmPage() {
       exportValue: (inv) => inv.status.replace("_", " "),
       sortValue: (inv) => inv.status,
     },
+    { key: "createdBy", header: "Created By", className: "w-[12%] whitespace-nowrap", render: (inv) => inv.creator?.full_name ?? "—", exportValue: (inv) => inv.creator?.full_name ?? "", sortValue: (inv) => inv.creator?.full_name },
     ...(spansMultipleOrgs
       ? [{ key: "org", header: "Organization", className: "w-[12%]", render: (inv: InvoiceRow) => inv.organizations?.name ?? "—", exportValue: (inv: InvoiceRow) => inv.organizations?.name ?? "Unknown organization" } as DataTableColumn<InvoiceRow>]
       : []),

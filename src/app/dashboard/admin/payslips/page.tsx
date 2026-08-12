@@ -20,6 +20,7 @@ type PayslipRow = {
   organization_id: string;
   profiles?: { full_name: string | null } | null;
   organizations?: { name: string | null } | null;
+  generator?: { full_name: string | null } | null;
 };
 
 // The full company-wide payslip register — split out from
@@ -80,6 +81,19 @@ export default function AdminPayslipsPage() {
       sortValue: (p) => new Date(p.year, p.month - 1),
     },
     { key: "net", header: "Net Salary", className: "w-[14%] whitespace-nowrap", render: (p) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>₹{Number(p.net_salary).toLocaleString("en-IN")}</span>, exportValue: (p) => Number(p.net_salary), sortValue: (p) => Number(p.net_salary) },
+    {
+      key: "generatedOn",
+      header: "Generated",
+      className: "w-[14%] whitespace-nowrap",
+      render: (p) => (
+        <>
+          {new Date(p.generated_at).toLocaleDateString("en-IN")}
+          {p.generator?.full_name && <span className="block text-xs" style={{ color: "var(--color-ink-soft)" }}>by {p.generator.full_name}</span>}
+        </>
+      ),
+      exportValue: (p) => `${new Date(p.generated_at).toLocaleDateString("en-IN")}${p.generator?.full_name ? ` (${p.generator.full_name})` : ""}`,
+      sortValue: (p) => p.generated_at,
+    },
     ...(spansMultipleOrgs
       ? [{ key: "org", header: "Organization", render: (p: PayslipRow) => p.organizations?.name ?? "—", exportValue: (p: PayslipRow) => p.organizations?.name ?? "Unknown organization" } as DataTableColumn<PayslipRow>]
       : []),

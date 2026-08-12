@@ -28,7 +28,13 @@ export async function GET() {
       .eq("organization_id", profile.organization_id)
       .in("account_type", ["staff", "admin"])
       .order("full_name"),
-    supabase.from("staff_tool_grants").select("*").eq("organization_id", profile.organization_id),
+    supabase
+      .from("staff_tool_grants")
+      // staff_tool_grants has two FKs to profiles (staff_id, granted_by)
+      // — profiles!staff_tool_grants_granted_by_fkey names the one this
+      // needs, since PostgREST can't infer it from "profiles" alone.
+      .select("*, granter:profiles!staff_tool_grants_granted_by_fkey(full_name)")
+      .eq("organization_id", profile.organization_id),
   ]);
   if (staffError) return NextResponse.json({ error: staffError.message }, { status: 500 });
   if (grantsError) return NextResponse.json({ error: grantsError.message }, { status: 500 });
