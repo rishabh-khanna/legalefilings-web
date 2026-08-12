@@ -25,7 +25,7 @@ test("admin generates a GST invoice for a brand-new customer through all 7 steps
   const customerEmail = `invoice-wizard-customer-${suffix}@example.com`;
 
   await page.goto("/dashboard/invoice-crm");
-  await expect(page.getByRole("heading", { name: "Invoice CRM" })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("heading", { name: "Invoice Generator" })).toBeVisible({ timeout: 15000 });
 
   await page.getByRole("button", { name: "+ Generate Invoice" }).click();
 
@@ -87,7 +87,7 @@ test("admin generates a GST invoice for a brand-new customer through all 7 steps
 
 test("Invoice CRM's Recurring tab is reachable and lists templates without erroring", async ({ page }) => {
   await page.goto("/dashboard/invoice-crm");
-  await expect(page.getByRole("heading", { name: "Invoice CRM" })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("heading", { name: "Invoice Generator" })).toBeVisible({ timeout: 15000 });
   await page.getByRole("button", { name: "Recurring", exact: true }).click();
   // Now the shared DataTable component — its empty state is a plain
   // <p>, not a row inside the table, so the table itself genuinely

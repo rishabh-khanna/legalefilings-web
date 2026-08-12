@@ -31,8 +31,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // payee label needs it, and emailing an invoice whose pay code is
   // branded with the wrong company is worse than not emailing at all.
   const { data: org } = await supabase.from("organizations").select("name").eq("id", invoice.organization_id).single();
+
+  // Same lookup as the download route — without it, a credit/debit
+  // note's PDF always showed "Against Invoice: —" when emailed, even
+  // though downloading the identical document showed the real reference.
+  let relatedInvoiceNumber: string | null = null;
+  if (invoice.related_invoice_id) {
+    const { data: related } = await supabase.from("invoices").select("invoice_number").eq("id", invoice.related_invoice_id).single();
+    relatedInvoiceNumber = related?.invoice_number ?? null;
+  }
+
   const buffer = await buildInvoicePdfBuffer({
-    invoice,
+    invoice: { ...invoice, related_invoice_number: relatedInvoiceNumber },
     company,
     items: (invoice.invoice_line_items as PdfLineItem[] | undefined) ?? [],
     orgName: org?.name ?? null,

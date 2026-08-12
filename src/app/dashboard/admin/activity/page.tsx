@@ -20,8 +20,8 @@ type ActivityRow = {
 
 const SOURCE_STYLE: Record<ActivityRow["source"], { bg: string; fg: string; label: string }> = {
   invoice: { bg: "var(--color-accent-tint)", fg: "var(--color-action-dark)", label: "Invoice" },
-  order: { bg: "#dbe7ff", fg: "#1d4fb8", label: "Order" },
-  lead: { bg: "#d0f4db", fg: "#116a2c", label: "Lead" },
+  order: { bg: "var(--color-info-tint)", fg: "var(--color-info)", label: "Order" },
+  lead: { bg: "var(--color-success-tint)", fg: "var(--color-success)", label: "Lead" },
   finance: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)", label: "Finance" },
 };
 

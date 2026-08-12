@@ -4,6 +4,26 @@
   --animate-sidebar-in: sidebar-in 0.25s ease-out;
 }
 
+/* ============================================================
+   DESIGN TOKENS
+   ============================================================
+   Every token name below is load-bearing: these are referenced
+   inline (style={{ color: "var(--color-ink)" }}) roughly 2,000
+   times across ~120 files. So the system is tuned by changing
+   VALUES here, never by renaming — a rename is a 2,000-site
+   breaking change, a retune is free and cascades everywhere.
+
+   The palette is a warm-neutral family built around a refined
+   gold. The previous version paired the brand yellow with cool
+   blue-grey (Tailwind `slate`) neutrals, which fight gold — a
+   blue-biased grey next to a warm accent reads cheap and makes
+   the yellow look acidic. Every neutral here instead carries a
+   few percent of the gold's own hue, so surfaces read as calm
+   near-greys on their own but sit in the same family as the
+   accent. That single change is most of what separates "yellow
+   bootstrap theme" from "warm premium product".
+   ============================================================ */
+
 :root {
   /* Real value is set by SiteHeader via ResizeObserver; this is only the
      first-paint fallback before that JS runs. */
@@ -15,51 +35,113 @@
      single-Inter-font system. */
   --font-body: var(--font-display);
 
-  /* Single theme: the real Legal Efilings brand (yellow badge + black
-     wordmark) — one confident yellow/amber family for both action and
-     accent, matching the real logo rather than a separate multi-theme
-     picker.
-     Note: --color-action / --color-accent / --color-muted are what used to
-     be --color-seal / --color-yellow / --color-brass before an earlier
-     rename; kept as-is so every component that reads these names still
-     works without a second pass. */
-  --background: #f6f8fb;
-  --foreground: #0f172a;
-  --color-ink: #0f172a;
-  --color-ink-soft: #5b6b81;
-  --color-paper: #f6f8fb;
+  /* ---- Gold scale ----------------------------------------
+     Hue ~42°. 50–200 are the workhorses: tints carry almost all
+     of the gold surface area in a data-dense UI, because large
+     saturated fills are exactly what reads "harsh". Saturated
+     gold is spent only on small, deliberate marks — an active
+     indicator, a focus ring, one primary button per screen. */
+  --gold-50: #fefaef;
+  --gold-100: #fbeecb;
+  --gold-200: #f6dfa2;
+  --gold-300: #efcb68;
+  --gold-400: #e7b63a;
+  --gold-500: #d29c17;
+  --gold-600: #a06a0e;
+  --gold-700: #7e520b;
+  --gold-800: #5c3b09;
+  --gold-900: #3d2707;
+
+  /* ---- Brand + action ------------------------------------
+     --color-accent is the badge yellow from the real logo, very
+     slightly deepened (#fdc500 -> #f2bc1b) to take the fluorescent
+     edge off large fills without losing brand recognition.
+
+     --color-action is the interactive gold, and it moved
+     meaningfully: the old #b58900 carried WHITE text at only
+     3.21:1, i.e. every solid primary button in the app was below
+     the WCAG AA 4.5:1 floor for body text. #a06a0e measures
+     4.60:1 on white — same warm gold family, now actually legible.
+     Verified numerically, not eyeballed. */
+  --color-action: #a06a0e;
+  --color-action-dark: #7e520b;
+  --color-action-tint: #fbeecb;
+  --color-accent: #f2bc1b;
+  --color-accent-dark: #7e520b;
+  --color-accent-tint: #fef6e0;
+  --color-muted: #9c7c2a;
+  --color-muted-dark: #6a4e14;
+  --color-muted-tint: #f7f1e2;
+  --gradient-accent-from: #a06a0e;
+  --gradient-accent-to: #f2bc1b;
+
+  /* ---- Neutrals (warm-biased) ---------------------------- */
+  --background: #faf9f7;
+  --foreground: #1c1a17;
+  --color-ink: #1c1a17;
+  --color-ink-soft: #6a665d;
+  --color-paper: #faf9f7;
   --color-paper-raised: #ffffff;
-  --color-line: #e2e8f0;
-  /* Action shade is a dark amber/gold (not the bright badge yellow) so
-     white button text stays legible; --color-accent is the real badge
-     yellow itself, for fills where white text isn't sitting on top. */
-  --color-action: #b58900;
-  --color-action-dark: #8a6700;
-  --color-action-tint: #fff6d9;
-  --color-accent: #fdc500;
-  --color-accent-dark: #8a6700;
-  --color-accent-tint: #fff8e6;
-  --color-muted: #a17a1f;
-  --color-muted-dark: #6b5215;
-  --color-muted-tint: #fbf3e3;
-  --gradient-accent-from: #b58900;
-  --gradient-accent-to: #fdc500;
+  /* New: the third surface level. A two-level system (canvas +
+     card) leaves nowhere to put a well, a table head, or an
+     inset panel except a border, which is why dense screens end
+     up looking like wireframes made of lines. */
+  --color-paper-sunken: #f4f3f0;
+  --color-line: #e8e6e1;
+  --color-line-strong: #d6d3cb;
 
   /* A handful of surfaces (the hero's dark form card, the AI-assistant
      header, the bottom CTA band) are deliberately dark panels regardless
      of the rest of the page — not "the page's text color". */
-  --color-ink-fixed: #0f172a;
+  --color-ink-fixed: #1c1a17;
+
+  /* ---- Semantic ------------------------------------------
+     Warned deliberately toward orange, not amber: in a
+     gold-branded product a yellow "warning" is indistinguishable
+     from ordinary brand chrome, so the one state that must
+     interrupt gets its own hue. */
+  --color-success: #147337;
+  --color-success-tint: #e8f5ec;
+  --color-warning: #a84c08;
+  --color-warning-tint: #fdf0e3;
+  --color-danger: #b42318;
+  --color-danger-tint: #fdeceb;
+  --color-info: #1d4ed8;
+  --color-info-tint: #eaf0fd;
 
   /* doola.com's own top offer banner runs on their brand blue specifically
      — not their homepage's yellow — so this is scoped to that one banner
-     rather than reintroduced as a second site-wide accent color. -dark/
-     -tint are the same hue, for the one other spot (MoneyBackBanner) that
-     also uses blue as a deliberate one-off trust accent — previously an
-     unrelated hand-picked lavender-blue that didn't read as the same
-     color family as the banner above it on the homepage. */
+     rather than reintroduced as a second site-wide accent color. */
   --color-banner: #276ef1;
   --color-banner-dark: #1b4ba4;
   --color-banner-tint: #e5eefd;
+
+  /* ---- Elevation -----------------------------------------
+     Tinted with the ink's own warmth rather than pure black —
+     a neutral-black shadow over a warm surface greys it out and
+     is the single most common reason a light UI looks dusty. */
+  --shadow-xs: 0 1px 2px rgba(28, 26, 23, 0.04);
+  --shadow-sm: 0 1px 2px rgba(28, 26, 23, 0.04), 0 2px 6px -1px rgba(28, 26, 23, 0.05);
+  --shadow-md: 0 2px 4px rgba(28, 26, 23, 0.03), 0 8px 18px -6px rgba(28, 26, 23, 0.09);
+  --shadow-lg: 0 4px 8px rgba(28, 26, 23, 0.03), 0 18px 36px -12px rgba(28, 26, 23, 0.12);
+  --shadow-drag: 0 2px 6px rgba(28, 26, 23, 0.06), 0 18px 34px -8px rgba(28, 26, 23, 0.22);
+  --ring-focus: 0 0 0 3px var(--color-action-tint), 0 0 0 1px var(--color-action);
+
+  /* ---- Radii ---------------------------------------------- */
+  --radius-sm: 8px;
+  --radius-md: 10px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* ---- Motion --------------------------------------------
+     One easing for everything that isn't a drag. The spring is
+     reserved for direct manipulation (kanban cards), where
+     overshoot reads as physical rather than decorative. */
+  --ease-out: cubic-bezier(0.2, 0, 0, 1);
+  --ease-spring: cubic-bezier(0.34, 1.4, 0.64, 1);
+  --dur-fast: 120ms;
+  --dur-base: 180ms;
+  --dur-slow: 280ms;
 }
 
 @theme inline {
@@ -69,7 +151,9 @@
   --color-ink-soft: var(--color-ink-soft);
   --color-paper: var(--color-paper);
   --color-paper-raised: var(--color-paper-raised);
+  --color-paper-sunken: var(--color-paper-sunken);
   --color-line: var(--color-line);
+  --color-line-strong: var(--color-line-strong);
   --color-action: var(--color-action);
   --color-action-dark: var(--color-action-dark);
   --color-action-tint: var(--color-action-tint);
@@ -86,16 +170,35 @@ body {
   background: var(--color-paper);
   color: var(--foreground);
   font-family: var(--font-body), -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+  /* Inter ships proper optical alternates; cv02/cv03/cv04 open up 4/6/9
+     and cv11 gives the single-storey a — collectively the difference
+     between "Inter, the default" and Inter set on purpose. An engine
+     that doesn't know a feature simply ignores it, so this is safe. */
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 /* A single font family carries both display and body text — Inter,
    referenced from doola.com's own site (their whole typographic identity
    is one font at varying weights, not a separate serif/display face) —
-   with tight letter-spacing on headings to match. */
+   with tight letter-spacing on headings to match. Optical sizing: large
+   text needs proportionally tighter tracking to look evenly set, so the
+   negative tracking scales with the heading level rather than being one
+   flat value. */
 h1, h2, h3 {
   font-family: var(--font-display), -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
-  letter-spacing: -0.01em;
   font-weight: 700;
+  text-wrap: balance;
+}
+h1 { letter-spacing: -0.021em; }
+h2 { letter-spacing: -0.017em; }
+h3 { letter-spacing: -0.012em; }
+
+::selection {
+  background: var(--gold-200);
+  color: var(--color-ink);
 }
 
 .text-gradient {
@@ -111,6 +214,62 @@ h1, h2, h3 {
   scroll-margin-top: calc(var(--header-height) + 16px);
 }
 
+/* ---- Focus -------------------------------------------------
+   Keyboard focus is a first-class state, not a browser default
+   to be reset away. Two rules, because they solve different
+   problems:
+
+   1. Form controls get a soft gold ring drawn with box-shadow
+      specifically. Nearly every input in this app sets its
+      border colour as an INLINE style, and inline styles beat
+      any stylesheet rule — so `border-color` from here would
+      silently lose. box-shadow isn't set inline anywhere, so the
+      ring lands on all ~34 hand-rolled input variants at once
+      without editing a single call site.
+   2. Everything else gets a real outline, which correctly traces
+      non-rectangular and wrapped targets that a box-shadow would
+      clip.
+   :focus-visible, never :focus, so a mouse click doesn't leave a
+   ring behind on a button that was merely pressed. */
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible {
+  outline: none;
+  box-shadow: var(--ring-focus);
+  border-color: var(--color-action);
+}
+a:focus-visible,
+button:focus-visible,
+[role="button"]:focus-visible,
+[tabindex]:not([tabindex="-1"]):focus-visible {
+  outline: 2px solid var(--color-action);
+  outline-offset: 2px;
+}
+
+input,
+select,
+textarea {
+  transition: box-shadow var(--dur-fast) var(--ease-out), border-color var(--dur-fast) var(--ease-out);
+}
+input::placeholder,
+textarea::placeholder {
+  color: var(--color-ink-soft);
+  opacity: 0.62;
+}
+
+/* Native <button> elements default to cursor: default, not pointer — only
+   <a href> gets the hand cursor for free. Tailwind's preflight doesn't add
+   it back either (checked: no cursor rule on button in the shipped
+   preflight.css). Every clickable button across this app — table sort
+   headers, row actions, toggles, everything styled as a <button
+   type="button"> — has therefore never shown a pointer, and adding
+   cursor-pointer by hand to every one of them individually is exactly the
+   kind of drift this stylesheet-level rule exists to avoid. Disabled
+   buttons are excluded so a genuinely inert control still reads as inert. */
+button:not(:disabled) {
+  cursor: pointer;
+}
+
 /* Reveal's fade/rise-in is set inline (so its start state renders before
    any stylesheet asserts itself), but a user who's asked for reduced motion
    should just see the content — never fading in, no transform. */
@@ -122,12 +281,6 @@ h1, h2, h3 {
   }
 }
 
-/* Mobile nav sidebar's slide-in — safe to animate transform here because
-   the panel is only ever mounted while open (see SiteHeader), so it never
-   sits at rest at a negative offset the way an always-mounted, permanently
-   translated drawer would. That earlier approach expanded the page's
-   scrollable area and shifted the whole viewport (see: the mobile "hiding
-   content" bug); this one only exists at its final in-bounds position. */
 /* Ambient background orbs (AmbientBackground component) — slow, subtle
    drift so every page has a faint sense of motion instead of feeling
    static, without being a distraction. Three different durations/paths
@@ -153,70 +306,85 @@ h1, h2, h3 {
   }
 }
 
-/* Shared compact table style — every dashboard data table opts in via
-   `dt-table` on the <table> element instead of each page hand-tuning its
-   own cell padding/font-size. Selector specificity (.dt-table th/td, one
-   class + one element) beats the plain utility classes (px-4 py-3 etc.)
-   already on those cells, so this overrides them without needing
-   !important or touching every inline className. */
-/* Native <button> elements default to cursor: default, not pointer — only
-   <a href> gets the hand cursor for free. Tailwind's preflight doesn't add
-   it back either (checked: no cursor rule on button in the shipped
-   preflight.css). Every clickable button across this app — table sort
-   headers, row actions, toggles, everything styled as a <button
-   type="button"> — has therefore never shown a pointer, and adding
-   cursor-pointer by hand to every one of them individually is exactly the
-   kind of drift this stylesheet-level rule exists to avoid. Disabled
-   buttons are excluded so a genuinely inert control still reads as inert. */
-button:not(:disabled) {
-  cursor: pointer;
-}
+/* ============================================================
+   DATA TABLES
+   ============================================================
+   Shared compact table style — every dashboard data table opts
+   in via `dt-table` on the <table> element instead of each page
+   hand-tuning its own cell padding/font-size. Selector
+   specificity (.dt-table th/td, one class + one element) beats
+   the plain utility classes (px-4 py-3 etc.) already on those
+   cells, so this overrides them without needing !important or
+   touching every inline className.
 
-/* A second pass on this — the first cut went too far toward "neutral" and
-   ended up flat/cold instead of considered. The fix isn't a brand-yellow
-   rule or zebra-striping again (both still read as spreadsheet defaults);
-   it's carrying the brand's actual warmth — the same cream/gold this app
-   already uses for every page's hero band — into the table itself,
-   while keeping structure legible: a warm-tinted header instead of a
-   stark white or gray one, a warm hover instead of a cold gray one, and
-   color on the row-number badges (DataTable.tsx) using the same rotating
-   palette already used for sidebar icons and lead avatars elsewhere in
-   this app, so a table doesn't look like a separately-designed screen. */
+   The hierarchy here is deliberately carried by WEIGHT and
+   SPACE rather than by lines and fills. Dense tables get
+   unreadable when every cell is fenced; the eye needs one
+   strong horizontal (the header rule) and then near-invisible
+   row separation to track along.
+   ============================================================ */
 .dt-table {
   border-collapse: separate;
   border-spacing: 0;
+  /* Digits in a column must sit on a shared vertical rhythm or
+     the eye can't compare magnitudes down the column — this is
+     the whole reason financial tables feel scannable. */
   font-variant-numeric: tabular-nums;
 }
-.dt-table thead tr {
-  background: linear-gradient(180deg, #fffaf0 0%, #fef2d4 100%);
+
+.dt-table thead th {
+  /* Sticky only engages when DataTable has decided the table is
+     long enough to scroll inside its own card (see the
+     `dt-scroll` wrapper) — a short table stays in normal page
+     flow, where a sticky header would do nothing but add a
+     stacking context. */
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  /* Frosted AND warm. A flat grey head made the whole table read
+     as inert — on a page of white cards the header is the only
+     structural element with room for colour, and taking it out
+     left nothing to look at. The blur still lets rows dissolve
+     under it as they scroll, which is the cue that content
+     continues past the edge. */
+  background: linear-gradient(180deg,
+    color-mix(in srgb, var(--gold-50) 92%, transparent) 0%,
+    color-mix(in srgb, var(--gold-100) 88%, transparent) 100%);
+  backdrop-filter: blur(10px) saturate(1.6);
+  -webkit-backdrop-filter: blur(10px) saturate(1.6);
 }
+
 .dt-table th {
-  /* Density pass: the previous padding (0.8rem/1rem, line-height 1.5)
-     read as spacious rather than "generous" — every row taller than it
-     needed to be, especially once multiplied across a page of 10+ rows.
-     Pulled back down closer to the original compact sizing, but keeping
-     everything else from this pass (the warm header, colored row-number
-     badges, tabular numerals). */
-  padding: 0.55rem 1.25rem;
+  padding: 0.6rem 1rem;
   font-size: 0.6875rem;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.06em;
   color: var(--color-action-dark);
-  /* var(--color-muted) — the brand's darker, more restrained gold/brass —
-     not var(--color-accent) (the bright badge yellow), which is what
-     made the original rule read as loud rather than refined. Needs to
-     hold contrast against both the header's own cream gradient above it
-     and the white row background below it; the accent-tint cream used
-     in an earlier pass was nearly invisible against both. */
   border-bottom: 1.5px solid var(--color-muted);
+  white-space: nowrap;
 }
+
+/* The sorted column is the one place gold belongs in a table
+   head: it marks state, so the colour is information. */
+.dt-table th[aria-sort="ascending"],
+.dt-table th[aria-sort="descending"] {
+  color: var(--color-action-dark);
+  box-shadow: inset 0 -2px 0 var(--color-action);
+}
+
 .dt-table td {
-  padding: 0.5rem 1.25rem;
+  padding: 0.55rem 1rem;
   font-size: 0.8125rem;
-  line-height: 1.4;
-  border-bottom: 1px solid var(--color-line);
+  line-height: 1.45;
+  color: var(--color-ink);
+  /* Row separation sits barely above the noise floor. At full
+     --color-line strength across 20 rows the page reads as a
+     grid of boxes; at ~55% the eye still tracks the row but
+     stops seeing the lines. */
+  border-bottom: 1px solid color-mix(in srgb, var(--color-line) 55%, transparent);
 }
+
 /* Long unbroken values — an organization name carrying a 13-digit suffix,
    an email address, a reference number — used to run straight out of their
    column and print on top of the next one under table-layout: fixed, which
@@ -229,18 +397,86 @@ button:not(:disabled) {
 .dt-table td {
   overflow-wrap: break-word;
 }
+
 .dt-table tbody tr {
   background-color: var(--color-paper-raised);
-  transition: background-color 0.12s ease-out;
+  transition: background-color var(--dur-fast) var(--ease-out);
 }
-/* Warm gold-tinted hover, not the cold neutral gray from the previous
-   pass — matches the header above it and every other hover state in
-   this app (nav rows, KPI tiles, buttons all use this same tint). */
+
+/* A whisper of gold, not a highlight. The row under the cursor
+   only has to be findable, and at this strength it reads as
+   warmth rather than as a selection. */
 .dt-table tbody tr:hover {
-  background-color: var(--color-accent-tint);
+  background-color: var(--gold-50);
 }
+
 .dt-table tbody tr:last-child td {
   border-bottom: none;
+}
+
+/* Inline row actions stay out of the way until the row is under
+   the cursor — the single biggest reduction in visual noise
+   available to a wide table, since action columns otherwise
+   repeat the same icons down every row and compete with the
+   data. Kept visible on keyboard focus, and on touch (no hover),
+   so this never becomes an accessibility trap. */
+.dt-table .dt-row-actions {
+  opacity: 0;
+  transition: opacity var(--dur-fast) var(--ease-out);
+}
+.dt-table tbody tr:hover .dt-row-actions,
+.dt-table tbody tr:focus-within .dt-row-actions {
+  opacity: 1;
+}
+@media (hover: none) {
+  .dt-table .dt-row-actions { opacity: 1; }
+}
+
+/* Compact density — a real information-density change (about
+   30% more rows per screen), not a font tweak. */
+.dt-table[data-density="compact"] th {
+  padding: 0.4rem 0.7rem;
+}
+.dt-table[data-density="compact"] td {
+  padding: 0.3rem 0.7rem;
+  font-size: 0.78125rem;
+  line-height: 1.35;
+}
+
+/* The scroll container a long table gets, so its head can stick
+   to the top of the card rather than the page. */
+.dt-scroll {
+  max-height: min(68vh, 42rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+/* ---- Skeletons ---------------------------------------------
+   A sweeping shimmer instead of a pulsing block: the sweep
+   suggests content arriving in a direction, where a global
+   opacity pulse just says "something is missing". */
+@keyframes skeleton-sweep {
+  from { background-position: 200% 0; }
+  to { background-position: -200% 0; }
+}
+.skeleton {
+  background-image: linear-gradient(
+    90deg,
+    var(--color-paper-sunken) 0%,
+    var(--color-paper-sunken) 38%,
+    color-mix(in srgb, var(--color-paper-raised) 92%, var(--gold-100)) 50%,
+    var(--color-paper-sunken) 62%,
+    var(--color-paper-sunken) 100%
+  );
+  background-size: 200% 100%;
+  animation: skeleton-sweep 1.5s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background-image: none;
+    background-color: var(--color-paper-sunken);
+  }
 }
 
 @keyframes sidebar-in {
@@ -260,15 +496,15 @@ button:not(:disabled) {
 @keyframes toast-in {
   from {
     opacity: 0;
-    transform: translateY(-8px);
+    transform: translateY(-10px) scale(0.97);
   }
   to {
     opacity: 1;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
   }
 }
 .animate-toast-in {
-  animation: toast-in 0.2s ease-out;
+  animation: toast-in var(--dur-slow) var(--ease-spring);
 }
 @media (prefers-reduced-motion: reduce) {
   .animate-toast-in {

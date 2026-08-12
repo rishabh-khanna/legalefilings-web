@@ -15,6 +15,10 @@ import type { ActionMessage as ActionMessageType } from "@/lib/use-action-messag
 // handler — clicking the × just hides this specific message's text
 // locally, so nothing needs to change across the ~40 pages that already
 // call `<ActionMessage message={message} />`.
+//
+// Deliberately does NOT auto-dismiss: about half the messages routed
+// through here are validation failures the user has to read and act on,
+// and a timer would race them.
 export function ActionMessage({ message }: { message: ActionMessageType }) {
   const [mounted, setMounted] = useState(false);
   const [dismissedText, setDismissedText] = useState<string | null>(null);
@@ -28,26 +32,42 @@ export function ActionMessage({ message }: { message: ActionMessageType }) {
 
   const isSuccess = message.kind === "success";
   const Icon = isSuccess ? CheckCircle2 : XCircle;
+  const accent = isSuccess ? "var(--color-success)" : "var(--color-danger)";
+  const accentTint = isSuccess ? "var(--color-success-tint)" : "var(--color-danger-tint)";
 
   return createPortal(
     <div
       role="status"
-      className="animate-toast-in fixed right-4 top-4 z-[200] flex w-full max-w-sm items-start gap-2.5 rounded-xl border px-4 py-3 shadow-lg"
-      style={
-        isSuccess
-          ? { backgroundColor: "#f0fdf4", borderColor: "#bbf0cd", color: "#116a2c" }
-          : { backgroundColor: "#fef2f2", borderColor: "#f8caca", color: "#b42318" }
-      }
+      // A white card with one colored element, not a fully tinted panel.
+      // A solid green or red block is a shout; the eye only needs the
+      // status *encoded* somewhere, and an icon plus a 3px rail does
+      // that while the message itself stays plain readable text at full
+      // contrast on white instead of colored-on-colored.
+      className="animate-toast-in fixed right-4 top-4 z-[200] flex w-full max-w-sm items-start gap-3 overflow-hidden rounded-[14px] border pl-0 pr-3.5 py-3.5"
+      style={{
+        backgroundColor: "var(--color-paper-raised)",
+        borderColor: "var(--color-line)",
+        boxShadow: "var(--shadow-lg)",
+      }}
     >
-      <Icon className="mt-0.5 h-[18px] w-[18px] shrink-0" />
-      <p className="min-w-0 flex-1 text-sm font-medium">{message.text}</p>
+      <span aria-hidden="true" className="absolute inset-y-0 left-0 w-[3px]" style={{ backgroundColor: accent }} />
+      <span
+        className="ml-3.5 mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full"
+        style={{ backgroundColor: accentTint, color: accent }}
+      >
+        <Icon className="h-3.5 w-3.5" />
+      </span>
+      <p className="min-w-0 flex-1 text-sm font-medium leading-snug" style={{ color: "var(--color-ink)" }}>
+        {message.text}
+      </p>
       <button
         type="button"
         onClick={() => setDismissedText(message.text)}
         aria-label="Dismiss"
-        className="shrink-0 opacity-60 transition-opacity hover:opacity-100"
+        className="-mr-1 shrink-0 rounded-md p-1 transition-colors hover:bg-[var(--color-paper-sunken)]"
+        style={{ color: "var(--color-ink-soft)" }}
       >
-        <X className="h-4 w-4" />
+        <X className="h-3.5 w-3.5" />
       </button>
     </div>,
     document.body

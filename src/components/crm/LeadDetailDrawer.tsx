@@ -164,14 +164,14 @@ export function LeadDetailDrawer({
                 target="_blank"
                 rel="noopener noreferrer"
                 className="mt-5 flex items-center justify-center gap-2 rounded-full py-2.5 text-sm font-semibold transition-transform hover:scale-[1.02]"
-                style={{ backgroundColor: "#dcfce3", color: "#116a2c" }}
+                style={{ backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" }}
               >
                 <MessageCircle className="h-4 w-4" />
                 Message on WhatsApp
               </a>
 
               {lead.convertedToProfileId ? (
-                <p className="mt-3 flex items-center justify-center gap-2 rounded-full py-2.5 text-sm font-semibold" style={{ backgroundColor: "#d0f4db", color: "#116a2c" }}>
+                <p className="mt-3 flex items-center justify-center gap-2 rounded-full py-2.5 text-sm font-semibold" style={{ backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" }}>
                   <CheckCircle2 className="h-4 w-4" />
                   Converted to a customer + order
                 </p>
@@ -190,7 +190,7 @@ export function LeadDetailDrawer({
                   <p className="mt-1.5 text-center text-xs" style={{ color: "var(--color-ink-soft)" }}>
                     Creates their customer account (or reuses one if they already have one), a real order, and emails them a payment link.
                   </p>
-                  {convertError && <p className="mt-1.5 text-center text-xs" style={{ color: "#b42318" }}>{convertError}</p>}
+                  {convertError && <p className="mt-1.5 text-center text-xs" style={{ color: "var(--color-danger)" }}>{convertError}</p>}
                 </>
               )}
 
@@ -216,7 +216,7 @@ export function LeadDetailDrawer({
                           setNoteStatus(ok ? "saved" : "error");
                         }}
                         className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-60"
-                        style={{ backgroundColor: "#116a2c" }}
+                        style={{ backgroundColor: "var(--color-success)" }}
                       >
                         <Check className="h-3.5 w-3.5" /> Save
                       </button>
@@ -235,10 +235,10 @@ export function LeadDetailDrawer({
                     <span className="text-xs" style={{ color: "var(--color-ink-soft)" }}>Saving…</span>
                   )}
                   {notes === (lead.notes ?? "") && noteStatus === "saved" && (
-                    <span className="text-xs font-medium" style={{ color: "#116a2c" }}>Saved ✓</span>
+                    <span className="text-xs font-medium" style={{ color: "var(--color-success)" }}>Saved ✓</span>
                   )}
                   {noteStatus === "error" && (
-                    <span className="text-xs font-medium" style={{ color: "#b42318" }}>Failed to save — try again</span>
+                    <span className="text-xs font-medium" style={{ color: "var(--color-danger)" }}>Failed to save — try again</span>
                   )}
                 </div>
               </div>

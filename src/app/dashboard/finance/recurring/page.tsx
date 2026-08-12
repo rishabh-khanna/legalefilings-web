@@ -160,7 +160,7 @@ export default function FinanceRecurringPage() {
       key: "amount",
       header: "Amount",
       className: "w-[14%] whitespace-nowrap",
-      render: (t) => <span className="font-semibold" style={{ color: t.transaction_type === "income" ? "#116a2c" : "#b42318" }}>{money(t.amount)}</span>,
+      render: (t) => <span className="font-semibold" style={{ color: t.transaction_type === "income" ? "var(--color-success)" : "var(--color-danger)" }}>{money(t.amount)}</span>,
       exportValue: (t) => money(t.amount),
       sortValue: (t) => t.amount,
     },
@@ -175,14 +175,14 @@ export default function FinanceRecurringPage() {
             type="button"
             onClick={() => handleToggle(t.id, !t.is_active)}
             className="rounded-full px-2.5 py-1 text-xs font-semibold"
-            style={t.is_active ? { backgroundColor: "#d0f4db", color: "#116a2c" } : { backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}
+            style={t.is_active ? { backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" } : { backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}
           >
             {t.is_active ? "Active" : "Paused"}
           </button>
         ) : (
           <span
             className="rounded-full px-2.5 py-1 text-xs font-semibold"
-            style={t.is_active ? { backgroundColor: "#d0f4db", color: "#116a2c" } : { backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}
+            style={t.is_active ? { backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" } : { backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}
           >
             {t.is_active ? "Active" : "Paused"}
           </span>
@@ -196,7 +196,7 @@ export default function FinanceRecurringPage() {
       className: "text-right",
       render: (t) =>
         canManage ? (
-          <button type="button" onClick={() => handleDelete(t.id, t.description ?? t.expense_categories?.name ?? "this recurring entry")} className="text-xs font-medium" style={{ color: "#b42318" }}>Delete</button>
+          <button type="button" onClick={() => handleDelete(t.id, t.description ?? t.expense_categories?.name ?? "this recurring entry")} className="text-xs font-medium" style={{ color: "var(--color-danger)" }}>Delete</button>
         ) : null,
     },
   ];
@@ -263,7 +263,7 @@ export default function FinanceRecurringPage() {
             <label className="mb-1 block text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>Day of month (1–28)</label>
             <input required type="number" min={1} max={28} value={form.dayOfMonth} onChange={(e) => setForm((p) => ({ ...p, dayOfMonth: e.target.value }))} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
           </div>
-          {error && <p className="sm:col-span-3 text-sm" style={{ color: "#b42318" }}>{error}</p>}
+          {error && <p className="sm:col-span-3 text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>}
           <div className="flex gap-2 sm:col-span-3">
             <button type="submit" className="rounded-full px-4 py-1.5 text-xs font-semibold text-white" style={{ backgroundColor: "var(--color-action)" }}>Save Recurring Entry</button>
             <button

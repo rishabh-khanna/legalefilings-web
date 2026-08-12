@@ -9,10 +9,11 @@ import { CrmAccessRequestCard } from "@/components/crm/CrmAccessRequestCard";
 // What a customer unlocks once approved — shown as a locked preview so
 // "request my own CRM" isn't just an abstract offer, it's a concrete
 // list of the same tools staff/admin actually use elsewhere in this app
-// (Leads CRM, Invoice CRM, Team Management, Attendance/Leave, Payroll).
+// (Team Pipeline, Invoice Generator, Team Management, Attendance/Leave,
+// Payroll).
 const CRM_FEATURES = [
-  { icon: Users, label: "Leads CRM", description: "Track your own leads from first contact to close." },
-  { icon: FileSpreadsheet, label: "Invoice CRM", description: "GST-compliant ad-hoc invoicing for your own customers." },
+  { icon: Users, label: "Team Pipeline", description: "Track your own leads from first contact to close." },
+  { icon: FileSpreadsheet, label: "Invoice Generator", description: "GST-compliant ad-hoc invoicing for your own customers." },
   { icon: Building2, label: "Team Management", description: "Add employees, set departments, and manage who reports to whom." },
   { icon: CalendarClock, label: "Attendance & Leave", description: "Clock-in tracking, leave balances, and approvals for your team." },
   { icon: IndianRupee, label: "Payroll", description: "Salary structures and monthly payslip generation." },

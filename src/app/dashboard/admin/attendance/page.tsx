@@ -14,8 +14,8 @@ import { toISTDateString } from "@/lib/ist-date";
 
 const CORRECTION_STATUS_STYLE: Record<CorrectionRow["status"], { bg: string; fg: string }> = {
   pending: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
-  approved: { bg: "#d0f4db", fg: "#116a2c" },
-  rejected: { bg: "#fde2e2", fg: "#b42318" },
+  approved: { bg: "var(--color-success-tint)", fg: "var(--color-success)" },
+  rejected: { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" },
 };
 
 type StaffOption = { id: string; name: string };
@@ -214,7 +214,7 @@ export default function AdminAttendancePage() {
         if (entry.checkOutNote === AUTO_CLOSE_NOTE) {
           return (
             <Tooltip content="No check-out was ever recorded — this is when the nightly cleanup job auto-closed the shift, not when they actually left.">
-              <span className="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "#fde2e2", color: "#b42318" }}>
+              <span className="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "var(--color-danger-tint)", color: "var(--color-danger)" }}>
                 Auto-closed
               </span>
             </Tooltip>
@@ -223,7 +223,7 @@ export default function AdminAttendancePage() {
         if (entry.checkInNote === "regularized" || entry.checkOutNote === "regularized") {
           return (
             <Tooltip content="Corrected via an approved attendance correction request.">
-              <span className="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "#dbe7ff", color: "#1d4fb8" }}>
+              <span className="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "var(--color-info-tint)", color: "var(--color-info)" }}>
                 Regularized
               </span>
             </Tooltip>
@@ -237,7 +237,7 @@ export default function AdminAttendancePage() {
           );
         }
         return (
-          <span className="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "#dcfce3", color: "#116a2c" }}>
+          <span className="inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" }}>
             Present
           </span>
         );
@@ -298,10 +298,10 @@ export default function AdminAttendancePage() {
         c.status === "pending" ? (
           <div className="flex shrink-0 gap-2">
             <button type="button" onClick={() => decideCorrection(c.id, "approve")} aria-label="Approve" className="rounded-full p-1.5 transition-colors hover:bg-[var(--color-accent-tint)]">
-              <Check className="h-4 w-4" style={{ color: "#116a2c" }} />
+              <Check className="h-4 w-4" style={{ color: "var(--color-success)" }} />
             </button>
             <button type="button" onClick={() => decideCorrection(c.id, "reject")} aria-label="Reject" className="rounded-full p-1.5 transition-colors hover:bg-[var(--color-accent-tint)]">
-              <X className="h-4 w-4" style={{ color: "#b42318" }} />
+              <X className="h-4 w-4" style={{ color: "var(--color-danger)" }} />
             </button>
           </div>
         ) : (

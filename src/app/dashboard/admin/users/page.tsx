@@ -244,8 +244,8 @@ export default function CreateUserPage() {
             </select>
             <p className="mt-1 text-xs" style={{ color: "var(--color-ink-soft)" }}>
               {unassignedLeads.length === 0
-                ? "No unassigned leads right now — you can hand one out later from Team Leads CRM."
-                : "Hands this lead to the new staff member right away instead of leaving it in the shared pool. Leave blank and assign it later from Team Leads CRM."}
+                ? "No unassigned leads right now — you can hand one out later from Team Pipeline."
+                : "Hands this lead to the new staff member right away instead of leaving it in the shared pool. Leave blank and assign it later from Team Pipeline."}
             </p>
           </div>
         )}
@@ -260,7 +260,7 @@ export default function CreateUserPage() {
         {result && (
           <div
             className="rounded-lg px-4 py-3 text-sm"
-            style={result.ok ? { backgroundColor: "#d0f4db", color: "#116a2c" } : { backgroundColor: "#fde2e2", color: "#b42318" }}
+            style={result.ok ? { backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" } : { backgroundColor: "var(--color-danger-tint)", color: "var(--color-danger)" }}
           >
             <p>{result.text}</p>
             {result.password && (

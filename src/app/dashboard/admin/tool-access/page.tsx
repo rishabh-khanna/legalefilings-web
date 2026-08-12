@@ -110,7 +110,7 @@ export default function ToolAccessPage() {
         return (
           <span
             className="inline-flex rounded-full px-2 py-0.5 text-xs font-semibold"
-            style={active ? { backgroundColor: "var(--color-accent-tint)", color: "#116a2c" } : { backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}
+            style={active ? { backgroundColor: "var(--color-accent-tint)", color: "var(--color-success)" } : { backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }}
           >
             {active ? "Active" : "Expired"}
           </span>
@@ -130,7 +130,7 @@ export default function ToolAccessPage() {
           disabled={revokingId === g.id}
           aria-label="Revoke access"
           className="rounded-lg p-1.5 transition-colors hover:bg-red-50 disabled:opacity-60"
-          style={{ color: "#b42318" }}
+          style={{ color: "var(--color-danger)" }}
         >
           <Trash2 className="h-3.5 w-3.5" />
         </button>

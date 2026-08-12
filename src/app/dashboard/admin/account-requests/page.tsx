@@ -168,7 +168,7 @@ export default function AccountRequestsPage() {
               aria-label="Approve"
               className="rounded-full p-1.5 transition-colors hover:bg-[var(--color-accent-tint)]"
             >
-              <Check className="h-4 w-4" style={{ color: "#116a2c" }} />
+              <Check className="h-4 w-4" style={{ color: "var(--color-success)" }} />
             </button>
             {rejectingId === r.id ? (
               <>
@@ -185,7 +185,7 @@ export default function AccountRequestsPage() {
                   onClick={() => handleReject(r.id)}
                   disabled={!rejectReason.trim()}
                   className="rounded-full border px-4 py-1.5 text-xs font-semibold disabled:opacity-50"
-                  style={{ borderColor: "#b42318", color: "#b42318" }}
+                  style={{ borderColor: "var(--color-danger)", color: "var(--color-danger)" }}
                 >
                   Confirm
                 </button>
@@ -200,7 +200,7 @@ export default function AccountRequestsPage() {
                 aria-label="Reject"
                 className="rounded-full p-1.5 transition-colors hover:bg-[var(--color-accent-tint)]"
               >
-                <X className="h-4 w-4" style={{ color: "#b42318" }} />
+                <X className="h-4 w-4" style={{ color: "var(--color-danger)" }} />
               </button>
             )}
           </div>

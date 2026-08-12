@@ -49,7 +49,7 @@ export function ForgotPasswordForm() {
       <div className="space-y-4">
         <div
           className="rounded-xl px-4 py-4 text-sm"
-          style={{ backgroundColor: "#d0f4db", color: "#116a2c" }}
+          style={{ backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" }}
         >
           <p className="font-semibold">Check your email</p>
           <p className="mt-1">
@@ -100,7 +100,7 @@ export function ForgotPasswordForm() {
       </div>
 
       {errorMessage && (
-        <p className="rounded-lg px-4 py-3 text-sm" style={{ backgroundColor: "#fde2e2", color: "#b42318" }}>
+        <p className="rounded-lg px-4 py-3 text-sm" style={{ backgroundColor: "var(--color-danger-tint)", color: "var(--color-danger)" }}>
           {errorMessage}
         </p>
       )}

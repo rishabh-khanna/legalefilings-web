@@ -317,7 +317,7 @@ export default function ManualPage() {
         <a href="#staff-pipeline"><span className="role-dot dot-staff"></span>Team pipeline &amp; converting leads</a>
         <a href="#staff-phone-order"><span className="role-dot dot-staff"></span>Selling over the phone</a>
         <a href="#staff-orders"><span className="role-dot dot-staff"></span>Working an order</a>
-        <a href="#staff-invoice-crm"><span className="role-dot dot-staff"></span>Invoice CRM &amp; billing</a>
+        <a href="#staff-invoice-crm"><span className="role-dot dot-staff"></span>Invoice Generator &amp; billing</a>
         <a href="#staff-attendance-leave"><span className="role-dot dot-staff"></span>Attendance &amp; leave</a>
         <a href="#staff-team-management"><span className="role-dot dot-staff"></span>Managing a team</a>
         <a href="#staff-personal"><span className="role-dot dot-staff"></span>Payslips, documents, holidays</a>
@@ -499,7 +499,7 @@ export default function ManualPage() {
         </ol>
         <div className="callout">
           <div className="callout-label">What you actually unlock</div>
-          <p>Leads CRM, Invoice CRM, Team Management, Attendance &amp; Leave, and Payroll — the same full toolset described in the <a href="#admin-people">Admin &amp; HR</a> section below, because you’re now that new organization’s admin. Your old orders and invoices as a customer stay exactly where they were.</p>
+          <p>Team Pipeline, Invoice Generator, Team Management, Attendance &amp; Leave, and Payroll — the same full toolset described in the <a href="#admin-people">Admin &amp; HR</a> section below, because you’re now that new organization’s admin. Your old orders and invoices as a customer stay exactly where they were.</p>
         </div>
         <div className="callout warn">
           <div className="callout-label">Time-limited</div>
@@ -536,7 +536,7 @@ export default function ManualPage() {
       <article className="usecase" id="staff-pipeline">
         <h3>Team pipeline, and converting a Won lead</h3>
         <div className="who-sees">Who sees this: <b>Leader, Group Leader, Admin</b> — a Rater doesn’t get this page (they have My Leads instead).</div>
-        <p><b>Team Leads CRM</b> (the Pipeline board) shows the whole team’s leads — or filter to one person’s — as either a drag-and-drop board grouped by stage, or a sortable table. From here you can reassign a lead, leave a note, and:</p>
+        <p><b>Team Pipeline</b> shows the whole team’s leads — or filter to one person’s — as either a drag-and-drop board grouped by stage, or a sortable table. From here you can reassign a lead, leave a note, and:</p>
         <ol className="steps">
           <li>Move a lead to <code>Won</code>.</li>
           <li>Open it and choose <b>Convert to Order</b>.</li>
@@ -565,11 +565,11 @@ export default function ManualPage() {
       </article>
 
       <article className="usecase" id="staff-invoice-crm">
-        <h3>Invoice CRM — billing that isn’t tied to a purchase</h3>
+        <h3>Invoice Generator — billing that isn’t tied to a purchase</h3>
         <div className="who-sees">Who sees this: any staff or admin, scoped to their own org — never shown to customers.</div>
-        <p>For an order that came from an actual purchase, invoices are already handled automatically (see Order Invoices below). <b>Invoice CRM</b> is for everything else — a GST invoice for something ad-hoc, a non-GST or export invoice, a proforma, or a credit/debit note against an existing invoice.</p>
+        <p>For an order that came from an actual purchase, invoices are already handled automatically (see Order Invoices below). <b>Invoice Generator</b> is for everything else — a GST invoice for something ad-hoc, a non-GST or export invoice, a proforma, or a credit/debit note against an existing invoice.</p>
         <ol className="steps">
-          <li>Open Invoice CRM and start <b>+ Generate Invoice</b>.</li>
+          <li>Open Invoice Generator and start <b>+ Generate Invoice</b>.</li>
           <li>Pick the invoice type, the customer (or add a new one inline), and fill in place-of-supply and line items from your product/service catalog.</li>
           <li>Add any charges (freight, packing) and a discount if needed, then generate.</li>
         </ol>
@@ -746,7 +746,7 @@ export default function ManualPage() {
         <h3>Business Settings and the invoice catalog</h3>
         <div className="callout warn">
           <div className="callout-label">Do this first</div>
-          <p><b>Business Settings</b> — address, GSTIN, PAN, state, and at least one payment method (bank details or UPI) — is mandatory. Every invoice-generating action (Buy Plan for Customer, converting a lead, Invoice CRM) is blocked with a clear error until this is filled in. It also shows up on every generated invoice PDF and the customer’s payment page.</p>
+          <p><b>Business Settings</b> — address, GSTIN, PAN, state, and at least one payment method (bank details or UPI) — is mandatory. Every invoice-generating action (Buy Plan for Customer, converting a lead, Invoice Generator) is blocked with a clear error until this is filled in. It also shows up on every generated invoice PDF and the customer’s payment page.</p>
         </div>
         <p><b>Invoice Item Catalog</b> holds your products/services with their HSN/SAC code, GST rate, and default price — picking one on an invoice line auto-fills those fields. Editing a price here only changes that autofill default; it never changes what a customer actually pays through checkout.</p>
       </article>

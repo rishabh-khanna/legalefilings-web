@@ -120,7 +120,7 @@ export default function PlatformOrganizationsPage() {
       header: "Status",
       className: "w-[10%] whitespace-nowrap",
       render: (org) => (
-        <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={org.status === "active" ? { backgroundColor: "#d0f4db", color: "#116a2c" } : { backgroundColor: "#fde2e2", color: "#b42318" }}>
+        <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={org.status === "active" ? { backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" } : { backgroundColor: "var(--color-danger-tint)", color: "var(--color-danger)" }}>
           {org.status}
         </span>
       ),
@@ -134,7 +134,7 @@ export default function PlatformOrganizationsPage() {
       render: (org) =>
         org.access_expires_at
           ? new Date(org.access_expires_at) < new Date()
-            ? <span style={{ color: "#b42318" }}>Expired {new Date(org.access_expires_at).toLocaleDateString("en-IN")}</span>
+            ? <span style={{ color: "var(--color-danger)" }}>Expired {new Date(org.access_expires_at).toLocaleDateString("en-IN")}</span>
             : new Date(org.access_expires_at).toLocaleDateString("en-IN")
           : "No expiry",
       exportValue: (org) => (org.access_expires_at ? new Date(org.access_expires_at).toLocaleDateString("en-IN") : "No expiry"),
@@ -200,7 +200,7 @@ export default function PlatformOrganizationsPage() {
           {result && (
             <div
               className="rounded-lg px-4 py-3 text-sm"
-              style={result.ok ? { backgroundColor: "#d0f4db", color: "#116a2c" } : { backgroundColor: "#fde2e2", color: "#b42318" }}
+              style={result.ok ? { backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" } : { backgroundColor: "var(--color-danger-tint)", color: "var(--color-danger)" }}
             >
               <p>{result.text}</p>
               {result.password && (

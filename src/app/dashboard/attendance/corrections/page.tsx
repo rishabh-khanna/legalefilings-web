@@ -26,8 +26,8 @@ type CorrectionRequest = {
 
 const STATUS_STYLE: Record<CorrectionRequest["status"], { bg: string; fg: string }> = {
   pending: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
-  approved: { bg: "#d0f4db", fg: "#116a2c" },
-  rejected: { bg: "#fde2e2", fg: "#b42318" },
+  approved: { bg: "var(--color-success-tint)", fg: "var(--color-success)" },
+  rejected: { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" },
 };
 
 // Split out from /dashboard/attendance — a flat, unpaginated list of
@@ -136,7 +136,7 @@ export default function AttendanceCorrectionsPage() {
               <TruncatedText
                 text={c.review_note}
                 className="mt-1.5 max-w-[160px] rounded-lg px-2 py-1"
-                style={{ backgroundColor: "#fde2e2", color: "#b42318" }}
+                style={{ backgroundColor: "var(--color-danger-tint)", color: "var(--color-danger)" }}
               />
             )}
           </>

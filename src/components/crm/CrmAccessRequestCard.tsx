@@ -76,7 +76,7 @@ export function CrmAccessRequestCard({ hasPaidPurchase, initialRequest }: { hasP
               {submitting ? "Submitting…" : "Set Up My CRM"}
             </button>
           </form>
-          {error && <p className="mt-2 text-sm" style={{ color: "#b42318" }}>{error}</p>}
+          {error && <p className="mt-2 text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>}
         </>
       )}
 
@@ -88,7 +88,7 @@ export function CrmAccessRequestCard({ hasPaidPurchase, initialRequest }: { hasP
 
       {request?.status === "rejected" && (
         <div className="mt-2">
-          <p className="text-sm" style={{ color: "#b42318" }}>
+          <p className="text-sm" style={{ color: "var(--color-danger)" }}>
             Your request for {request.organization_name} wasn&apos;t approved{request.review_note ? `: ${request.review_note}` : "."}
           </p>
           <button

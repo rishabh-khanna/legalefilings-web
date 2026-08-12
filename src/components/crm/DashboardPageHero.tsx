@@ -3,24 +3,18 @@
 import { isValidElement, type ReactNode } from "react";
 import { PageHelpButton } from "@/components/dashboard/PageHelpButton";
 
-// A warm cream→gold gradient hero (with soft blurred glow orbs) — every
-// dashboard page wraps its title/subtitle/KPIs in this instead of a
-// plain white header, so the whole logged-in area reads as one
-// consistent system rather than two different-looking sections bolted
-// together. Previously a dark navy panel; switched to this light
-// brand-gold treatment since the dark block read as an odd, out-of-place
-// slab against the rest of the (light) dashboard.
-// `action` is the page's one primary "+ Add X" / "+ Apply for X" control
-// — rendered top-right, next to the title, instead of its own row below
-// the hero. Keeps it in a fixed, predictable spot regardless of how much
-// KPI/summary content a page puts in `children`: a row placed after the
-// hero drifts further down the page as that content grows (this is what
-// happened on the Leave page once balance cards were added above it,
-// pushing "+ Apply for Leave" down far enough to crowd the fixed
-// help/WhatsApp widgets in the corner). Use HeroAction for it, which
-// gives it a lighter outlined style than a full solid-fill button — a
-// routine "add one row" action doesn't need the same visual weight as a
-// page's main call to action.
+// Every dashboard page wraps its title/subtitle/KPIs here, so this one
+// component sets the tone for the whole logged-in product.
+//
+// It used to be a saturated cream->gold gradient with two blurred glow
+// orbs behind it. That reads as decoration competing with content: on a
+// dense page the loudest thing on screen was the band that carries the
+// least information, and repeating it on all 45 pages made the product
+// feel like a template. This version keeps the warmth but spends it
+// differently — a near-white surface, one hairline of real gold at the
+// top edge, and a very soft radial wash that you notice only if you look
+// for it. The hierarchy is carried by type and space; the gold is a
+// signature, not a fill.
 export function DashboardPageHero({
   title,
   subtitle,
@@ -34,31 +28,48 @@ export function DashboardPageHero({
 }) {
   return (
     <div
-      className="relative mb-6 overflow-hidden rounded-[28px] border p-6"
+      className="relative mb-6 overflow-hidden rounded-[22px] border px-6 pb-6 pt-[1.375rem]"
       style={{
-        background: "linear-gradient(135deg, #fffaf0 0%, #fef2d4 55%, #fce4ad 100%)",
-        borderColor: "var(--color-accent-tint)",
+        // The warm cream->gold band is the product's signature and it
+        // stays. An earlier pass flattened this to near-white in the name
+        // of restraint and the result read as dead — on a page that is
+        // otherwise white cards on a near-white canvas, this band is the
+        // only thing carrying brand warmth, so removing it removed the
+        // personality without buying any legibility (the text on it
+        // measures 15:1 either way). Same gradient, retuned onto the new
+        // gold ramp so it's honeyed rather than acidic.
+        // Ends on #f9e8bd rather than gold-200 (#f6dfa2): the subtitle
+        // runs in --color-ink-soft, which measures 4.36:1 on gold-200 —
+        // just under the 4.5:1 floor. Two shades lighter and it clears at
+        // 4.71:1 with no visible loss of warmth.
+        background: "linear-gradient(135deg, var(--gold-50) 0%, var(--gold-100) 52%, #f9e8bd 100%)",
+        borderColor: "var(--gold-200)",
+        boxShadow: "var(--shadow-sm)",
       }}
     >
-      <div
+      <span
         aria-hidden="true"
-        className="absolute -right-16 -top-16 h-56 w-56 rounded-full blur-3xl"
-        style={{ backgroundColor: "var(--color-accent)", opacity: 0.25 }}
+        className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full blur-3xl"
+        style={{ backgroundColor: "var(--color-accent)", opacity: 0.22 }}
       />
-      <div
+      <span
         aria-hidden="true"
-        className="absolute -bottom-20 left-1/4 h-48 w-48 rounded-full blur-3xl"
-        style={{ backgroundColor: "var(--color-action)", opacity: 0.12 }}
+        className="pointer-events-none absolute -bottom-20 left-1/4 h-48 w-48 rounded-full blur-3xl"
+        style={{ backgroundColor: "var(--color-action)", opacity: 0.1 }}
       />
+
       <div className="relative">
         <div className="flex items-center gap-1.5">
-          <h2 className="text-2xl font-extrabold" style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)" }}>
+          <h2
+            className="text-[1.375rem] font-bold leading-tight"
+            style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)", letterSpacing: "-0.019em" }}
+          >
             {title}
           </h2>
           <PageHelpButton />
         </div>
         {subtitle && (
-          <p className="mt-1 text-sm" style={{ color: "var(--color-ink-soft)" }}>
+          <p className="mt-1.5 max-w-3xl text-[0.8125rem] leading-relaxed" style={{ color: "var(--color-ink-soft)" }}>
             {subtitle}
           </p>
         )}
@@ -76,18 +87,25 @@ export function DashboardPageHero({
   );
 }
 
-// Shared lighter style for a hero's primary add/apply action — an
-// outlined pill instead of a solid fill, so it reads as "a normal
-// control up here" rather than competing with the page's real CTAs.
+// The page's primary add/apply control. Solid brand yellow carrying ink
+// text rather than white-on-gold: it's the logo's own relationship
+// (yellow field, black wordmark), it measures 9.9:1 where white on gold
+// manages 4.6:1, and in a product where every other button is neutral it
+// makes the one real call to action on a page unmissable without being
+// loud.
 export function HeroAction({ icon: Icon, children, ...props }: { icon?: React.ComponentType<{ className?: string }>; children: ReactNode } & React.ButtonHTMLAttributes<HTMLButtonElement>) {
   return (
     <button
       type="button"
       {...props}
-      className="inline-flex items-center gap-1.5 rounded-full border bg-white/70 px-4 py-2 text-sm font-semibold backdrop-blur-xl transition-colors hover:bg-white disabled:opacity-60"
-      style={{ borderColor: "var(--color-accent)", color: "var(--color-ink)" }}
+      className="group inline-flex items-center gap-1.5 rounded-full px-4 py-2 text-[0.8125rem] font-semibold transition-all duration-150 hover:-translate-y-px active:translate-y-0 disabled:pointer-events-none disabled:opacity-55"
+      style={{
+        backgroundColor: "var(--color-accent)",
+        color: "var(--color-ink)",
+        boxShadow: "var(--shadow-xs)",
+      }}
     >
-      {Icon && <Icon className="h-4 w-4" />}
+      {Icon && <Icon className="h-4 w-4 transition-transform duration-150 group-hover:scale-110" />}
       {children}
     </button>
   );
@@ -124,15 +142,34 @@ export function HeroKpi({
   const Icon = isValidElement(icon) ? null : (icon as React.ComponentType<{ className?: string }>);
 
   return (
-    <div className="rounded-2xl border bg-white/70 p-4 backdrop-blur-xl transition-transform hover:-translate-y-0.5" style={{ borderColor: "var(--color-line)" }}>
-      <span className="flex h-9 w-9 items-center justify-center rounded-full" style={{ backgroundColor: "var(--color-accent)", color: "var(--color-ink)" }}>
+    <div
+      className="group rounded-[16px] border p-4 transition-all duration-200 hover:-translate-y-0.5"
+      style={{
+        borderColor: "var(--color-line)",
+        backgroundColor: "color-mix(in srgb, var(--color-paper-raised) 82%, transparent)",
+        backdropFilter: "blur(6px)",
+        boxShadow: "var(--shadow-xs)",
+      }}
+    >
+      {/* Filled with real accent, not a pale tint. The tint version read
+          as a disabled control — on a white tile inside a gold band, a
+          washed-out icon has nothing to hold onto. This is one of the few
+          places a saturated fill earns its keep: it's small, it repeats
+          in a rhythm, and ink-on-accent measures 9.9:1. */}
+      <span
+        className="flex h-9 w-9 items-center justify-center rounded-full shadow-sm transition-transform duration-200 group-hover:scale-105"
+        style={{ backgroundColor: "var(--color-accent)", color: "var(--color-ink)" }}
+      >
         {Icon ? <Icon className="h-4 w-4" /> : (icon as ReactNode)}
       </span>
-      <p className="mt-3 text-2xl font-extrabold" style={{ color: "var(--color-ink)" }}>
+      <p
+        className="mt-3 text-2xl font-bold tabular-nums"
+        style={{ color: "var(--color-ink)", letterSpacing: "-0.02em" }}
+      >
         {value}
         {suffix}
       </p>
-      <p className="text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>
+      <p className="mt-0.5 text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>
         {label}
       </p>
     </div>

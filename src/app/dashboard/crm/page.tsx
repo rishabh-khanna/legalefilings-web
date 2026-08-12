@@ -28,9 +28,9 @@ type LeadRow = {
 
 const STATUS_STYLE: Record<LeadStage, { bg: string; fg: string }> = {
   new: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
-  contacted: { bg: "#fff6d9", fg: "#8a6700" },
-  in_progress: { bg: "#fff6d9", fg: "#8a6700" },
-  won: { bg: "#d0f4db", fg: "#116a2c" },
+  contacted: { bg: "var(--color-action-tint)", fg: "var(--color-action-dark)" },
+  in_progress: { bg: "var(--color-action-tint)", fg: "var(--color-action-dark)" },
+  won: { bg: "var(--color-success-tint)", fg: "var(--color-success)" },
   lost: { bg: "var(--color-paper)", fg: "var(--color-ink-soft)" },
 };
 
@@ -145,7 +145,7 @@ export default function CrmPage() {
           target="_blank"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-semibold"
-          style={{ backgroundColor: "#d0f4db", color: "#116a2c" }}
+          style={{ backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" }}
         >
           WhatsApp
         </a>

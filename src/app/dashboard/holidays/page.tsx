@@ -20,8 +20,8 @@ type Holiday = {
 };
 
 const TYPE_STYLE: Record<Holiday["type"], { bg: string; fg: string }> = {
-  national: { bg: "#fde2e2", fg: "#b42318" },
-  festival: { bg: "#fff6d9", fg: "#8a6700" },
+  national: { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" },
+  festival: { bg: "var(--color-action-tint)", fg: "var(--color-action-dark)" },
   company: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
 };
 
@@ -144,7 +144,7 @@ export default function HolidaysPage() {
           key: "actions",
           header: "",
           render: (h: Holiday) => (
-            <button type="button" onClick={() => handleDelete(h.id, h.name)} className="text-xs font-semibold" style={{ color: "#b42318" }}>
+            <button type="button" onClick={() => handleDelete(h.id, h.name)} className="text-xs font-semibold" style={{ color: "var(--color-danger)" }}>
               Remove
             </button>
           ),

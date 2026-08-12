@@ -8,7 +8,7 @@ import { getDashboardAssistantReply, type DashboardAssistantReply } from "@/lib/
 const SUGGESTED_PROMPTS = [
   "How do I approve leave?",
   "Where do I record an invoice payment?",
-  "What's the difference between Order Invoices and Invoice CRM?",
+  "What's the difference between Order Invoices and Invoice Generator?",
   "How do I generate a payslip?",
 ];
 

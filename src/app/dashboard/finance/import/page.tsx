@@ -111,7 +111,7 @@ export default function FinanceImportPage() {
 
       {bookOwnerId && <BookSwitcher bookOwnerId={bookOwnerId} onChange={setBookOwnerId} />}
 
-      {error && <p className="mb-4 text-sm" style={{ color: "#b42318" }}>{error}</p>}
+      {error && <p className="mb-4 text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>}
 
       <div className="space-y-3">
         {invoices === null ? (

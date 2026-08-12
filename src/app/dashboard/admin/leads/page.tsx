@@ -33,19 +33,26 @@ function needsAttention(lead: Lead, now: number) {
   return ageDays > 3;
 }
 
+// Each column keeps its own tinted wash. A pass that flattened all five
+// to the same grey made the board read as dead — on a kanban the column
+// IS the state, so colour-coding it is information, not decoration, and
+// it's what lets you find "Won" without reading a word. The gradients
+// previously ended on the old cool canvas (#f6f8fb), which would now
+// fight the warm page; they fade to the new canvas instead so each
+// column settles into the page rather than sitting on it as a slab.
 const STAGE_STYLES: Record<LeadStage, { bg: string; text: string; grad: string }> = {
-  new: { bg: "var(--color-muted-tint)", text: "var(--color-muted-dark)", grad: "linear-gradient(135deg,#fbf3e3,#f6f8fb)" },
-  contacted: { bg: "#dbe7ff", text: "#1d4fb8", grad: "linear-gradient(135deg,#dbe7ff,#f6f8fb)" },
-  in_progress: { bg: "var(--color-accent-tint)", text: "var(--color-action-dark)", grad: "linear-gradient(135deg,#fff8e6,#f6f8fb)" },
-  won: { bg: "#d0f4db", text: "#116a2c", grad: "linear-gradient(135deg,#d0f4db,#f6f8fb)" },
-  lost: { bg: "#fde2e2", text: "#b42318", grad: "linear-gradient(135deg,#fde2e2,#f6f8fb)" },
+  new: { bg: "var(--color-muted-tint)", text: "var(--color-muted-dark)", grad: "linear-gradient(160deg, var(--color-muted-tint), var(--color-paper))" },
+  contacted: { bg: "var(--color-info-tint)", text: "var(--color-info)", grad: "linear-gradient(160deg, var(--color-info-tint), var(--color-paper))" },
+  in_progress: { bg: "var(--color-accent-tint)", text: "var(--color-action-dark)", grad: "linear-gradient(160deg, var(--color-accent-tint), var(--color-paper))" },
+  won: { bg: "var(--color-success-tint)", text: "var(--color-success)", grad: "linear-gradient(160deg, var(--color-success-tint), var(--color-paper))" },
+  lost: { bg: "var(--color-danger-tint)", text: "var(--color-danger)", grad: "linear-gradient(160deg, var(--color-danger-tint), var(--color-paper))" },
 };
 
 const AVATAR_PALETTE = [
-  { bg: "#fff1cc", text: "#8a6700" },
-  { bg: "#dbe7ff", text: "#1d4fb8" },
-  { bg: "#dcfce3", text: "#116a2c" },
-  { bg: "#fde2e2", text: "#b42318" },
+  { bg: "var(--color-accent-tint)", text: "var(--color-action-dark)" },
+  { bg: "var(--color-info-tint)", text: "var(--color-info)" },
+  { bg: "var(--color-success-tint)", text: "var(--color-success)" },
+  { bg: "var(--color-danger-tint)", text: "var(--color-danger)" },
   { bg: "#ede9fe", text: "#5b21b6" },
   { bg: "#fce7f3", text: "#9d174d" },
 ];
@@ -253,9 +260,9 @@ export default function AdminDashboard() {
 
   const kpis = [
     { label: "Total Leads", value: stats.total, icon: Users, tone: "var(--color-action-dark)", trend: now === null ? undefined : stats.weekTrend },
-    { label: "New", value: stats.newCount, icon: Sparkles, tone: "#1d4fb8" },
+    { label: "New", value: stats.newCount, icon: Sparkles, tone: "var(--color-info)" },
     { label: "In Progress", value: stats.inProgress, icon: Clock, tone: "var(--color-action-dark)" },
-    { label: "Won · Conversion", value: stats.won, suffix: ` · ${stats.conversion}%`, icon: Trophy, tone: "#116a2c" },
+    { label: "Won · Conversion", value: stats.won, suffix: ` · ${stats.conversion}%`, icon: Trophy, tone: "var(--color-success)" },
   ];
 
   const leadColumns: DataTableColumn<Lead>[] = [
@@ -418,7 +425,7 @@ export default function AdminDashboard() {
                     aria-label="Save note"
                     title="Save note"
                     className="flex h-6 w-6 items-center justify-center rounded-full text-white disabled:opacity-60"
-                    style={{ backgroundColor: "#116a2c" }}
+                    style={{ backgroundColor: "var(--color-success)" }}
                   >
                     <Check className="h-3.5 w-3.5" />
                   </button>
@@ -445,10 +452,10 @@ export default function AdminDashboard() {
                 <span className="text-[10px]" style={{ color: "var(--color-ink-soft)" }}>Saving…</span>
               )}
               {!dirty && status === "saved" && (
-                <span className="text-[10px] font-medium" style={{ color: "#116a2c" }}>Saved ✓</span>
+                <span className="text-[10px] font-medium" style={{ color: "var(--color-success)" }}>Saved ✓</span>
               )}
               {status === "error" && (
-                <span className="text-[10px] font-medium" style={{ color: "#b42318" }}>Failed to save — try again</span>
+                <span className="text-[10px] font-medium" style={{ color: "var(--color-danger)" }}>Failed to save — try again</span>
               )}
             </div>
           </div>
@@ -474,7 +481,7 @@ export default function AdminDashboard() {
           rel="noopener noreferrer"
           onClick={(e) => e.stopPropagation()}
           className="inline-flex items-center gap-1 whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold transition-transform hover:scale-[1.02]"
-          style={{ backgroundColor: "#dcfce3", color: "#116a2c" }}
+          style={{ backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" }}
         >
           WhatsApp
         </a>
@@ -678,15 +685,29 @@ export default function AdminDashboard() {
                       : moved
                   );
                 }}
-                className="min-w-0 rounded-2xl p-3 transition-colors"
-                style={{ background: isDragOver ? stageStyle.bg : stageStyle.grad, border: `1px solid ${isDragOver ? stageStyle.text : "var(--color-line)"}` }}
+                // Border width stays constant between states so engaging a
+                // drop zone never nudges the column's contents by a pixel.
+                // The active zone switches to a dashed gold outline — dashed
+                // reads as "provisional, drop here" in a way a solid colour
+                // change doesn't.
+                className="min-w-0 rounded-[14px] p-2.5 transition-colors duration-200"
+                style={{
+                  background: isDragOver ? "var(--gold-50)" : stageStyle.grad,
+                  border: isDragOver ? "1.5px dashed var(--color-action)" : "1.5px solid var(--color-line)",
+                }}
               >
-                <div className="flex items-center justify-between px-1 pb-3">
-                  <span className="flex items-center gap-2 text-sm font-bold" style={{ color: stageStyle.text }}>
+                <div className="flex items-center justify-between px-1.5 pb-2.5 pt-0.5">
+                  <span
+                    className="flex items-center gap-1.5 text-[0.8125rem] font-bold"
+                    style={{ color: stageStyle.text }}
+                  >
                     <span className="h-2 w-2 rounded-full" style={{ backgroundColor: stageStyle.text }} />
                     {LEAD_STAGE_LABELS[stage]}
                   </span>
-                  <span className="rounded-full px-2 py-0.5 text-xs font-bold" style={{ backgroundColor: stageStyle.bg, color: stageStyle.text }}>
+                  <span
+                    className="rounded-full px-1.5 py-0.5 text-[11px] font-semibold tabular-nums"
+                    style={{ backgroundColor: stageStyle.bg, color: stageStyle.text }}
+                  >
                     {stageLeads.length}
                   </span>
                 </div>
@@ -732,8 +753,30 @@ export default function AdminDashboard() {
                             if (Date.now() - dragEndedAt.current < 250) return;
                             setActiveLead(lead);
                           }}
-                          className="cursor-grab space-y-2 rounded-xl border bg-white p-3 shadow-sm transition-shadow hover:shadow-lg active:cursor-grabbing dark:bg-[var(--color-paper-raised)]"
-                          style={{ borderColor: "var(--color-line)", opacity: draggingId === lead.id ? 0.4 : 1 }}
+                          className="cursor-grab space-y-2 rounded-[12px] border p-2.5 active:cursor-grabbing"
+                          style={{
+                            borderColor: "var(--color-line)",
+                            backgroundColor: "var(--color-paper-raised)",
+                            // The card being dragged stays in place as a
+                            // faded, flattened placeholder marking where it
+                            // came from; the browser's own drag image is the
+                            // thing that moves. Scaling it down slightly is
+                            // what makes it read as "lifted out of here"
+                            // rather than merely dimmed.
+                            opacity: draggingId === lead.id ? 0.35 : 1,
+                            transform: draggingId === lead.id ? "scale(0.97)" : undefined,
+                            boxShadow: draggingId === lead.id ? "none" : "var(--shadow-xs)",
+                            transition: "box-shadow 150ms var(--ease-out), opacity 150ms var(--ease-out), transform 150ms var(--ease-out)",
+                          }}
+                          onMouseEnter={(e) => {
+                            if (draggingId === lead.id) return;
+                            e.currentTarget.style.boxShadow = "var(--shadow-md)";
+                            e.currentTarget.style.borderColor = "var(--color-line-strong)";
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.boxShadow = draggingId === lead.id ? "none" : "var(--shadow-xs)";
+                            e.currentTarget.style.borderColor = "var(--color-line)";
+                          }}
                         >
                           <div className="flex items-start justify-between gap-2">
                             <div className="flex items-start gap-2 min-w-0">
@@ -801,7 +844,7 @@ export default function AdminDashboard() {
                               onClick={(e) => e.stopPropagation()}
                               aria-label={`WhatsApp ${lead.name}`}
                               className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full transition-transform hover:scale-110"
-                              style={{ backgroundColor: "#dcfce3", color: "#116a2c" }}
+                              style={{ backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" }}
                             >
                               <MessageCircle className="h-3.5 w-3.5" />
                             </a>

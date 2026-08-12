@@ -54,9 +54,9 @@ const TYPE_LABEL: Record<InvoiceType, string> = {
 const STATUS_STYLE: Record<InvoiceRow["status"], { bg: string; fg: string }> = {
   draft: { bg: "var(--color-paper)", fg: "var(--color-ink-soft)" },
   sent: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
-  paid: { bg: "#d0f4db", fg: "#116a2c" },
-  partially_paid: { bg: "#fff6d9", fg: "#8a6700" },
-  overdue: { bg: "#fde2e2", fg: "#b42318" },
+  paid: { bg: "var(--color-success-tint)", fg: "var(--color-success)" },
+  partially_paid: { bg: "var(--color-action-tint)", fg: "var(--color-action-dark)" },
+  overdue: { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" },
   cancelled: { bg: "var(--color-paper)", fg: "var(--color-ink-soft)" },
 };
 const EMPTY_ITEM: WizardItem = { catalogItemId: "", description: "", itemType: "service", hsnSacCode: "", unit: "Nos", quantity: "1", rate: "", discount: "0", gstRate: "18" };
@@ -651,7 +651,7 @@ export default function InvoiceCrmPage() {
       className: "w-[12%] whitespace-nowrap",
       render: (inv) => {
         const balance = balanceOf(inv);
-        return <span style={{ color: balance > 0 ? "#b42318" : "var(--color-ink-soft)" }}>{balance > 0 ? `₹${balance.toLocaleString("en-IN")}` : "—"}</span>;
+        return <span style={{ color: balance > 0 ? "var(--color-danger)" : "var(--color-ink-soft)" }}>{balance > 0 ? `₹${balance.toLocaleString("en-IN")}` : "—"}</span>;
       },
       exportValue: (inv) => balanceOf(inv),
       sortValue: (inv) => balanceOf(inv),
@@ -689,7 +689,7 @@ export default function InvoiceCrmPage() {
           { key: "email", label: "Email", icon: Mail, onClick: () => handleEmail(inv.id), color: "var(--color-action-dark)" },
         ];
         if (canRecordPayment) {
-          primary.push({ key: "payment", label: "Record Payment", icon: IndianRupee, onClick: () => { setPayingInvoice(inv); setPayAmount(String(balance)); }, color: "#116a2c" });
+          primary.push({ key: "payment", label: "Record Payment", icon: IndianRupee, onClick: () => { setPayingInvoice(inv); setPayAmount(String(balance)); }, color: "var(--color-success)" });
         }
         if (invCustomerPhone) {
           primary.push({
@@ -697,7 +697,7 @@ export default function InvoiceCrmPage() {
             label: "WhatsApp",
             icon: MessageCircle,
             href: buildWhatsAppLink(invCustomerPhone, `Hi, here's your invoice ${inv.invoice_number} from ${invOrgName}: ${shareUrl}`),
-            color: "#116a2c",
+            color: "var(--color-success)",
           });
         }
 
@@ -785,7 +785,7 @@ export default function InvoiceCrmPage() {
   if (!canManage) {
     return (
       <div>
-        <DashboardPageHero title="Invoice CRM" subtitle="Staff and admin only." />
+        <DashboardPageHero title="Invoice Generator" subtitle="Staff and admin only." />
         <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>You don&apos;t have access to this page. See your invoices under Order Invoices instead.</p>
       </div>
     );
@@ -834,7 +834,7 @@ export default function InvoiceCrmPage() {
   return (
     <div>
       <DashboardPageHero
-        title="Invoice CRM"
+        title="Invoice Generator"
         subtitle={
           spansMultipleOrgs
             ? "Every organization's invoices, pooled here for platform-level support — a new invoice is still issued and branded under whichever company the customer you pick actually belongs to, never the platform admin's own."
@@ -1109,7 +1109,7 @@ export default function InvoiceCrmPage() {
                       )}
                     </div>
                     {items.length > 1 && (
-                      <button type="button" onClick={() => setItems((prev) => prev.filter((_, idx) => idx !== i))} className="mt-2 flex items-center gap-1 text-xs font-medium" style={{ color: "#b42318" }}>
+                      <button type="button" onClick={() => setItems((prev) => prev.filter((_, idx) => idx !== i))} className="mt-2 flex items-center gap-1 text-xs font-medium" style={{ color: "var(--color-danger)" }}>
                         <Trash2 className="h-3 w-3" /> Remove
                       </button>
                     )}
@@ -1250,7 +1250,7 @@ export default function InvoiceCrmPage() {
               <ChevronLeft className="h-4 w-4" /> Back
             </button>
             {currentStepIssue && (
-              <p className="px-3 text-xs" style={{ color: "#b42318" }}>{currentStepIssue}</p>
+              <p className="px-3 text-xs" style={{ color: "var(--color-danger)" }}>{currentStepIssue}</p>
             )}
             {step < activeStepLabels.length && (
               <button

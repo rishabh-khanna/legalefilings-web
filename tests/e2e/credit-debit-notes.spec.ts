@@ -46,7 +46,7 @@ test("admin issues a Credit Note against a real invoice through the wizard", asy
   const { customer, invoice } = await createOriginalInvoice(request);
 
   await page.goto("/dashboard/invoice-crm");
-  await expect(page.getByRole("heading", { name: "Invoice CRM" })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("heading", { name: "Invoice Generator" })).toBeVisible({ timeout: 15000 });
   await page.getByRole("button", { name: "+ Generate Invoice" }).click();
 
   const wizard = page.getByText("Generate Invoice", { exact: true }).locator("xpath=ancestor::div[contains(@class,'fixed')][1]");
@@ -90,7 +90,7 @@ test("admin issues a Debit Note against a real invoice through the wizard", asyn
   const { customer, invoice } = await createOriginalInvoice(request);
 
   await page.goto("/dashboard/invoice-crm");
-  await expect(page.getByRole("heading", { name: "Invoice CRM" })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("heading", { name: "Invoice Generator" })).toBeVisible({ timeout: 15000 });
   await page.getByRole("button", { name: "+ Generate Invoice" }).click();
 
   const wizard = page.getByText("Generate Invoice", { exact: true }).locator("xpath=ancestor::div[contains(@class,'fixed')][1]");
@@ -121,7 +121,7 @@ test("a Credit Note can't be generated without picking the original invoice firs
   await ensureBusinessSettings(request);
 
   await page.goto("/dashboard/invoice-crm");
-  await expect(page.getByRole("heading", { name: "Invoice CRM" })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("heading", { name: "Invoice Generator" })).toBeVisible({ timeout: 15000 });
   await page.getByRole("button", { name: "+ Generate Invoice" }).click();
 
   const wizard = page.getByText("Generate Invoice", { exact: true }).locator("xpath=ancestor::div[contains(@class,'fixed')][1]");

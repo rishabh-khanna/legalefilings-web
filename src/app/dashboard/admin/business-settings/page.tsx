@@ -246,8 +246,8 @@ export default function BusinessSettingsPage() {
           className="mt-3 flex items-start gap-2.5 rounded-xl border px-4 py-3 text-sm"
           style={
             missing.length === 0
-              ? { backgroundColor: "#d0f4db", borderColor: "#a8e6bc", color: "#116a2c" }
-              : { backgroundColor: "#fde2e2", borderColor: "#f3a9a9", color: "#8a1a13" }
+              ? { backgroundColor: "var(--color-success-tint)", borderColor: "#a8e6bc", color: "var(--color-success)" }
+              : { backgroundColor: "var(--color-danger-tint)", borderColor: "#f3a9a9", color: "#8a1a13" }
           }
         >
           {missing.length === 0 ? (
@@ -396,7 +396,7 @@ export default function BusinessSettingsPage() {
         <p className="mt-1 text-xs" style={{ color: "var(--color-ink-soft)" }}>
           {spansMultipleOrgs
             ? "Every organization's additional GST registrations, pooled here for platform-level support — each company still manages its own from its own Business Settings page."
-            : "If the company operates under more than one GSTIN (e.g. a branch in another state), add each one here — Invoice CRM lets staff pick which registration an invoice is issued under."}
+            : "If the company operates under more than one GSTIN (e.g. a branch in another state), add each one here — Invoice Generator lets staff pick which registration an invoice is issued under."}
         </p>
         {spansMultipleOrgs ? (
           <p className="mt-3 text-xs" style={{ color: "var(--color-ink-soft)" }}>
@@ -424,7 +424,7 @@ export default function BusinessSettingsPage() {
                   <span className="ml-2 text-xs" style={{ color: "var(--color-ink-soft)" }}>· Added by {r.creator.full_name}</span>
                 )}
               </span>
-              <button type="button" onClick={() => handleRemoveRegistration(r.id, r.label)} className="text-xs font-semibold" style={{ color: "#b42318" }}>Remove</button>
+              <button type="button" onClick={() => handleRemoveRegistration(r.id, r.label)} className="text-xs font-semibold" style={{ color: "var(--color-danger)" }}>Remove</button>
             </div>
           ))}
           {registrations.length === 0 && <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>No additional registrations — invoices use the default GST number above.</p>}

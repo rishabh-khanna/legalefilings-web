@@ -1,29 +1,12 @@
 "use client";
 
 import { Fragment, useEffect, useMemo, useState, type ReactNode, type CSSProperties } from "react";
-import { Search, ChevronUp, ChevronDown, ChevronsUpDown } from "lucide-react";
+import { Search, ChevronUp, ChevronDown, ChevronsUpDown, Rows3, Rows4, Inbox, SearchX } from "lucide-react";
 import { usePagination } from "@/lib/use-pagination";
 import { useDateRangeFilter } from "@/lib/use-date-range-filter";
 import { TablePagination } from "@/components/TablePagination";
 import { ExportButton } from "@/components/ExportButton";
 import { DateRangeFilter } from "@/components/DateRangeFilter";
-
-// Same rotating tint set used for the sidebar's nav icons and the leads
-// board's avatars (see DashboardShell.tsx, admin/leads/page.tsx) — reused
-// here rather than a fourth palette, so a table's row numbers read as
-// part of the same app instead of introducing their own color language.
-// Row number, not row identity, drives the rotation: it's a stable,
-// always-available integer every table already has, and the point here
-// is decorative rhythm down the column, not per-record color-coding.
-const ROW_NUMBER_TINTS = [
-  { bg: "#fff1cc", fg: "#8a6700" },
-  { bg: "#dbe7ff", fg: "#1d4fb8" },
-  { bg: "#dcfce3", fg: "#116a2c" },
-  { bg: "#fde2e2", fg: "#b42318" },
-  { bg: "#ede9fe", fg: "#5b21b6" },
-  { bg: "#fce7f3", fg: "#9d174d" },
-  { bg: "#e0f2fe", fg: "#075985" },
-];
 
 export type DataTableColumn<T> = {
   key: string;
@@ -43,6 +26,32 @@ export type DataTableColumn<T> = {
   className?: string;
 };
 
+// Same rotating tint set used for the sidebar's nav icons and the leads
+// board's avatars — reused here rather than a fourth palette, so a
+// table's row numbers read as part of the same app. Row number, not row
+// identity, drives the rotation: it's a stable always-available integer,
+// and the point is decorative rhythm down the column, not per-record
+// colour-coding. Retuned onto the new warm ramp.
+const ROW_NUMBER_TINTS = [
+  { bg: "var(--color-accent-tint)", fg: "var(--color-action-dark)" },
+  { bg: "var(--color-info-tint)", fg: "var(--color-info)" },
+  { bg: "var(--color-success-tint)", fg: "var(--color-success)" },
+  { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" },
+  { bg: "#ede9fe", fg: "#5b21b6" },
+  { bg: "#fce7f3", fg: "#9d174d" },
+  { bg: "#e0f2fe", fg: "#075985" },
+];
+
+type Density = "comfortable" | "compact";
+const DENSITY_KEY = "dt-density";
+
+// Past this many rows on screen, the table gets its own scroll
+// container so the header can stick to the top of the card. Below it,
+// the table stays in normal page flow — a sticky header on a six-row
+// table does nothing except create a stacking context and trap the
+// page scroll under the cursor.
+const STICKY_THRESHOLD = 12;
+
 // The one shared shape every dashboard table list was independently
 // reinventing — a leading "#" column, search, an optional date-range
 // filter, pagination, export, and the bordered/rounded card container —
@@ -56,6 +65,8 @@ export function DataTable<T>({
   rows,
   getRowKey,
   emptyMessage = "No results yet.",
+  emptyHint,
+  emptyAction,
   filteredEmptyMessage = "No results match your filters.",
   search,
   dateFilter,
@@ -73,6 +84,12 @@ export function DataTable<T>({
   rows: T[];
   getRowKey: (row: T) => string;
   emptyMessage?: string;
+  // Optional second line + call-to-action for the empty state. An empty
+  // table that only says "nothing here" leaves the user to work out
+  // whether that's a bug, a filter, or simply a thing they haven't done
+  // yet — the hint says which, and the action gives them the way out.
+  emptyHint?: ReactNode;
+  emptyAction?: ReactNode;
   filteredEmptyMessage?: string;
   // Free-text search across whatever fields the caller wants matched.
   search?: { placeholder: string; filter: (row: T, query: string) => boolean };
@@ -118,6 +135,30 @@ export function DataTable<T>({
     const t = setTimeout(() => setDebouncedQuery(searchQuery), 300);
     return () => clearTimeout(t);
   }, [searchQuery]);
+
+  // Density starts at the SSR-safe default and is corrected from
+  // localStorage after mount — reading storage during render would
+  // produce different markup on server and client and trip hydration.
+  const [density, setDensity] = useState<Density>("comfortable");
+  useEffect(() => {
+    const kickoff = setTimeout(() => {
+      const stored = window.localStorage.getItem(DENSITY_KEY);
+      if (stored === "compact" || stored === "comfortable") setDensity(stored);
+    }, 0);
+    return () => clearTimeout(kickoff);
+  }, []);
+  function toggleDensity() {
+    setDensity((d) => {
+      const next: Density = d === "comfortable" ? "compact" : "comfortable";
+      try {
+        window.localStorage.setItem(DENSITY_KEY, next);
+      } catch {
+        // Private-mode/quota failures shouldn't break the toggle itself —
+        // the preference just won't survive a reload.
+      }
+      return next;
+    });
+  }
 
   const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
@@ -170,6 +211,10 @@ export function DataTable<T>({
 
   const exportableColumns = columns.filter((c) => c.exportValue);
   const hasToolbarRow = Boolean(search || dateFilter || exportFilename || toolbar);
+  const scrolls = pageItems.length >= STICKY_THRESHOLD;
+
+  const controlBase =
+    "inline-flex h-9 items-center gap-1.5 rounded-[10px] border px-3 text-xs font-semibold transition-colors";
 
   return (
     <div>
@@ -183,7 +228,7 @@ export function DataTable<T>({
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder={search.placeholder}
-                  className="w-full rounded-lg border py-2 pl-9 pr-3 text-sm outline-none transition-shadow focus:border-[var(--color-action)] focus:shadow-[0_0_0_3px_var(--color-action-tint)]"
+                  className="h-9 w-full rounded-[10px] border bg-[var(--color-paper-raised)] pl-9 pr-3 text-sm outline-none"
                   style={{ borderColor: "var(--color-line)" }}
                 />
               </div>
@@ -193,20 +238,42 @@ export function DataTable<T>({
             )}
             {toolbar}
           </div>
-          {exportFilename && (
-            <ExportButton
-              filename={exportFilename}
-              headers={exportableColumns.map((c) => (typeof c.header === "string" ? c.header : c.key))}
-              rows={sortedRows.map((row) => exportableColumns.map((c) => c.exportValue!(row) ?? ""))}
-            />
-          )}
+          <div className="flex items-center gap-2">
+            {/* Density is a genuine information-density control, not a
+                cosmetic one — Compact fits roughly a third more rows on
+                screen, which is the difference between scanning and
+                scrolling on a long register. Persisted, because someone
+                who wants dense tables wants them on every page. */}
+            <button
+              type="button"
+              onClick={toggleDensity}
+              className={`${controlBase} hover:border-[var(--color-action)] hover:text-[var(--color-action-dark)]`}
+              style={{ borderColor: "var(--color-line)", color: "var(--color-ink-soft)" }}
+              aria-pressed={density === "compact"}
+              title={density === "comfortable" ? "Switch to compact rows" : "Switch to comfortable rows"}
+            >
+              {density === "comfortable" ? <Rows3 className="h-3.5 w-3.5" /> : <Rows4 className="h-3.5 w-3.5" />}
+              {density === "comfortable" ? "Comfortable" : "Compact"}
+            </button>
+            {exportFilename && (
+              <ExportButton
+                filename={exportFilename}
+                headers={exportableColumns.map((c) => (typeof c.header === "string" ? c.header : c.key))}
+                rows={sortedRows.map((row) => exportableColumns.map((c) => c.exportValue!(row) ?? ""))}
+              />
+            )}
+          </div>
         </div>
       )}
 
       {rows.length === 0 ? (
-        <p className="mt-6 text-sm" style={{ color: "var(--color-ink-soft)" }}>{emptyMessage}</p>
+        <EmptyState icon={Inbox} title={emptyMessage} hint={emptyHint} action={emptyAction} />
       ) : filteredRows.length === 0 ? (
-        <p className="mt-6 text-sm" style={{ color: "var(--color-ink-soft)" }}>{filteredEmptyMessage}</p>
+        <EmptyState
+          icon={SearchX}
+          title={filteredEmptyMessage}
+          hint="Try a broader search term, or clear the filters above."
+        />
       ) : (
         <>
           <TablePagination
@@ -220,14 +287,15 @@ export function DataTable<T>({
             total={total}
             itemLabel={itemLabel}
           />
-          {/* shadow-sm instead of a flat border-only card — a hint of
-              elevation is what separates "a table with a border around
-              it" from "a table that looks like a designed surface." Kept
-              deliberately soft (Tailwind's own shadow-sm token, not a
-              custom heavier one) so it reads as considered rather than
-              skeuomorphic. */}
-          <div className="mt-3 overflow-x-auto rounded-2xl border bg-white shadow-sm dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)" }}>
-            <table className="dt-table w-full text-left text-sm" style={{ minWidth, tableLayout: fixedLayout ? "fixed" : undefined }}>
+          <div
+            className={`mt-3 overflow-x-auto rounded-[14px] border bg-[var(--color-paper-raised)] ${scrolls ? "dt-scroll" : ""}`}
+            style={{ borderColor: "var(--color-line)", boxShadow: "var(--shadow-sm)" }}
+          >
+            <table
+              className="dt-table w-full text-left text-sm"
+              data-density={density}
+              style={{ minWidth, tableLayout: fixedLayout ? "fixed" : undefined }}
+            >
               <thead>
                 <tr>
                   {/* whitespace-nowrap is load-bearing here, not cosmetic —
@@ -242,7 +310,16 @@ export function DataTable<T>({
                     const sortable = Boolean(c.sortValue);
                     const active = sortKey === c.key;
                     return (
-                      <th key={c.key} className={c.className}>
+                      <th
+                        key={c.key}
+                        className={c.className}
+                        // Drives both the screen-reader announcement and the
+                        // sorted-column styling in globals.css — one source
+                        // of truth for "this column is sorted" instead of a
+                        // separate visual-only class that can drift out of
+                        // sync with what's announced.
+                        aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : undefined}
+                      >
                         {sortable ? (
                           <button
                             type="button"
@@ -250,21 +327,21 @@ export function DataTable<T>({
                             className="inline-flex items-center gap-1 transition-colors hover:text-[var(--color-action-dark)]"
                           >
                             {c.header}
-                            {/* opacity-40 on var(--color-ink-soft) (#5b6b81) against
-                                this header's near-white gradient worked out to
-                                roughly 2:1 contrast — technically painted, not
-                                actually legible at 12px. Full opacity for the
-                                idle affordance; the active column gets its own
+                            {/* opacity-40 on var(--color-ink-soft) against
+                                this header worked out to roughly 2:1
+                                contrast — technically painted, not actually
+                                legible at 12px. Full opacity for the idle
+                                affordance; the active column gets its own
                                 stronger color instead of relying on the icon
                                 shape alone to say "sorted, and which way". */}
                             {active ? (
                               sortDir === "asc" ? (
-                                <ChevronUp className="h-3.5 w-3.5" style={{ color: "var(--color-action-dark)" }} />
+                                <ChevronUp className="h-3.5 w-3.5" style={{ color: "var(--color-action)" }} />
                               ) : (
-                                <ChevronDown className="h-3.5 w-3.5" style={{ color: "var(--color-action-dark)" }} />
+                                <ChevronDown className="h-3.5 w-3.5" style={{ color: "var(--color-action)" }} />
                               )
                             ) : (
-                              <ChevronsUpDown className="h-3.5 w-3.5" />
+                              <ChevronsUpDown className="h-3.5 w-3.5 opacity-55" />
                             )}
                           </button>
                         ) : (
@@ -291,18 +368,16 @@ export function DataTable<T>({
                         // Tailwind hover class here previously raced it
                         // for the same specificity, and which one won was
                         // effectively arbitrary based on stylesheet order.
-                        className={onRowClick ? "cursor-pointer transition-colors" : undefined}
+                        className={onRowClick ? "cursor-pointer" : undefined}
                         style={rowStyle?.(row)}
                       >
                         <td className="whitespace-nowrap">
-                          {/* min-w-6 + px-1.5, not a fixed w-6 — a 3-digit
-                              row number (rows-per-page goes up to 100)
-                              would overflow a hard-circular badge; this
-                              stays circular for 1-2 digits and gracefully
-                              becomes a small pill once a number needs the
-                              extra room. */}
+                          {/* min-w-5 + px-1, not a fixed w-5 — a 3-digit row
+                              number (rows-per-page goes to 100) would
+                              overflow a hard circle; this stays circular for
+                              1-2 digits and becomes a small pill beyond. */}
                           <span
-                            className="inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold"
+                            className="inline-flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold tabular-nums"
                             style={{ backgroundColor: tint.bg, color: tint.fg }}
                           >
                             {rowNumber}
@@ -329,6 +404,46 @@ export function DataTable<T>({
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// A real empty state rather than one grey sentence: a soft medallion,
+// the reason the table is empty, and — where the caller supplies one —
+// the action that fills it. This is the screen a new organization sees
+// on almost every page, so it does more to set the tone of the product
+// than any populated table does.
+function EmptyState({
+  icon: Icon,
+  title,
+  hint,
+  action,
+}: {
+  icon: React.ComponentType<{ className?: string; style?: CSSProperties }>;
+  title: ReactNode;
+  hint?: ReactNode;
+  action?: ReactNode;
+}) {
+  return (
+    <div
+      className="mt-3 flex flex-col items-center justify-center rounded-[14px] border px-6 py-14 text-center"
+      style={{ borderColor: "var(--color-line)", backgroundColor: "var(--color-paper-raised)" }}
+    >
+      <span
+        className="flex h-14 w-14 items-center justify-center rounded-full"
+        style={{ backgroundColor: "var(--color-accent-tint)", color: "var(--color-action-dark)" }}
+      >
+        <Icon className="h-6 w-6" />
+      </span>
+      <p className="mt-4 text-sm font-semibold" style={{ color: "var(--color-ink)" }}>
+        {title}
+      </p>
+      {hint && (
+        <p className="mt-1.5 max-w-sm text-xs leading-relaxed" style={{ color: "var(--color-ink-soft)" }}>
+          {hint}
+        </p>
+      )}
+      {action && <div className="mt-5">{action}</div>}
     </div>
   );
 }

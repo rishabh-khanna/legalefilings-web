@@ -124,7 +124,7 @@ export default function RequestAccountPage() {
           {result && (
             <p
               className="rounded-lg px-4 py-3 text-sm"
-              style={result.ok ? { backgroundColor: "#d0f4db", color: "#116a2c" } : { backgroundColor: "#fde2e2", color: "#b42318" }}
+              style={result.ok ? { backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" } : { backgroundColor: "var(--color-danger-tint)", color: "var(--color-danger)" }}
             >
               {result.text}
             </p>

@@ -272,7 +272,7 @@ export default function EmployeesPage() {
             Editing {emp.full_name ?? "employee"}
           </p>
           <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>
-            <span style={{ color: "#b42318" }}>*</span> Required
+            <span style={{ color: "var(--color-danger)" }}>*</span> Required
           </p>
         </div>
 

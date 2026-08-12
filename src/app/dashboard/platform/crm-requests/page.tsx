@@ -17,8 +17,8 @@ type CrmAccessRequest = {
 };
 
 const REQUEST_STATUS_STYLE: Record<"approved" | "rejected", { bg: string; fg: string }> = {
-  approved: { bg: "#d0f4db", fg: "#116a2c" },
-  rejected: { bg: "#fde2e2", fg: "#b42318" },
+  approved: { bg: "var(--color-success-tint)", fg: "var(--color-success)" },
+  rejected: { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" },
 };
 
 // Platform-admin only. Split out from Organizations — approving/rejecting
@@ -99,16 +99,16 @@ export default function CrmRequestsPage() {
               className="w-40 rounded-lg border px-2 py-1.5 text-sm outline-none"
               style={{ borderColor: "var(--color-line)" }}
             />
-            <button type="button" onClick={() => handleRejectRequest(r.id)} className="text-sm font-semibold" style={{ color: "#b42318" }}>Confirm</button>
+            <button type="button" onClick={() => handleRejectRequest(r.id)} className="text-sm font-semibold" style={{ color: "var(--color-danger)" }}>Confirm</button>
             <button type="button" onClick={() => { setRejectingId(null); setRejectReason(""); }} className="text-sm" style={{ color: "var(--color-ink-soft)" }}>Cancel</button>
           </div>
         ) : (
           <div className="flex items-center justify-end gap-2">
             <button type="button" onClick={() => handleApproveRequest(r.id)} aria-label="Approve" className="rounded-full p-1.5 transition-colors hover:bg-[var(--color-accent-tint)]">
-              <Check className="h-4 w-4" style={{ color: "#116a2c" }} />
+              <Check className="h-4 w-4" style={{ color: "var(--color-success)" }} />
             </button>
             <button type="button" onClick={() => setRejectingId(r.id)} aria-label="Reject" className="rounded-full p-1.5 transition-colors hover:bg-[var(--color-accent-tint)]">
-              <X className="h-4 w-4" style={{ color: "#b42318" }} />
+              <X className="h-4 w-4" style={{ color: "var(--color-danger)" }} />
             </button>
           </div>
         ),
@@ -141,7 +141,7 @@ export default function CrmRequestsPage() {
       className: "max-w-[180px]",
       render: (r) =>
         r.status === "rejected" && r.review_note ? (
-          <TruncatedText text={r.review_note} style={{ color: "#b42318" }} />
+          <TruncatedText text={r.review_note} style={{ color: "var(--color-danger)" }} />
         ) : (
           <span style={{ color: "var(--color-ink-soft)" }}>—</span>
         ),
@@ -163,7 +163,7 @@ export default function CrmRequestsPage() {
       </DashboardPageHero>
 
       {reviewError && (
-        <p className="mt-4 text-sm" style={{ color: "#b42318" }}>{reviewError}</p>
+        <p className="mt-4 text-sm" style={{ color: "var(--color-danger)" }}>{reviewError}</p>
       )}
 
       <div className="mt-6 flex items-center gap-1 rounded-full border p-1" style={{ borderColor: "var(--color-line)" }}>

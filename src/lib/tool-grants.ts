@@ -28,8 +28,8 @@ export const DELEGABLE_TOOLS = [
   // grantee is staff; these four are the exception, and every call site
   // that checks them has a matching customer+grant branch (see
   // src/proxy.ts, src/lib/reporting-chain.ts, and each backing API route).
-  { key: "leads_crm", label: "Leads CRM (Pipeline)", path: "/dashboard/admin/leads" },
-  { key: "invoice_crm", label: "Invoice CRM", path: "/dashboard/invoice-crm" },
+  { key: "leads_crm", label: "Team Pipeline", path: "/dashboard/admin/leads" },
+  { key: "invoice_crm", label: "Invoice Generator", path: "/dashboard/invoice-crm" },
   { key: "team_attendance", label: "Team Attendance", path: "/dashboard/admin/attendance" },
   { key: "team_leave", label: "Team Leave Requests", path: "/dashboard/admin/leave-requests" },
 ] as const;

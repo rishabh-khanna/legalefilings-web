@@ -32,9 +32,9 @@ type InvoiceRow = {
 const STATUS_STYLE: Record<InvoiceRow["status"], { bg: string; fg: string }> = {
   draft: { bg: "var(--color-paper)", fg: "var(--color-ink-soft)" },
   sent: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
-  paid: { bg: "#d0f4db", fg: "#116a2c" },
-  partially_paid: { bg: "#fff6d9", fg: "#8a6700" },
-  overdue: { bg: "#fde2e2", fg: "#b42318" },
+  paid: { bg: "var(--color-success-tint)", fg: "var(--color-success)" },
+  partially_paid: { bg: "var(--color-action-tint)", fg: "var(--color-action-dark)" },
+  overdue: { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" },
   cancelled: { bg: "var(--color-paper)", fg: "var(--color-ink-soft)" },
 };
 
@@ -165,7 +165,7 @@ export default function InvoicesPage() {
       className: "w-[12%] whitespace-nowrap",
       render: (inv) => {
         const balance = balanceOf(inv);
-        return <span style={{ color: balance > 0 ? "#b42318" : "var(--color-ink-soft)" }}>{balance > 0 ? `₹${balance.toLocaleString("en-IN")}` : "—"}</span>;
+        return <span style={{ color: balance > 0 ? "var(--color-danger)" : "var(--color-ink-soft)" }}>{balance > 0 ? `₹${balance.toLocaleString("en-IN")}` : "—"}</span>;
       },
       exportValue: (inv) => balanceOf(inv),
       sortValue: (inv) => balanceOf(inv),
@@ -192,12 +192,12 @@ export default function InvoicesPage() {
           <div className="flex flex-wrap items-center gap-2.5">
             <a href={`/api/invoices/${inv.id}/download`} className="text-xs font-semibold underline" style={{ color: "var(--color-action-dark)" }}>PDF</a>
             {canManage && isCollectableInvoiceType(inv.invoice_type) && inv.status !== "paid" && inv.status !== "cancelled" && (
-              <button type="button" onClick={() => { setPayingInvoice(inv); setPayAmount(String(balance)); }} className="text-xs font-semibold underline" style={{ color: "#116a2c" }}>
+              <button type="button" onClick={() => { setPayingInvoice(inv); setPayAmount(String(balance)); }} className="text-xs font-semibold underline" style={{ color: "var(--color-success)" }}>
                 Record Payment
               </button>
             )}
             {!canManage && isCollectableInvoiceType(inv.invoice_type) && inv.status !== "paid" && inv.status !== "cancelled" && (
-              <Link href={`/pay/${inv.id}`} target="_blank" className="text-xs font-semibold underline" style={{ color: "#116a2c" }}>
+              <Link href={`/pay/${inv.id}`} target="_blank" className="text-xs font-semibold underline" style={{ color: "var(--color-success)" }}>
                 Pay Now
               </Link>
             )}
@@ -219,7 +219,7 @@ export default function InvoicesPage() {
           spansMultipleOrgs
             ? "Every organization's order invoices, pooled here for platform-level support."
             : canManage
-              ? "Invoices generated from purchases — Buy Plan for Customer and direct checkout. For ad-hoc billing, use Invoice CRM."
+              ? "Invoices generated from purchases — Buy Plan for Customer and direct checkout. For ad-hoc billing, use Invoice Generator."
               : "Invoices issued to your account."
         }
       >

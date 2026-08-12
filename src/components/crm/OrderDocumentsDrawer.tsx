@@ -27,16 +27,16 @@ export const DOCUMENT_STATUS_LABEL: Record<OrderDocumentStatus, string> = {
 };
 
 export const DOCUMENT_STATUS_STYLE: Record<OrderDocumentStatus, { bg: string; fg: string }> = {
-  awaiting: { bg: "#fde2e2", fg: "#b42318" },
-  submitted: { bg: "#fff6d9", fg: "#8a6700" },
-  verified: { bg: "#d0f4db", fg: "#116a2c" },
+  awaiting: { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" },
+  submitted: { bg: "var(--color-action-tint)", fg: "var(--color-action-dark)" },
+  verified: { bg: "var(--color-success-tint)", fg: "var(--color-success)" },
   not_required: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
 };
 
 const DOC_STATUS_STYLE: Record<DocumentRow["status"], { bg: string; fg: string }> = {
   pending: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
-  verified: { bg: "#d0f4db", fg: "#116a2c" },
-  rejected: { bg: "#fde2e2", fg: "#b42318" },
+  verified: { bg: "var(--color-success-tint)", fg: "var(--color-success)" },
+  rejected: { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" },
 };
 
 function formatSize(bytes: number | null) {
@@ -246,7 +246,7 @@ export function OrderDocumentsDrawer({
                           if (confirm("Cancel this order? The customer will see it as cancelled.")) handleProcessStatusChange("cancelled");
                         }}
                         className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium disabled:opacity-60"
-                        style={{ borderColor: "var(--color-line)", color: "#b42318" }}
+                        style={{ borderColor: "var(--color-line)", color: "var(--color-danger)" }}
                       >
                         <Ban className="h-3 w-3" /> Cancel Order
                       </button>
@@ -287,7 +287,7 @@ export function OrderDocumentsDrawer({
                 </label>
               )}
 
-              {error && <p className="mt-3 text-sm" style={{ color: "#b42318" }}>{error}</p>}
+              {error && <p className="mt-3 text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>}
 
               <div className="mt-5 space-y-3">
                 {documents === null ? (
@@ -326,10 +326,10 @@ export function OrderDocumentsDrawer({
                         </span>
                         {isStaff && doc.status === "pending" && rejectingId !== doc.id && (
                           <div className="flex gap-2">
-                            <button type="button" onClick={() => handleReview(doc.id, "verified")} className="flex items-center gap-1 text-xs font-medium" style={{ color: "#116a2c" }}>
+                            <button type="button" onClick={() => handleReview(doc.id, "verified")} className="flex items-center gap-1 text-xs font-medium" style={{ color: "var(--color-success)" }}>
                               <CheckCircle2 className="h-3.5 w-3.5" /> Verify
                             </button>
-                            <button type="button" onClick={() => setRejectingId(doc.id)} className="flex items-center gap-1 text-xs font-medium" style={{ color: "#b42318" }}>
+                            <button type="button" onClick={() => setRejectingId(doc.id)} className="flex items-center gap-1 text-xs font-medium" style={{ color: "var(--color-danger)" }}>
                               <XCircle className="h-3.5 w-3.5" /> Reject
                             </button>
                           </div>
@@ -348,7 +348,7 @@ export function OrderDocumentsDrawer({
                             className="w-full rounded-lg border px-2 py-1.5 text-xs outline-none"
                             style={{ borderColor: "var(--color-line)" }}
                           />
-                          <button type="button" onClick={() => handleReview(doc.id, "rejected", rejectNote)} className="shrink-0 text-xs font-semibold" style={{ color: "#b42318" }}>Confirm</button>
+                          <button type="button" onClick={() => handleReview(doc.id, "rejected", rejectNote)} className="shrink-0 text-xs font-semibold" style={{ color: "var(--color-danger)" }}>Confirm</button>
                           <button type="button" onClick={() => { setRejectingId(null); setRejectNote(""); }} className="shrink-0 text-xs" style={{ color: "var(--color-ink-soft)" }}>Cancel</button>
                         </div>
                       )}

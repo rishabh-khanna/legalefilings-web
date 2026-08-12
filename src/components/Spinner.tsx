@@ -19,7 +19,7 @@ export function Spinner({ size = 28, label }: { size?: number; label?: string })
             className="absolute flex items-center justify-center rounded-full font-extrabold text-white shadow-sm"
             style={{
               inset: border + 2,
-              background: "linear-gradient(135deg, #fdc500, #ff8a3d)",
+              background: "linear-gradient(135deg, var(--color-accent), #ff8a3d)",
               fontSize: Math.max(7, size * 0.28),
             }}
           >

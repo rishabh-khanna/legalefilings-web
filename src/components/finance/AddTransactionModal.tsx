@@ -231,7 +231,7 @@ export function AddTransactionModal({
           </h3>
           <div className="flex items-center gap-3">
             <p className="text-xs" style={{ color: "var(--color-ink-soft)" }}>
-              <span style={{ color: "#b42318" }}>*</span> Required
+              <span style={{ color: "var(--color-danger)" }}>*</span> Required
             </p>
             <button type="button" onClick={onClose} aria-label="Close" className="rounded-full p-1.5 transition-colors hover:bg-[var(--color-accent-tint)]">
               <X className="h-4 w-4" style={{ color: "var(--color-ink-soft)" }} />
@@ -379,7 +379,7 @@ export function AddTransactionModal({
           </div>
         </div>
 
-        {error && <p className="mt-3 text-sm" style={{ color: "#b42318" }}>{error}</p>}
+        {error && <p className="mt-3 text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>}
 
         <div className="mt-5 flex flex-wrap gap-3">
           <button

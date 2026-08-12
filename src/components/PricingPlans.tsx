@@ -148,7 +148,7 @@ export function PricingPlans({
                   {plan.discount && (
                     <span
                       className="rounded-full px-2.5 py-0.5 text-xs font-semibold"
-                      style={{ backgroundColor: "#d0f4db", color: "#116a2c" }}
+                      style={{ backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" }}
                     >
                       {plan.discount}
                     </span>

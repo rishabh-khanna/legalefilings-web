@@ -84,7 +84,7 @@ export function NotificationBell() {
         {actionable > 0 && (
           <span
             className="absolute -right-0.5 -top-0.5 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[10px] font-bold text-white"
-            style={{ backgroundColor: "#b42318" }}
+            style={{ backgroundColor: "var(--color-danger)" }}
           >
             {actionable > 9 ? "9+" : actionable}
           </span>
@@ -123,7 +123,7 @@ export function NotificationBell() {
               >
                 <span
                   className="mt-1.5 h-2 w-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: item.tone === "act" ? "#b42318" : "var(--color-line)" }}
+                  style={{ backgroundColor: item.tone === "act" ? "var(--color-danger)" : "var(--color-line)" }}
                 />
                 <span className="min-w-0 flex-1">
                   <span className="block text-sm font-semibold" style={{ color: "var(--color-ink)" }}>{item.title}</span>

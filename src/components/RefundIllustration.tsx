@@ -11,7 +11,7 @@ import { ShieldCheck } from "lucide-react";
 // entirely — nothing here can render out of proportion with itself.
 export function RefundIllustration({ className = "" }: { className?: string }) {
   return (
-    <span className={`flex shrink-0 items-center justify-center rounded-full ${className}`} style={{ backgroundColor: "#dbe7ff" }}>
+    <span className={`flex shrink-0 items-center justify-center rounded-full ${className}`} style={{ backgroundColor: "var(--color-info-tint)" }}>
       <ShieldCheck className="h-[46%] w-[46%]" style={{ color: "#1b4ba4" }} strokeWidth={1.75} />
     </span>
   );

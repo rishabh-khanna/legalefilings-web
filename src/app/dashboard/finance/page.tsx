@@ -225,7 +225,7 @@ export default function FinancePage() {
       header: "Amount",
       className: "w-[12%] whitespace-nowrap",
       render: (t) => (
-        <span className="font-semibold" style={{ color: t.transaction_type === "income" ? "#116a2c" : "#b42318" }}>
+        <span className="font-semibold" style={{ color: t.transaction_type === "income" ? "var(--color-success)" : "var(--color-danger)" }}>
           {t.transaction_type === "income" ? "+" : "-"}{money(t.amount)}
         </span>
       ),
@@ -238,11 +238,11 @@ export default function FinancePage() {
       className: "w-[10%] whitespace-nowrap",
       render: (t) =>
         t.status === "pending" ? (
-          <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "#fff6d9", color: "#8a6700" }}>Pending</span>
+          <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "var(--color-action-tint)", color: "var(--color-action-dark)" }}>Pending</span>
         ) : t.status === "rejected" ? (
-          <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "#fde2e2", color: "#b42318" }}>Rejected</span>
+          <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "var(--color-danger-tint)", color: "var(--color-danger)" }}>Rejected</span>
         ) : (
-          <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "#d0f4db", color: "#116a2c" }}>Approved</span>
+          <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" }}>Approved</span>
         ),
       exportValue: (t) => t.status,
       sortValue: (t) => t.status,
@@ -256,10 +256,10 @@ export default function FinancePage() {
           {t.status === "pending" && can("delete_expense") && (
             <>
               <button type="button" onClick={() => handleReview(t.id, "approve")} aria-label="Approve" className="rounded-full p-1 transition-colors hover:bg-[var(--color-accent-tint)]">
-                <Check className="h-3.5 w-3.5" style={{ color: "#116a2c" }} />
+                <Check className="h-3.5 w-3.5" style={{ color: "var(--color-success)" }} />
               </button>
               <button type="button" onClick={() => handleReview(t.id, "reject")} aria-label="Reject" className="rounded-full p-1 transition-colors hover:bg-[var(--color-accent-tint)]">
-                <X className="h-3.5 w-3.5" style={{ color: "#b42318" }} />
+                <X className="h-3.5 w-3.5" style={{ color: "var(--color-danger)" }} />
               </button>
             </>
           )}
@@ -268,7 +268,7 @@ export default function FinancePage() {
               <button type="button" onClick={() => setEditingTransaction(t)} className="text-xs font-medium" style={{ color: "var(--color-action-dark)" }}>
                 Edit
               </button>
-              <button type="button" onClick={() => handleDeleteTransaction(t.id)} className="text-xs font-medium" style={{ color: "#b42318" }}>
+              <button type="button" onClick={() => handleDeleteTransaction(t.id)} className="text-xs font-medium" style={{ color: "var(--color-danger)" }}>
                 Delete
               </button>
             </>
@@ -374,7 +374,7 @@ export default function FinancePage() {
       {summary.alerts && summary.alerts.length > 0 && (
         <div className="mb-4 space-y-2">
           {summary.alerts.map((a, i) => (
-            <div key={i} className="flex items-start gap-2 rounded-xl px-4 py-3 text-sm" style={{ backgroundColor: "#fde2e2", color: "#b42318" }}>
+            <div key={i} className="flex items-start gap-2 rounded-xl px-4 py-3 text-sm" style={{ backgroundColor: "var(--color-danger-tint)", color: "var(--color-danger)" }}>
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
               <span>{a}</span>
             </div>
@@ -436,7 +436,7 @@ export default function FinancePage() {
                       >
                         Edit
                       </button>
-                      <button type="button" onClick={() => handleToggleAccountActive(a)} className="text-xs font-medium" style={{ color: a.is_active ? "#b42318" : "#116a2c" }}>
+                      <button type="button" onClick={() => handleToggleAccountActive(a)} className="text-xs font-medium" style={{ color: a.is_active ? "var(--color-danger)" : "var(--color-success)" }}>
                         {a.is_active ? "Close" : "Reopen"}
                       </button>
                     </div>
@@ -515,7 +515,7 @@ export default function FinancePage() {
                 type="button"
                 onClick={() => setPendingOnly((p) => !p)}
                 className="rounded-full px-3 py-1.5 text-xs font-semibold"
-                style={pendingOnly ? { backgroundColor: "var(--color-action)", color: "#fff" } : { backgroundColor: "#fff6d9", color: "#8a6700" }}
+                style={pendingOnly ? { backgroundColor: "var(--color-action)", color: "#fff" } : { backgroundColor: "var(--color-action-tint)", color: "var(--color-action-dark)" }}
               >
                 {summary.pendingApprovalCount} awaiting approval
               </button>

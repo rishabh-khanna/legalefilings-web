@@ -27,8 +27,8 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
 
   const ICONS: Record<ToastKind, typeof CheckCircle2> = { success: CheckCircle2, error: XCircle, info: Info };
   const COLORS: Record<ToastKind, { bg: string; text: string; icon: string }> = {
-    success: { bg: "#ffffff", text: "#116a2c", icon: "#22c55e" },
-    error: { bg: "#ffffff", text: "#b42318", icon: "#ef4444" },
+    success: { bg: "#ffffff", text: "var(--color-success)", icon: "#22c55e" },
+    error: { bg: "#ffffff", text: "var(--color-danger)", icon: "#ef4444" },
     info: { bg: "#ffffff", text: "var(--color-ink)", icon: "var(--color-action)" },
   };
 

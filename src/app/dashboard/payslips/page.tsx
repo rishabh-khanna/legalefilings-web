@@ -67,7 +67,7 @@ export default function MyPayslipsPage() {
         <span className="font-medium" style={{ color: "var(--color-ink)" }}>
           {new Date(p.year, p.month - 1).toLocaleDateString("en-IN", { month: "long", year: "numeric" })}
           {Number(p.lop_days) > 0 && (
-            <span className="ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: "#fde2e2", color: "#b42318" }}>
+            <span className="ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold" style={{ backgroundColor: "var(--color-danger-tint)", color: "var(--color-danger)" }}>
               {Number(p.lop_days)} LOP day{Number(p.lop_days) === 1 ? "" : "s"}
             </span>
           )}
@@ -77,7 +77,7 @@ export default function MyPayslipsPage() {
       sortValue: (p) => new Date(p.year, p.month - 1),
     },
     { key: "gross", header: "Gross Salary", className: "w-[14%] whitespace-nowrap", render: (p) => `₹${Number(p.gross_salary).toLocaleString("en-IN")}`, exportValue: (p) => Number(p.gross_salary), sortValue: (p) => Number(p.gross_salary) },
-    { key: "deductions", header: "Deductions", className: "w-[14%] whitespace-nowrap", render: (p) => <span style={{ color: "#b42318" }}>−₹{deductionsOf(p).toLocaleString("en-IN")}</span>, exportValue: (p) => deductionsOf(p), sortValue: (p) => deductionsOf(p) },
+    { key: "deductions", header: "Deductions", className: "w-[14%] whitespace-nowrap", render: (p) => <span style={{ color: "var(--color-danger)" }}>−₹{deductionsOf(p).toLocaleString("en-IN")}</span>, exportValue: (p) => deductionsOf(p), sortValue: (p) => deductionsOf(p) },
     { key: "net", header: "Net Salary", className: "w-[14%] whitespace-nowrap", render: (p) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>₹{Number(p.net_salary).toLocaleString("en-IN")}</span>, exportValue: (p) => Number(p.net_salary), sortValue: (p) => Number(p.net_salary) },
     { key: "generated", header: "Generated On", className: "w-[14%] whitespace-nowrap", render: (p) => new Date(p.generated_at).toLocaleDateString("en-IN"), exportValue: (p) => new Date(p.generated_at).toLocaleDateString("en-IN"), sortValue: (p) => p.generated_at },
     {

@@ -22,9 +22,9 @@ export const ORDER_STATUS_LABEL: Record<OrderStatus, string> = {
 export const ORDER_STATUS_STYLE: Record<OrderStatus, { bg: string; fg: string }> = {
   new: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
   assigned: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
-  in_progress: { bg: "#fff6d9", fg: "#8a6700" },
-  under_review: { bg: "#dbe7ff", fg: "#1d4fb8" },
-  completed: { bg: "#d0f4db", fg: "#116a2c" },
+  in_progress: { bg: "var(--color-action-tint)", fg: "var(--color-action-dark)" },
+  under_review: { bg: "var(--color-info-tint)", fg: "var(--color-info)" },
+  completed: { bg: "var(--color-success-tint)", fg: "var(--color-success)" },
   cancelled: { bg: "var(--color-paper)", fg: "var(--color-ink-soft)" },
 };
 

@@ -32,10 +32,10 @@ const PAYMENT_STATUS_LABEL: Record<string, string> = {
 };
 
 const PAYMENT_STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
-  paid: { bg: "#d0f4db", fg: "#116a2c" },
-  partially_paid: { bg: "#fff6d9", fg: "#8a6700" },
-  sent: { bg: "#fff6d9", fg: "#8a6700" },
-  overdue: { bg: "#fde2e2", fg: "#b42318" },
+  paid: { bg: "var(--color-success-tint)", fg: "var(--color-success)" },
+  partially_paid: { bg: "var(--color-action-tint)", fg: "var(--color-action-dark)" },
+  sent: { bg: "var(--color-action-tint)", fg: "var(--color-action-dark)" },
+  overdue: { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" },
   draft: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
   cancelled: { bg: "var(--color-paper)", fg: "var(--color-ink-soft)" },
   no_invoice: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
@@ -226,7 +226,7 @@ export function OrdersTableClient({ orders: initialOrders, isStaff, spansMultipl
         dateFilter={{ getDate: (order) => order.created_at }}
         exportFilename="orders"
         minWidth={640}
-        rowStyle={(order) => (isReadyToWork(order) ? { boxShadow: "inset 3px 0 0 #116a2c" } : undefined)}
+        rowStyle={(order) => (isReadyToWork(order) ? { boxShadow: "inset 3px 0 0 var(--color-success)" } : undefined)}
         toolbar={
           <>
             {isStaff && (
@@ -236,7 +236,7 @@ export function OrdersTableClient({ orders: initialOrders, isStaff, spansMultipl
                 className="inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors"
                 style={
                   readyOnly
-                    ? { backgroundColor: "#d0f4db", borderColor: "#116a2c", color: "#116a2c" }
+                    ? { backgroundColor: "var(--color-success-tint)", borderColor: "var(--color-success)", color: "var(--color-success)" }
                     : { borderColor: "var(--color-line)", color: "var(--color-ink-soft)" }
                 }
               >

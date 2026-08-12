@@ -176,7 +176,7 @@ export default function AttendancePage() {
             {entry.checkOutAutoClosed && (
               <span
                 className="ml-2 rounded-full px-2 py-0.5 text-[10px] font-semibold"
-                style={{ backgroundColor: "#fff6d9", color: "#8a6700" }}
+                style={{ backgroundColor: "var(--color-action-tint)", color: "var(--color-action-dark)" }}
                 title="No check-out was recorded, so this time is an estimate. Request a correction to set the real one."
               >
                 estimated
@@ -239,7 +239,7 @@ export default function AttendancePage() {
           disabled={clocking || !clockedIn}
           onClick={() => handleClock("check_out")}
           className="rounded-full px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-40"
-          style={{ backgroundColor: "#b42318" }}
+          style={{ backgroundColor: "var(--color-danger)" }}
         >
           Clock Out
         </button>

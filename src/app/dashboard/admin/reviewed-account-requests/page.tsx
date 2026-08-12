@@ -37,8 +37,8 @@ function describeRequest(r: RequestRow) {
 }
 
 const STATUS_STYLE: Record<"approved" | "rejected", { bg: string; fg: string }> = {
-  approved: { bg: "#d0f4db", fg: "#116a2c" },
-  rejected: { bg: "#fde2e2", fg: "#b42318" },
+  approved: { bg: "var(--color-success-tint)", fg: "var(--color-success)" },
+  rejected: { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" },
 };
 
 // Read-only history — approving/rejecting happens on the separate
@@ -118,7 +118,7 @@ export default function ReviewedAccountRequestsPage() {
               <TruncatedText
                 text={r.review_note}
                 className="mt-1.5 max-w-[160px] rounded-lg px-2 py-1"
-                style={{ backgroundColor: "#fde2e2", color: "#b42318" }}
+                style={{ backgroundColor: "var(--color-danger-tint)", color: "var(--color-danger)" }}
               />
             )}
           </>

@@ -32,16 +32,16 @@ export function ProfileCompletionBanner({ profile }: { profile: Profile }) {
   return (
     <div
       className="mx-auto mb-6 flex max-w-[1800px] flex-wrap items-center gap-3 rounded-xl border px-4 py-3 sm:px-6 lg:px-10"
-      style={{ backgroundColor: "#fde2e2", borderColor: "#f3a9a9" }}
+      style={{ backgroundColor: "var(--color-danger-tint)", borderColor: "#f3a9a9" }}
     >
-      <AlertTriangle className="h-4 w-4 shrink-0" style={{ color: "#b42318" }} />
+      <AlertTriangle className="h-4 w-4 shrink-0" style={{ color: "var(--color-danger)" }} />
       <p className="min-w-0 flex-1 text-sm" style={{ color: "#8a1a13" }}>
         <span className="font-semibold">Your profile is missing required details</span> — {missing.join(", ")}.
       </p>
       <Link
         href="/dashboard/profile"
         className="shrink-0 rounded-full px-3.5 py-1.5 text-xs font-semibold text-white transition-transform hover:scale-[1.02]"
-        style={{ backgroundColor: "#b42318" }}
+        style={{ backgroundColor: "var(--color-danger)" }}
       >
         Complete Now
       </Link>

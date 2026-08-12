@@ -97,7 +97,7 @@ export function PaymentModal() {
         description: `${detail.service} — ${detail.plan.name}`,
         order_id: payload.orderId,
         prefill: { name: fullName, email, contact: phone },
-        theme: { color: "#fdc500" },
+        theme: { color: "var(--color-accent)" },
         handler: async (response) => {
           try {
             const verifyRes = await fetch("/api/payments/verify", {

@@ -6,7 +6,7 @@
 // does block submission when left blank.
 export function RequiredMark() {
   return (
-    <span aria-hidden="true" style={{ color: "#b42318" }}>
+    <span aria-hidden="true" style={{ color: "var(--color-danger)" }}>
       {" "}
       *
     </span>

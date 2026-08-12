@@ -81,7 +81,7 @@ export function ResetPasswordForm() {
   if (ready === "invalid") {
     return (
       <div className="space-y-4">
-        <div className="rounded-xl px-4 py-4 text-sm" style={{ backgroundColor: "#fde2e2", color: "#b42318" }}>
+        <div className="rounded-xl px-4 py-4 text-sm" style={{ backgroundColor: "var(--color-danger-tint)", color: "var(--color-danger)" }}>
           <p className="font-semibold">This link isn&apos;t valid any more</p>
           <p className="mt-1">Reset links expire after an hour and can only be used once. Request a fresh one.</p>
         </div>
@@ -99,7 +99,7 @@ export function ResetPasswordForm() {
   if (done) {
     return (
       <div className="space-y-4">
-        <div className="rounded-xl px-4 py-4 text-sm" style={{ backgroundColor: "#d0f4db", color: "#116a2c" }}>
+        <div className="rounded-xl px-4 py-4 text-sm" style={{ backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" }}>
           <p className="font-semibold">Password updated</p>
           <p className="mt-1">Sign in with your new password.</p>
         </div>
@@ -162,7 +162,7 @@ export function ResetPasswordForm() {
       </div>
 
       {errorMessage && (
-        <p className="rounded-lg px-4 py-3 text-sm" style={{ backgroundColor: "#fde2e2", color: "#b42318" }}>
+        <p className="rounded-lg px-4 py-3 text-sm" style={{ backgroundColor: "var(--color-danger-tint)", color: "var(--color-danger)" }}>
           {errorMessage}
         </p>
       )}

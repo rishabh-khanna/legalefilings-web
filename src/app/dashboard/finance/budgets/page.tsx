@@ -12,9 +12,9 @@ type Category = { id: string; name: string; transaction_type: "expense" | "incom
 type BudgetRow = { id: string; categoryId: string; categoryName: string; monthlyAmount: number; actual: number; remaining: number; percentUsed: number };
 
 function barColor(percentUsed: number) {
-  if (percentUsed >= 100) return "#b42318";
-  if (percentUsed >= 80) return "#8a6700";
-  return "#116a2c";
+  if (percentUsed >= 100) return "var(--color-danger)";
+  if (percentUsed >= 80) return "var(--color-action-dark)";
+  return "var(--color-success)";
 }
 
 // Smart Automation #8 — "set monthly budgets by category and compare
@@ -132,7 +132,7 @@ export default function FinanceBudgetsPage() {
             <input required type="number" min={0.01} step="0.01" value={amount} onChange={(e) => setAmount(e.target.value)} className={inputClass} style={{ borderColor: "var(--color-line)" }} />
           </div>
           <button type="submit" className="rounded-full px-5 py-2 text-sm font-semibold text-white" style={{ backgroundColor: "var(--color-action)" }}>Set Budget</button>
-          {error && <p className="text-sm" style={{ color: "#b42318" }}>{error}</p>}
+          {error && <p className="text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>}
         </form>
       ) : (
         <p className="mb-6 rounded-2xl border bg-white p-4 text-sm dark:bg-[var(--color-paper-raised)]" style={{ borderColor: "var(--color-line)", color: "var(--color-ink-soft)" }}>
@@ -153,14 +153,14 @@ export default function FinanceBudgetsPage() {
                 <div className="flex items-center gap-3">
                   <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>{money(b.actual)} of {money(b.monthlyAmount)}</p>
                   {canManage && (
-                    <button type="button" onClick={() => handleDelete(b.id, b.categoryName)} className="text-xs font-medium" style={{ color: "#b42318" }}>Remove</button>
+                    <button type="button" onClick={() => handleDelete(b.id, b.categoryName)} className="text-xs font-medium" style={{ color: "var(--color-danger)" }}>Remove</button>
                   )}
                 </div>
               </div>
               <div className="mt-2 h-2 w-full overflow-hidden rounded-full" style={{ backgroundColor: "var(--color-muted-tint)" }}>
                 <div className="h-full rounded-full" style={{ width: `${Math.min(b.percentUsed, 100)}%`, backgroundColor: barColor(b.percentUsed) }} />
               </div>
-              <p className="mt-1 text-xs" style={{ color: b.remaining < 0 ? "#b42318" : "var(--color-ink-soft)" }}>
+              <p className="mt-1 text-xs" style={{ color: b.remaining < 0 ? "var(--color-danger)" : "var(--color-ink-soft)" }}>
                 {b.remaining < 0 ? `₹${Math.abs(b.remaining).toLocaleString("en-IN")} over budget` : `₹${b.remaining.toLocaleString("en-IN")} remaining`}
               </p>
             </div>

@@ -33,8 +33,8 @@ function leaveRowLabel(r: LeaveRow): string {
 
 const STATUS_STYLE: Record<LeaveRow["status"], { bg: string; fg: string }> = {
   pending: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
-  approved: { bg: "#d0f4db", fg: "#116a2c" },
-  rejected: { bg: "#fde2e2", fg: "#b42318" },
+  approved: { bg: "var(--color-success-tint)", fg: "var(--color-success)" },
+  rejected: { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" },
   // Neutral, not red — a cancelled request isn't a refusal.
   cancelled: { bg: "var(--color-paper)", fg: "var(--color-ink-soft)" },
 };
@@ -175,19 +175,19 @@ export default function AdminLeaveRequestsPage() {
           return (
             <div className="flex flex-wrap items-center gap-2">
               <button type="button" onClick={() => decide(r.id, "approve")} aria-label="Approve" className="rounded-full p-1.5 transition-colors hover:bg-[var(--color-accent-tint)]">
-                <Check className="h-4 w-4" style={{ color: "#116a2c" }} />
+                <Check className="h-4 w-4" style={{ color: "var(--color-success)" }} />
               </button>
               {rejectingId === r.id ? (
                 <>
                   <input autoFocus placeholder="Reason" value={rejectReason} onChange={(e) => setRejectReason(e.target.value)} className="w-28 rounded-lg border px-3 py-1.5 text-xs outline-none" style={{ borderColor: "var(--color-line)" }} />
-                  <button type="button" disabled={!rejectReason.trim()} onClick={() => decide(r.id, "reject", rejectReason)} className="rounded-full border px-4 py-1.5 text-xs font-semibold disabled:opacity-50" style={{ borderColor: "#b42318", color: "#b42318" }}>
+                  <button type="button" disabled={!rejectReason.trim()} onClick={() => decide(r.id, "reject", rejectReason)} className="rounded-full border px-4 py-1.5 text-xs font-semibold disabled:opacity-50" style={{ borderColor: "var(--color-danger)", color: "var(--color-danger)" }}>
                     Confirm
                   </button>
                   <button type="button" onClick={() => setRejectingId(null)} className="text-xs" style={{ color: "var(--color-ink-soft)" }}>Cancel</button>
                 </>
               ) : (
                 <button type="button" onClick={() => setRejectingId(r.id)} aria-label="Reject" className="rounded-full p-1.5 transition-colors hover:bg-[var(--color-accent-tint)]">
-                  <X className="h-4 w-4" style={{ color: "#b42318" }} />
+                  <X className="h-4 w-4" style={{ color: "var(--color-danger)" }} />
                 </button>
               )}
             </div>
@@ -199,7 +199,7 @@ export default function AdminLeaveRequestsPage() {
               type="button"
               onClick={() => cancelApproved(r)}
               className="rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-red-50"
-              style={{ borderColor: "var(--color-line)", color: "#b42318" }}
+              style={{ borderColor: "var(--color-line)", color: "var(--color-danger)" }}
             >
               Cancel leave
             </button>

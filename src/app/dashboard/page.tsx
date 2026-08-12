@@ -12,22 +12,22 @@ import { getMissingBusinessSettingsFields } from "@/lib/business-settings-comple
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, type OrderStatus } from "@/lib/order-status";
 
 const LEAVE_STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
-  pending: { bg: "#fff6d9", fg: "#8a6700" },
-  approved: { bg: "#d0f4db", fg: "#116a2c" },
-  rejected: { bg: "#fde2e2", fg: "#b42318" },
+  pending: { bg: "var(--color-action-tint)", fg: "var(--color-action-dark)" },
+  approved: { bg: "var(--color-success-tint)", fg: "var(--color-success)" },
+  rejected: { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" },
 };
 
 const INVOICE_STATUS_STYLE: Record<string, { bg: string; fg: string }> = {
   draft: { bg: "var(--color-paper)", fg: "var(--color-ink-soft)" },
   sent: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
-  paid: { bg: "#d0f4db", fg: "#116a2c" },
-  partially_paid: { bg: "#fff6d9", fg: "#8a6700" },
-  overdue: { bg: "#fde2e2", fg: "#b42318" },
+  paid: { bg: "var(--color-success-tint)", fg: "var(--color-success)" },
+  partially_paid: { bg: "var(--color-action-tint)", fg: "var(--color-action-dark)" },
+  overdue: { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" },
   cancelled: { bg: "var(--color-paper)", fg: "var(--color-ink-soft)" },
 };
 
 const AVATAR_GRADIENTS = [
-  "linear-gradient(135deg, #fdc500, #ff8a3d)",
+  "linear-gradient(135deg, var(--color-accent), #ff8a3d)",
   "linear-gradient(135deg, #60a5fa, #6366f1)",
   "linear-gradient(135deg, #34d399, #059669)",
   "linear-gradient(135deg, #f472b6, #db2777)",
@@ -266,11 +266,11 @@ export default async function DashboardOverviewPage() {
           </h2>
           <div className="mt-3 grid gap-4 sm:grid-cols-3 lg:grid-cols-5">
             {[
-              { label: "Total Employees", value: hrOverview.totalEmployees, href: "/dashboard/admin/users", icon: Users, tint: { bg: "#dbe7ff", fg: "#1d4fb8" } },
-              { label: "Present Today", value: hrOverview.presentToday, href: "/dashboard/admin/attendance", icon: UserCheck, tint: { bg: "#dcfce3", fg: "#116a2c" } },
-              { label: "Absent Today", value: hrOverview.absentToday, href: "/dashboard/admin/attendance", icon: UserX, tint: { bg: "#fde2e2", fg: "#b42318" } },
+              { label: "Total Employees", value: hrOverview.totalEmployees, href: "/dashboard/admin/users", icon: Users, tint: { bg: "var(--color-info-tint)", fg: "var(--color-info)" } },
+              { label: "Present Today", value: hrOverview.presentToday, href: "/dashboard/admin/attendance", icon: UserCheck, tint: { bg: "var(--color-success-tint)", fg: "var(--color-success)" } },
+              { label: "Absent Today", value: hrOverview.absentToday, href: "/dashboard/admin/attendance", icon: UserX, tint: { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" } },
               { label: "Today's Birthdays", value: hrOverview.birthdaysToday, href: "/dashboard/admin/users", icon: Gift, tint: { bg: "#fce7f3", fg: "#9d174d" } },
-              { label: "Payroll Due", value: hrOverview.payrollDue, href: "/dashboard/admin/payroll", icon: IndianRupee, tint: { bg: "#fff1cc", fg: "#8a6700" } },
+              { label: "Payroll Due", value: hrOverview.payrollDue, href: "/dashboard/admin/payroll", icon: IndianRupee, tint: { bg: "var(--color-accent-tint)", fg: "var(--color-action-dark)" } },
             ].map((s) => (
               <Link
                 key={s.label}
@@ -312,7 +312,7 @@ export default async function DashboardOverviewPage() {
                       <p className="min-w-0 flex-1 truncate font-medium" style={{ color: "var(--color-ink)" }}>
                         {a.name}
                       </p>
-                      <span className="flex shrink-0 items-center gap-1 text-xs" style={{ color: a.eventType === "check_in" ? "#116a2c" : "var(--color-ink-soft)" }}>
+                      <span className="flex shrink-0 items-center gap-1 text-xs" style={{ color: a.eventType === "check_in" ? "var(--color-success)" : "var(--color-ink-soft)" }}>
                         {a.eventType === "check_in" ? <LogIn className="h-3.5 w-3.5" /> : <LogOut className="h-3.5 w-3.5" />}
                         {new Date(a.occurredAt).toLocaleString("en-IN")}
                       </span>
@@ -380,7 +380,7 @@ export default async function DashboardOverviewPage() {
               return (
                 <li key={order.id}>
                   <Link href="/dashboard/orders" className="flex items-center gap-3 rounded-xl px-2 py-2 text-sm transition-colors hover:bg-[var(--color-paper)]">
-                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: "#dbe7ff", color: "#1d4fb8" }}>
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: "var(--color-info-tint)", color: "var(--color-info)" }}>
                       <Package className="h-4 w-4" />
                     </span>
                     <div className="min-w-0 flex-1">
@@ -417,7 +417,7 @@ export default async function DashboardOverviewPage() {
             {invoiceList.slice(0, 3).map((inv) => (
               <li key={inv.id}>
                 <Link href="/dashboard/invoices" className="flex items-center gap-3 rounded-xl px-2 py-2 text-sm transition-colors hover:bg-[var(--color-paper)]">
-                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: "#fff1cc", color: "#8a6700" }}>
+                  <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full" style={{ backgroundColor: "var(--color-accent-tint)", color: "var(--color-action-dark)" }}>
                     <FileText className="h-4 w-4" />
                   </span>
                   <div className="min-w-0 flex-1">

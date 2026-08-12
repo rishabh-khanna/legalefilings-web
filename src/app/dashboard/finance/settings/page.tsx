@@ -102,7 +102,7 @@ export default function FinanceSettingsPage() {
           <p className="mt-1 text-xs" style={{ color: "var(--color-ink-soft)" }}>Any expense above this amount gets flagged in the Activity log. Leave blank to turn off.</p>
         </div>
 
-        {saved && <p className="text-sm" style={{ color: "#116a2c" }}>Settings saved.</p>}
+        {saved && <p className="text-sm" style={{ color: "var(--color-success)" }}>Settings saved.</p>}
 
         <button type="submit" className="rounded-full px-4 py-1.5 text-xs font-semibold text-white" style={{ backgroundColor: "var(--color-action)" }}>
           Save Settings

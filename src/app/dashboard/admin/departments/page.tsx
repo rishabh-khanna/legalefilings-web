@@ -16,10 +16,10 @@ import { RequiredMark } from "@/components/RequiredMark";
 // two), so a given org or department always lands on the same color
 // across reloads rather than shuffling on every render.
 const TINTS = [
-  { bg: "#fff1cc", fg: "#8a6700" },
-  { bg: "#dbe7ff", fg: "#1d4fb8" },
-  { bg: "#dcfce3", fg: "#116a2c" },
-  { bg: "#fde2e2", fg: "#b42318" },
+  { bg: "var(--color-accent-tint)", fg: "var(--color-action-dark)" },
+  { bg: "var(--color-info-tint)", fg: "var(--color-info)" },
+  { bg: "var(--color-success-tint)", fg: "var(--color-success)" },
+  { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" },
   { bg: "#ede9fe", fg: "#5b21b6" },
   { bg: "#fce7f3", fg: "#9d174d" },
   { bg: "#e0f2fe", fg: "#075985" },
@@ -276,7 +276,7 @@ export default function DepartmentsPage() {
                         aria-label="Delete department"
                         title="Delete department"
                         className="shrink-0 rounded-lg p-1.5 transition-colors hover:bg-red-50"
-                        style={{ color: "#b42318" }}
+                        style={{ color: "var(--color-danger)" }}
                       >
                         <Trash2 className="h-4 w-4" />
                       </button>
@@ -318,7 +318,7 @@ export default function DepartmentsPage() {
                                 <Star className="h-3 w-3" fill={role.is_manager_level ? "currentColor" : "none"} />
                                 {role.is_manager_level ? "Manager-level" : "Individual"}
                               </button>
-                              <button type="button" onClick={() => handleDeleteRole(role)} aria-label="Delete role" className="rounded-lg p-1.5 transition-colors hover:bg-red-50" style={{ color: "#b42318" }}>
+                              <button type="button" onClick={() => handleDeleteRole(role)} aria-label="Delete role" className="rounded-lg p-1.5 transition-colors hover:bg-red-50" style={{ color: "var(--color-danger)" }}>
                                 <Trash2 className="h-3.5 w-3.5" />
                               </button>
                             </div>

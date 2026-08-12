@@ -96,7 +96,7 @@ export function TransactionDocumentsDrawer({ transactionId, transactionLabel, on
                 <input type="file" className="hidden" onChange={handleUpload} disabled={uploading} />
               </label>
 
-              {error && <p className="mt-3 text-sm" style={{ color: "#b42318" }}>{error}</p>}
+              {error && <p className="mt-3 text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>}
 
               <div className="mt-5 space-y-2">
                 {documents === null ? (

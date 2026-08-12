@@ -1,7 +1,8 @@
 import { renderToBuffer } from "@react-pdf/renderer";
 import { Document, Page, Text, View, StyleSheet, Image } from "@react-pdf/renderer";
 import QRCode from "qrcode";
-import { SITE_NAME, BUSINESS_PHONE } from "@/config/site";
+import { SITE_NAME } from "@/config/site";
+import { isCollectableInvoiceType, isTaxableInvoiceType } from "@/lib/invoice-calc";
 
 const classicStyles = StyleSheet.create({
   page: { padding: 36, fontSize: 9, color: "#0f172a" },
@@ -57,7 +58,10 @@ const modernStyles = StyleSheet.create({
 // currency symbol — the on-screen app is unaffected, since browsers/
 // Inter render ₹ correctly there.
 function money(n: number) {
-  return `Rs. ${Number(n).toLocaleString("en-IN")}`;
+  // Always two decimal places. Bare toLocaleString drops the trailing
+  // zero, so 75.60 prints as "Rs. 75.6" — which on a tax invoice reads
+  // like a truncated figure rather than a precise one.
+  return `Rs. ${Number(n).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 const TYPE_LABELS: Record<string, string> = {
@@ -151,7 +155,12 @@ function ItemsTable({ items, isTaxable, styles }: { items: PdfLineItem[]; isTaxa
         <Text style={[styles.thText, styles.colRate]}>Rate</Text>
         <Text style={[styles.thText, styles.colDisc]}>Discount</Text>
         {isTaxable && <Text style={[styles.thText, styles.colGst]}>GST</Text>}
-        <Text style={[styles.thText, styles.colAmount]}>Amount</Text>
+        {/* On a taxable invoice this column is the line's TAXABLE value,
+            not its GST-inclusive total — otherwise the column doesn't foot
+            to the "Taxable Value" line in the totals block below, and an
+            accountant reconciling the document can't tie the two together.
+            Tax is added once, beneath, as CGST/SGST or IGST. */}
+        <Text style={[styles.thText, styles.colAmount]}>{isTaxable ? "Taxable Value" : "Amount"}</Text>
       </View>
       {items.map((item, i) => (
         <View style={styles.tr} key={i} wrap={false}>
@@ -161,7 +170,7 @@ function ItemsTable({ items, isTaxable, styles }: { items: PdfLineItem[]; isTaxa
           <Text style={[styles.tdText, styles.colRate]}>{money(Number(item.unit_price))}</Text>
           <Text style={[styles.tdText, styles.colDisc]}>{item.discount ? money(Number(item.discount)) : "—"}</Text>
           {isTaxable && <Text style={[styles.tdText, styles.colGst]}>{item.gst_rate}%</Text>}
-          <Text style={[styles.tdText, styles.colAmount]}>{money(Number(item.amount))}</Text>
+          <Text style={[styles.tdText, styles.colAmount]}>{money(Number(isTaxable ? item.taxable_value : item.amount))}</Text>
         </View>
       ))}
     </View>
@@ -203,11 +212,26 @@ function Footer({ invoice, company, qrDataUrl, styles }: { invoice: Record<strin
   );
 }
 
-export function InvoicePdf({ invoice, company, items, qrDataUrl, template }: { invoice: Record<string, unknown>; company: Record<string, unknown> | null; items: PdfLineItem[]; qrDataUrl: string | null; template?: string }) {
+// orgName is the ISSUING organization's own name. It has to be threaded
+// in rather than falling back to SITE_NAME: this app is multi-tenant, so
+// on every invoice a tenant raises for its own buyers, SITE_NAME is the
+// SaaS provider's name, not the seller's — which would put "Legal
+// Efilings" at the top of a Chatak Singh tax invoice sitting above
+// Chatak Singh's own GSTIN, address and bank account.
+export function InvoicePdf({ invoice, company, items, qrDataUrl, template, orgName }: { invoice: Record<string, unknown>; company: Record<string, unknown> | null; items: PdfLineItem[]; qrDataUrl: string | null; template?: string; orgName?: string | null }) {
+  const sellerName = orgName || (company?.business_name as string | undefined) || SITE_NAME;
+  // A credit note or proforma has nothing to collect, so it carries no
+  // due date — see the matching guard on the payment QR.
+  const isCollectable = isCollectableInvoiceType((invoice.invoice_type as string) ?? "gst");
   const profiles = invoice.profiles as { full_name: string | null; company: string | null } | null;
-  const hasCgstSgst = items.some((i) => i.cgst_amount > 0 || i.sgst_amount > 0);
-  const hasIgst = items.some((i) => i.igst_amount > 0);
-  const isTaxable = hasCgstSgst || hasIgst;
+  // Whether this document TYPE carries tax invoice formatting (taxable
+  // value + GST% per line), not whether tax happens to be non-zero on
+  // this particular print — a genuinely nil-rated line item on a real
+  // "gst" invoice (a legitimate GST scenario) has cgst/sgst/igst all at
+  // 0, and inferring from those amounts silently relabeled the whole
+  // document as a plain non-tax invoice, dropping the GST% column and
+  // the "Taxable Value" label a real tax invoice is required to show.
+  const isTaxable = isTaxableInvoiceType((invoice.invoice_type as string) ?? "gst");
 
   if (template === "modern") {
     const styles = modernStyles;
@@ -220,17 +244,16 @@ export function InvoicePdf({ invoice, company, items, qrDataUrl, template }: { i
                 // eslint-disable-next-line jsx-a11y/alt-text
                 <Image src={company.logo_url as string} style={styles.logo} />
               ) : (
-                <Text style={styles.brandWhite}>{SITE_NAME}</Text>
+                <Text style={styles.brandWhite}>{sellerName}</Text>
               )}
               <Text style={styles.mutedWhite}>{(company?.address as string) ?? ""}</Text>
-              <Text style={styles.mutedWhite}>{BUSINESS_PHONE.display}</Text>
               {company?.gst_number ? <Text style={[styles.small, { color: "#dbe5fb" }]}>GSTIN: {company.gst_number as string}</Text> : null}
             </View>
             <View style={{ alignItems: "flex-end" }}>
               <Text style={styles.typeBadgeModern}>{TYPE_LABELS[invoice.invoice_type as string] ?? "Invoice"}</Text>
               <Text style={{ fontSize: 13, fontWeight: 700, marginTop: 4, color: "#ffffff" }}>{invoice.invoice_number as string}</Text>
               <Text style={styles.mutedWhite}>Date: {new Date((invoice.issued_at as string) ?? (invoice.created_at as string)).toLocaleDateString("en-IN")}</Text>
-              {invoice.due_at ? <Text style={styles.mutedWhite}>Due: {new Date(invoice.due_at as string).toLocaleDateString("en-IN")}</Text> : null}
+              {invoice.due_at && isCollectable ? <Text style={styles.mutedWhite}>Due: {new Date(invoice.due_at as string).toLocaleDateString("en-IN")}</Text> : null}
             </View>
           </View>
 
@@ -270,10 +293,9 @@ export function InvoicePdf({ invoice, company, items, qrDataUrl, template }: { i
               // eslint-disable-next-line jsx-a11y/alt-text
               <Image src={company.logo_url as string} style={styles.logo} />
             ) : (
-              <Text style={styles.brand}>{SITE_NAME}</Text>
+              <Text style={styles.brand}>{sellerName}</Text>
             )}
             <Text style={styles.muted}>{(company?.address as string) ?? ""}</Text>
-            <Text style={styles.muted}>{BUSINESS_PHONE.display}</Text>
             {company?.gst_number ? <Text style={styles.small}>GSTIN: {company.gst_number as string}</Text> : null}
             {company?.pan_number ? <Text style={styles.small}>PAN: {company.pan_number as string}</Text> : null}
             {company?.state ? <Text style={styles.small}>State: {company.state as string}{company.state_code ? ` (${company.state_code as string})` : ""}</Text> : null}
@@ -282,7 +304,7 @@ export function InvoicePdf({ invoice, company, items, qrDataUrl, template }: { i
             <Text style={styles.typeBadge}>{TYPE_LABELS[invoice.invoice_type as string] ?? "Invoice"}</Text>
             <Text style={{ fontSize: 13, fontWeight: 700, marginTop: 4 }}>{invoice.invoice_number as string}</Text>
             <Text style={styles.muted}>Date: {new Date((invoice.issued_at as string) ?? (invoice.created_at as string)).toLocaleDateString("en-IN")}</Text>
-            {invoice.due_at ? <Text style={styles.muted}>Due: {new Date(invoice.due_at as string).toLocaleDateString("en-IN")}</Text> : null}
+            {invoice.due_at && isCollectable ? <Text style={styles.muted}>Due: {new Date(invoice.due_at as string).toLocaleDateString("en-IN")}</Text> : null}
             {invoice.related_invoice_id ? <Text style={styles.small}>Against Invoice: {(invoice.related_invoice_number as string) ?? "—"}</Text> : null}
           </View>
         </View>
@@ -327,7 +349,11 @@ export async function buildInvoicePdfBuffer(opts: {
   orgName?: string | null;
 }) {
   let qrDataUrl: string | null = null;
-  if (opts.company?.upi_id) {
+  // Only a document that actually collects money gets a payment QR. A
+  // credit note is money owed BACK to the customer and a proforma is a
+  // quotation — putting a "pay us this amount" code on either invites
+  // exactly the wrong payment.
+  if (opts.company?.upi_id && isCollectableInvoiceType((opts.invoice.invoice_type as string) ?? "gst")) {
     // Amount is the balance still owed, not the invoice face value. The
     // QR used to always request the full total, so a customer who had
     // already part-paid and then scanned the code on their copy would be
@@ -352,6 +378,6 @@ export async function buildInvoicePdfBuffer(opts: {
     }
   }
   return renderToBuffer(
-    <InvoicePdf invoice={opts.invoice} company={opts.company} items={opts.items} qrDataUrl={qrDataUrl} template={(opts.invoice.pdf_template as string) ?? "classic"} />
+    <InvoicePdf invoice={opts.invoice} company={opts.company} items={opts.items} qrDataUrl={qrDataUrl} template={(opts.invoice.pdf_template as string) ?? "classic"} orgName={opts.orgName} />
   );
 }

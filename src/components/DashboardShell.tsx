@@ -35,31 +35,31 @@ const CUSTOMER_NAV_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Overview", exact: true },
   { href: "/dashboard/invoices", label: "My Invoices", section: "Billing" },
   { href: "/dashboard/orders", label: "Order History", section: "Billing" },
-  // Grouped under "CRM Access", not Billing — Business Finance is
-  // itself a form of CRM access already granted to a customer (their
-  // own bookkeeping tool), not a billing/payments concern. Only Reports
-  // joins it here, not every finance sub-page — view_reports is the one
-  // permission every book role (owner/admin/accountant/employee/viewer)
-  // has, so it's the only sub-page safe to put in a nav that has no
-  // idea what book-level role the viewer holds. Import/Recurring/
-  // Budgets/Team/Activity/Settings each require a permission at least
-  // one role lacks (see EXPENSE_ROLE_PERMISSIONS) — those stay as
-  // buttons ON the finance page itself, where `can(...)` can actually
-  // hide them per role instead of showing a dead-end nav link.
-  { href: "/dashboard/finance", label: "Business Finance", section: "CRM Access" },
-  { href: "/dashboard/finance/reports", label: "Finance Reports", section: "CRM Access" },
+  // Folded into Billing rather than its own "CRM Access" group —
+  // Business Finance is a customer's own bookkeeping, which reads as a
+  // billing/money concern same as My Invoices/Order History above it.
+  // Only Reports joins it here, not every finance sub-page —
+  // view_reports is the one permission every book role
+  // (owner/admin/accountant/employee/viewer) has, so it's the only
+  // sub-page safe to put in a nav that has no idea what book-level role
+  // the viewer holds. Import/Recurring/Budgets/Team/Activity/Settings
+  // each require a permission at least one role lacks (see
+  // EXPENSE_ROLE_PERMISSIONS) — those stay as buttons ON the finance
+  // page itself, where `can(...)` can actually hide them per role
+  // instead of showing a dead-end nav link.
+  { href: "/dashboard/finance", label: "Business Finance", section: "Billing" },
+  { href: "/dashboard/finance/reports", label: "Finance Reports", section: "Billing" },
   // No section — a standalone top-level item, same shape as Overview,
-  // not nested inside the CRM Access group. Requesting access is a
-  // different kind of thing from an access you already have, so it
-  // shouldn't read as one more item inside that same group. Always
-  // visible to every customer, not just surfaced as a card at the
-  // bottom of Overview — a customer who's already been approved for
-  // their own CRM (promoted to admin of a new org) never actually
-  // lands on this nav shape again, so this item is really for the two
-  // states that DO stay a plain customer: hasn't asked yet, or is
-  // waiting on a pending/rejected request — both need a durable,
-  // discoverable place to check status, not something they have to
-  // remember was on the Overview page once.
+  // not nested inside Billing. Requesting access is a different kind of
+  // thing from an access you already have, so it shouldn't read as one
+  // more item inside that group. Always visible to every customer, not
+  // just surfaced as a card at the bottom of Overview — a customer who's
+  // already been approved for their own CRM (promoted to admin of a new
+  // org) never actually lands on this nav shape again, so this item is
+  // really for the two states that DO stay a plain customer: hasn't
+  // asked yet, or is waiting on a pending/rejected request — both need a
+  // durable, discoverable place to check status, not something they
+  // have to remember was on the Overview page once.
   { href: "/dashboard/crm-access", label: "Request CRM Access" },
   { href: "/dashboard/profile", label: "Edit Profile", section: "Account" },
 ];
@@ -70,11 +70,13 @@ const CUSTOMER_NAV_ITEMS: NavItem[] = [
 // who called in is a normal sales action, not a sensitive one.
 const STAFF_BASE_ITEMS: NavItem[] = [
   { href: "/dashboard", label: "Overview", exact: true },
-  { href: "/dashboard/crm", label: "My Leads", section: "Sales & Billing" },
-  { href: "/dashboard/admin/buy-for-customer", label: "Buy Plan for Customer", section: "Sales & Billing" },
-  { href: "/dashboard/invoices", label: "Order Invoices", section: "Sales & Billing" },
-  { href: "/dashboard/invoice-crm", label: "Invoice CRM", section: "Sales & Billing" },
-  { href: "/dashboard/orders", label: "Orders", section: "Sales & Billing" },
+  // Sales — lead-to-order actions. Billing (below) is the money side:
+  // invoicing, bookkeeping, everything downstream of a sale.
+  { href: "/dashboard/crm", label: "My Leads", section: "Sales" },
+  { href: "/dashboard/admin/buy-for-customer", label: "Buy Plan for Customer", section: "Sales" },
+  { href: "/dashboard/orders", label: "Orders", section: "Sales" },
+  { href: "/dashboard/invoices", label: "Order Invoices", section: "Billing" },
+  { href: "/dashboard/invoice-crm", label: "Invoice Generator", section: "Billing" },
   // A staff member sees this too, not just customers — an accountant
   // invited onto a customer's Business Finance books (Module 12) needs
   // a way to reach them; for anyone not invited to any, the page itself
@@ -85,8 +87,8 @@ const STAFF_BASE_ITEMS: NavItem[] = [
   // (Import/Recurring/Budgets/Team/Activity/Settings) each need a
   // permission at least one role lacks, so they stay as buttons ON the
   // finance page, where `can(...)` actually hides them per role.
-  { href: "/dashboard/finance", label: "Business Finance", section: "Sales & Billing" },
-  { href: "/dashboard/finance/reports", label: "Finance Reports", section: "Sales & Billing" },
+  { href: "/dashboard/finance", label: "Business Finance", section: "Billing" },
+  { href: "/dashboard/finance/reports", label: "Finance Reports", section: "Billing" },
   { href: "/dashboard/attendance", label: "Attendance", section: "My Workspace" },
   // Split out from Attendance — a personal, paginated history of your
   // own correction requests (pending/approved/rejected), separate from
@@ -96,35 +98,43 @@ const STAFF_BASE_ITEMS: NavItem[] = [
   { href: "/dashboard/payslips", label: "My Payslips", section: "My Workspace" },
   { href: "/dashboard/holidays", label: "Holidays", section: "My Workspace" },
   { href: "/dashboard/documents", label: "Documents", section: "My Workspace" },
+  // Own section, not folded into My Workspace — these three are about
+  // bringing new people into the system (a queue + its history + the
+  // create action itself), a distinct concern from personal day-to-day
+  // self-service items like Attendance/Leave/Payslips above.
   // Viewable by every staff level — only admin can actually act on one
   // (enforced in the API and reflected in the page itself), but everyone
   // should be able to see what's pending.
-  { href: "/dashboard/admin/account-requests", label: "Account Requests", section: "My Workspace" },
+  { href: "/dashboard/admin/account-requests", label: "Account Requests", section: "Account Requests" },
   // Read-only approved/rejected history — split into its own nav item
   // instead of a second table on the pending-queue page above.
-  { href: "/dashboard/admin/reviewed-account-requests", label: "Reviewed Account Requests", section: "My Workspace" },
+  { href: "/dashboard/admin/reviewed-account-requests", label: "Reviewed Account Requests", section: "Account Requests" },
 ];
 
 // Payroll/HR letters/reports/business settings are admin-only — matches
-// the ADMIN_ONLY_SECTIONS guard in proxy.ts.
+// the ADMIN_ONLY_SECTIONS guard in proxy.ts. Split into three sections
+// instead of one flat "Administration" (was 11 items deep, everything
+// from Employees to Email Failures in a single undifferentiated list) —
+// grouped by what an admin is actually trying to do: manage people,
+// configure how billing looks, or check up on what's happened.
 const ADMIN_ONLY_ITEMS: NavItem[] = [
-  { href: "/dashboard/admin/employees", label: "Employees", section: "Administration", toolKey: "employees" },
-  { href: "/dashboard/admin/departments", label: "Departments", section: "Administration", toolKey: "departments" },
-  { href: "/dashboard/admin/payroll", label: "Payroll", section: "Administration", toolKey: "payroll" },
-  { href: "/dashboard/admin/payslips", label: "Payslips", section: "Administration", toolKey: "payslips" },
-  { href: "/dashboard/admin/hr-letters", label: "HR Letters", section: "Administration", toolKey: "hr_letters" },
-  { href: "/dashboard/admin/product-catalog", label: "Invoice Item Catalog", section: "Administration", toolKey: "product_catalog" },
-  { href: "/dashboard/admin/reports", label: "Data Exports", section: "Administration", toolKey: "reports" },
+  { href: "/dashboard/admin/employees", label: "Employees", section: "People & HR", toolKey: "employees" },
+  { href: "/dashboard/admin/departments", label: "Departments", section: "People & HR", toolKey: "departments" },
+  { href: "/dashboard/admin/payroll", label: "Payroll", section: "People & HR", toolKey: "payroll" },
+  { href: "/dashboard/admin/payslips", label: "Payslips", section: "People & HR", toolKey: "payslips" },
+  { href: "/dashboard/admin/hr-letters", label: "HR Letters", section: "People & HR", toolKey: "hr_letters" },
+  { href: "/dashboard/admin/leave-types", label: "Leave Types", section: "People & HR", toolKey: "leave_types" },
+  { href: "/dashboard/admin/product-catalog", label: "Invoice Item Catalog", section: "Billing Setup", toolKey: "product_catalog" },
   // toolKey stays "company_settings" — it's a persisted staff_tool_grants
   // column value, not user-facing text, so it wasn't touched by the
   // "Company Settings" -> "Business Settings" rename.
-  { href: "/dashboard/admin/business-settings", label: "Business Settings", section: "Administration", toolKey: "company_settings" },
-  { href: "/dashboard/admin/email-failures", label: "Email Failures", section: "Administration", toolKey: "email_failures" },
-  { href: "/dashboard/admin/leave-types", label: "Leave Types", section: "Administration", toolKey: "leave_types" },
+  { href: "/dashboard/admin/business-settings", label: "Business Settings", section: "Billing Setup", toolKey: "company_settings" },
+  { href: "/dashboard/admin/reports", label: "Data Exports", section: "Oversight", toolKey: "reports" },
   // Not itself delegable (Admin can already grant these individually
   // here) — org-admin only, matches proxy.ts's ADMIN_ONLY_SECTIONS.
-  { href: "/dashboard/admin/activity", label: "Activity Log", section: "Administration" },
-  { href: "/dashboard/admin/tool-access", label: "Delegated Access", section: "Administration" },
+  { href: "/dashboard/admin/activity", label: "Activity Log", section: "Oversight" },
+  { href: "/dashboard/admin/email-failures", label: "Email Failures", section: "Oversight", toolKey: "email_failures" },
+  { href: "/dashboard/admin/tool-access", label: "Delegated Access", section: "Oversight" },
 ];
 
 // Only a leader/group_leader/admin gets team-management views — a rater
@@ -132,7 +142,7 @@ const ADMIN_ONLY_ITEMS: NavItem[] = [
 // (the API scopes by reporting chain), but hiding the nav link avoids the
 // confusing "why is this blank" moment.
 const TEAM_MANAGEMENT_ITEMS: NavItem[] = [
-  { href: "/dashboard/admin/leads", label: "Team Leads CRM", section: "Team Management", toolKey: "leads_crm" },
+  { href: "/dashboard/admin/leads", label: "Team Pipeline", section: "Team Management", toolKey: "leads_crm" },
   { href: "/dashboard/admin/attendance", label: "Team Attendance", section: "Team Management", toolKey: "team_attendance" },
   { href: "/dashboard/admin/leave-requests", label: "Team Leave Requests", section: "Team Management", toolKey: "team_leave" },
 ];
@@ -170,7 +180,7 @@ function buildNavItems(profile: Profile, isManagerLevel: boolean, grantedTools: 
   // Viewable by every staff level — admin creates the account directly,
   // anyone else submits a request instead (the page itself branches on
   // role); only the label here needs to match which one they'll see.
-  items.push({ href: "/dashboard/admin/users", label: isAdmin ? "Create User" : "Request New User", section: "My Workspace" });
+  items.push({ href: "/dashboard/admin/users", label: isAdmin ? "Create User" : "Request New User", section: "Account Requests" });
 
   // is_platform_admin included here too: after the reporting-chain fixes
   // in api/leads, api/attendance-corrections, api/leave-requests etc.,
@@ -385,6 +395,75 @@ const NAV_ICONS: Record<string, (props: { className?: string }) => React.JSX.Ele
       <path d="M12 3v2.5M12 18.5V21M21 12h-2.5M5.5 12H3M18.4 5.6l-1.8 1.8M7.4 16.6l-1.8 1.8M18.4 18.4l-1.8-1.8M7.4 7.4 5.6 5.6" strokeLinecap="round" />
     </svg>
   ),
+  // A tag shape — Leave Types is a list of configured labels (Casual,
+  // Sick, Earned…), not a schedule, so it gets its own mark distinct
+  // from the calendar icons Leave/Holidays already use.
+  "/dashboard/admin/leave-types": ({ className }) => (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
+      <path d="M4 4h8l8 8-8 8-8-8V4Z" strokeLinejoin="round" />
+      <circle cx="8" cy="8" r="1.4" fill="currentColor" stroke="none" />
+    </svg>
+  ),
+  "/dashboard/admin/product-catalog": ({ className }) => (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
+      <path d="M12 3.5 3.5 8l8.5 4.5L20.5 8 12 3.5Z" strokeLinejoin="round" />
+      <path d="M3.5 12.5 12 17l8.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M3.5 16.5 12 21l8.5-4.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  "/dashboard/admin/activity": ({ className }) => (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
+      <path d="M3 12h4l2-6 4 12 2-6h6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  "/dashboard/admin/email-failures": ({ className }) => (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
+      <path d="M12 4 2.5 20h19L12 4Z" strokeLinejoin="round" />
+      <path d="M12 10v4.5" strokeLinecap="round" />
+      <circle cx="12" cy="17.3" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+  ),
+  // A key — Delegated Access hands out one specific capability at a
+  // time, the same idea a physical key represents, rather than the
+  // gear/cog already used for Business Settings' broader configuration.
+  "/dashboard/admin/tool-access": ({ className }) => (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
+      <circle cx="8" cy="8" r="4" />
+      <path d="M11 11 20 20M16.5 16.5l2-2M19 19l2-2" strokeLinecap="round" />
+    </svg>
+  ),
+  // An open padlock — this is the one standalone (no-section) rail item
+  // whose whole job is GAINING access, distinct from every locked/closed
+  // shape elsewhere in this list.
+  "/dashboard/crm-access": ({ className }) => (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
+      <rect x="5" y="11" width="14" height="9" rx="2" />
+      <path d="M8 11V7.5a4 4 0 0 1 7.5-2" strokeLinecap="round" />
+    </svg>
+  ),
+  // A receipt with a plus — ad-hoc invoicing, distinct from the plain
+  // document (no plus) /dashboard/invoices uses for viewing invoices
+  // that already exist.
+  "/dashboard/invoice-crm": ({ className }) => (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
+      <path d="M6 3.5h9l3 3V20a.5.5 0 0 1-.5.5h-11A.5.5 0 0 1 6 20V4a.5.5 0 0 1 .5-.5Z" strokeLinejoin="round" />
+      <path d="M9 15h6M12 12v6" strokeLinecap="round" />
+    </svg>
+  ),
+  // A pie chart — distinct from the bar-chart mark Data Exports/Analytics
+  // already share, and from Business Finance's wallet icon.
+  "/dashboard/finance/reports": ({ className }) => (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 3.5V12h8.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  ),
+  "/dashboard/platform/crm-requests": ({ className }) => (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
+      <path d="M4 12h4.5l1.5 3h4l1.5-3H20" strokeLinecap="round" strokeLinejoin="round" />
+      <path d="M4 12 5.5 5A1 1 0 0 1 6.5 4h11a1 1 0 0 1 1 1L20 12v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-6Z" strokeLinejoin="round" />
+    </svg>
+  ),
 };
 
 // A rotating set of tints so the sidebar reads as colorful rather than
@@ -392,10 +471,10 @@ const NAV_ICONS: Record<string, (props: { className?: string }) => React.JSX.Ele
 // circle regardless of active state, keyed by position so it's stable
 // across renders without needing per-route color assignments.
 const ICON_TINTS = [
-  { bg: "#fff1cc", fg: "#8a6700" },
-  { bg: "#dbe7ff", fg: "#1d4fb8" },
-  { bg: "#dcfce3", fg: "#116a2c" },
-  { bg: "#fde2e2", fg: "#b42318" },
+  { bg: "var(--color-accent-tint)", fg: "var(--color-action-dark)" },
+  { bg: "var(--color-info-tint)", fg: "var(--color-info)" },
+  { bg: "var(--color-success-tint)", fg: "var(--color-success)" },
+  { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" },
   { bg: "#ede9fe", fg: "#5b21b6" },
   { bg: "#fce7f3", fg: "#9d174d" },
   { bg: "#e0f2fe", fg: "#075985" },
@@ -407,7 +486,7 @@ const ICON_TINTS = [
 // Color is hashed from the name, so the same person always gets the same
 // gradient rather than a random one on every render.
 const AVATAR_GRADIENTS = [
-  "linear-gradient(135deg, #fdc500, #ff8a3d)",
+  "linear-gradient(135deg, var(--color-accent), #ff8a3d)",
   "linear-gradient(135deg, #60a5fa, #6366f1)",
   "linear-gradient(135deg, #34d399, #059669)",
   "linear-gradient(135deg, #f472b6, #db2777)",
@@ -736,21 +815,42 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
         </div>
       </div>
 
-      {/* Same soft-yellow welcome band every other page's hero uses, so the
-          dashboard reads as part of the site instead of a bolted-on app. */}
-      <div style={{ background: "linear-gradient(180deg, var(--color-accent-tint) 0%, var(--color-paper) 100%)" }}>
-        <div className="mx-auto max-w-[1800px] px-4 pt-10 pb-6 sm:px-6 lg:px-10">
-          <p className="text-xs font-bold uppercase tracking-[0.2em]" style={{ color: "var(--color-action-dark)" }}>
+      {/* The welcome band. Depth comes from three stacked cues rather than
+          one flat wash: a warm gradient, a soft accent bloom off the right
+          edge, and a hairline of real gold along the bottom that separates
+          the band from the working area below it instead of letting the
+          two fade into each other. */}
+      <div
+        className="relative overflow-hidden"
+        style={{ background: "linear-gradient(165deg, var(--gold-100) 0%, var(--gold-50) 46%, var(--color-paper) 100%)" }}
+      >
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-20 -top-24 h-72 w-72 rounded-full blur-3xl"
+          style={{ backgroundColor: "var(--color-accent)", opacity: 0.2 }}
+        />
+        <span
+          aria-hidden="true"
+          className="absolute inset-x-0 bottom-0 h-px"
+          style={{ background: "linear-gradient(90deg, transparent, var(--gold-200) 22%, var(--gold-200) 78%, transparent)" }}
+        />
+        <div className="relative mx-auto max-w-[1800px] px-4 pt-10 pb-7 sm:px-6 lg:px-10">
+          <p className="text-[11px] font-bold uppercase tracking-[0.2em]" style={{ color: "var(--color-action-dark)" }}>
             Your Account
           </p>
-          <div className="mt-2 flex flex-wrap items-center justify-between gap-4">
+          <div className="mt-2.5 flex flex-wrap items-center justify-between gap-4">
             <div className="flex items-center gap-3.5">
-              <ProfileAvatar name={session.name} className="h-12 w-12 text-lg shadow-sm sm:h-14 sm:w-14" />
+              <ProfileAvatar name={session.name} className="h-12 w-12 text-lg shadow-md sm:h-14 sm:w-14" />
               <div>
-                <h1 className="text-2xl font-extrabold sm:text-3xl" style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)" }}>
+                <h1
+                  className="text-[1.75rem] font-bold leading-tight sm:text-[2rem]"
+                  style={{ color: "var(--color-ink)", fontFamily: "var(--font-display)", letterSpacing: "-0.028em" }}
+                >
                   Welcome back, {session.name}
                 </h1>
-                <p className="text-sm" style={{ color: "var(--color-ink-soft)" }}>{roleLabel(session.profile, session.departmentRole?.title)}</p>
+                <p className="mt-0.5 text-[0.8125rem] font-medium" style={{ color: "var(--color-ink-soft)" }}>
+                  {roleLabel(session.profile, session.departmentRole?.title)}
+                </p>
               </div>
             </div>
             <div className="flex items-center gap-3">
@@ -849,30 +949,55 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             visually overlap, which would make a flyout render behind
             page content instead of on top of it. */}
         <aside className="relative z-40 hidden lg:sticky lg:top-24 lg:block lg:self-start">
+          {/* The nav is a raised panel sitting in its own warm well, not a
+              flat white card outlined on a white page. Two things give it
+              depth: a top-lit gradient (lighter at the top edge, settling
+              into the sunken tone) and a real shadow. Without them the
+              sidebar reads as an outline drawn on the background rather
+              than a surface in front of it — which is most of why the
+              shell felt flat. */}
           <nav
             ref={navRef}
-            className="flex flex-col gap-1 rounded-2xl border bg-white p-2.5 dark:bg-[var(--color-paper-raised)]"
-            style={{ borderColor: "var(--color-line)" }}
+            className="flex flex-col gap-0.5 rounded-[18px] border p-2"
+            style={{
+              borderColor: "var(--color-line)",
+              background: "linear-gradient(180deg, var(--color-paper-raised) 0%, var(--color-paper-sunken) 100%)",
+              boxShadow: "var(--shadow-md)",
+            }}
           >
             {railEntries.map((entry) => {
               const Icon = entry.icon;
+              // Active = a gold rail on the leading edge plus a warm wash,
+              // rather than a filled tint block. A filled row competes with
+              // the icon medallions already carrying colour; a 3px rail
+              // says "you are here" using the one axis nothing else on the
+              // row is using, so it stays legible no matter how colourful
+              // the icons beside it get.
               const rowStyle = entry.active
-                ? { backgroundColor: "var(--color-accent-tint)", color: "var(--color-ink)" }
+                ? { backgroundColor: "var(--gold-50)", color: "var(--color-ink)", fontWeight: 650 }
                 : { color: "var(--color-ink-soft)" };
+              const rail = entry.active ? (
+                <span
+                  aria-hidden="true"
+                  className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full"
+                  style={{ backgroundColor: "var(--color-action)" }}
+                />
+              ) : null;
 
               if (entry.type === "link") {
                 return (
                   <Link
                     key={entry.key}
                     href={entry.href}
-                    className="group flex items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-sm font-medium transition-colors hover:bg-[var(--color-muted-tint)]"
+                    className="group relative flex items-center gap-2.5 rounded-[10px] py-2 pl-3 pr-2.5 text-[0.8125rem] font-medium transition-colors duration-150 hover:bg-[var(--gold-50)]"
                     style={rowStyle}
                   >
+                    {rail}
                     <span
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-transform duration-150 group-hover:scale-110"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[9px] transition-transform duration-150 group-hover:scale-110"
                       style={{ backgroundColor: entry.tint.bg, color: entry.tint.fg }}
                     >
-                      <Icon className="h-[16px] w-[16px]" />
+                      <Icon className="h-[15px] w-[15px]" />
                     </span>
                     <span className="truncate">{entry.label}</span>
                   </Link>
@@ -903,17 +1028,25 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                     // rendering on top of the isOpen background tint is
                     // what made an open row look like two different
                     // things were highlighted at once.
-                    className="group flex cursor-pointer items-center gap-2.5 rounded-xl px-2.5 py-2.5 text-sm font-medium outline-none transition-colors hover:bg-[var(--color-muted-tint)] focus-visible:ring-2 focus-visible:ring-[var(--color-action)]"
-                    style={isOpen ? { backgroundColor: "var(--color-accent-tint)", color: "var(--color-ink)" } : rowStyle}
+                    className="group relative flex cursor-pointer items-center gap-2.5 rounded-[10px] py-2 pl-3 pr-2 text-[0.8125rem] font-medium outline-none transition-colors duration-150 hover:bg-[var(--gold-50)] focus-visible:ring-2 focus-visible:ring-[var(--color-action)]"
+                    style={isOpen && !entry.active ? { backgroundColor: "var(--gold-50)", color: "var(--color-ink)" } : rowStyle}
                   >
+                    {rail}
                     <span
-                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full transition-transform duration-150 group-hover:scale-110"
+                      className="flex h-7 w-7 shrink-0 items-center justify-center rounded-[9px] transition-transform duration-150 group-hover:scale-110"
                       style={{ backgroundColor: entry.tint.bg, color: entry.tint.fg }}
                     >
-                      <Icon className="h-[16px] w-[16px]" />
+                      <Icon className="h-[15px] w-[15px]" />
                     </span>
                     <span className="min-w-0 flex-1 truncate">{entry.section}</span>
-                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth="2">
+                    <svg
+                      viewBox="0 0 24 24"
+                      className="h-3.5 w-3.5 shrink-0 transition-transform duration-200"
+                      style={{ opacity: 0.5, transform: isOpen ? "rotate(90deg)" : undefined }}
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
                       <path d="m9 6 6 6-6 6" strokeLinecap="round" strokeLinejoin="round" />
                     </svg>
                   </div>
@@ -933,8 +1066,14 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                     // longer leaves the hover target at all.
                     <div className="absolute left-full top-0 z-30 w-60 pl-2">
                       <div
-                        className="rounded-2xl border bg-white shadow-xl dark:bg-[var(--color-paper-raised)]"
-                        style={{ borderColor: "var(--color-line)" }}
+                        className="overflow-hidden rounded-[16px] border"
+                        style={{
+                          borderColor: "var(--color-line)",
+                          backgroundColor: "color-mix(in srgb, var(--color-paper-raised) 92%, transparent)",
+                          backdropFilter: "blur(14px) saturate(1.6)",
+                          WebkitBackdropFilter: "blur(14px) saturate(1.6)",
+                          boxShadow: "var(--shadow-lg)",
+                        }}
                       >
                         {/* max-h caps a long flyout (e.g. Administration's
                             10 items) instead of letting it run off the
@@ -955,16 +1094,23 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
                               key={item.href}
                               href={item.href}
                               onClick={() => setOpenFlyout(null)}
-                              className={`flex items-center gap-2.5 rounded-xl px-2.5 py-2 text-sm font-medium transition-colors ${itemActive ? "" : "hover:bg-[var(--color-muted-tint)]"}`}
-                              style={itemActive ? { backgroundColor: "var(--color-accent-tint)", color: "var(--color-ink)" } : { color: "var(--color-ink-soft)" }}
+                              className={`relative flex items-center gap-2.5 rounded-[10px] py-2 pl-3 pr-2.5 text-[0.8125rem] font-medium transition-colors duration-150 ${itemActive ? "" : "hover:bg-[var(--gold-50)]"}`}
+                              style={itemActive ? { backgroundColor: "var(--gold-50)", color: "var(--color-ink)", fontWeight: 650 } : { color: "var(--color-ink-soft)" }}
                             >
+                              {itemActive && (
+                                <span
+                                  aria-hidden="true"
+                                  className="absolute left-0 top-1/2 h-5 w-[3px] -translate-y-1/2 rounded-r-full"
+                                  style={{ backgroundColor: "var(--color-action)" }}
+                                />
+                              )}
                               <span
-                                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full"
-                                style={{ backgroundColor: itemTint.bg, color: itemTint.fg }}
+                                className="flex h-6.5 w-6.5 shrink-0 items-center justify-center rounded-[8px]"
+                                style={{ backgroundColor: itemTint.bg, color: itemTint.fg, height: "1.625rem", width: "1.625rem" }}
                               >
                                 <ItemIcon className="h-3.5 w-3.5" />
                               </span>
-                              {item.label}
+                              <span className="truncate">{item.label}</span>
                             </Link>
                           );
                           })}
@@ -984,22 +1130,30 @@ export function DashboardShell({ children }: { children: React.ReactNode }) {
             })}
           </nav>
 
+          {/* Matches the nav panel above it — same radius, same top-lit
+              gradient, same elevation — so the rail reads as one column of
+              two related surfaces rather than a designed panel with a
+              plain box stuck underneath. */}
           <div
-            className="mt-4 flex items-center gap-2.5 rounded-2xl border bg-white p-2.5 dark:bg-[var(--color-paper-raised)]"
-            style={{ borderColor: "var(--color-line)" }}
+            className="mt-3 flex items-center gap-2.5 rounded-[18px] border p-2.5"
+            style={{
+              borderColor: "var(--color-line)",
+              background: "linear-gradient(180deg, var(--color-paper-raised) 0%, var(--color-paper-sunken) 100%)",
+              boxShadow: "var(--shadow-sm)",
+            }}
           >
-            <ProfileAvatar name={session.name} className="h-9 w-9 shrink-0 text-sm" />
+            <ProfileAvatar name={session.name} className="h-9 w-9 shrink-0 text-sm shadow-sm" />
             <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold" style={{ color: "var(--color-ink)" }}>{session.name}</p>
-              <p className="truncate text-xs" style={{ color: "var(--color-ink-soft)" }}>{roleLabel(session.profile, session.departmentRole?.title)}</p>
+              <p className="truncate text-[0.8125rem] font-semibold" style={{ color: "var(--color-ink)" }}>{session.name}</p>
+              <p className="truncate text-[11px] font-medium" style={{ color: "var(--color-ink-soft)" }}>{roleLabel(session.profile, session.departmentRole?.title)}</p>
             </div>
             <button
               type="button"
               onClick={handleLogout}
               aria-label="Log out"
               title="Log out"
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border transition-colors hover:bg-[var(--color-accent-tint)]"
-              style={{ borderColor: "var(--color-line)", color: "var(--color-ink-soft)" }}
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] border transition-colors hover:border-[var(--color-action)] hover:bg-[var(--gold-50)] hover:text-[var(--color-action-dark)]"
+              style={{ borderColor: "var(--color-line)", color: "var(--color-ink-soft)", backgroundColor: "var(--color-paper-raised)" }}
             >
               <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="1.75">
                 <path d="M15 4.5H8a1.5 1.5 0 0 0-1.5 1.5v12A1.5 1.5 0 0 0 8 19.5h7" strokeLinecap="round" strokeLinejoin="round" />

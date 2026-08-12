@@ -136,7 +136,7 @@ export default function ProductCatalogPage() {
       render: (item) => (
         <div className="whitespace-nowrap">
           <button type="button" onClick={() => startEdit(item)} className="mr-3 text-xs font-semibold" style={{ color: "var(--color-action-dark)" }}>Edit</button>
-          <button type="button" onClick={() => handleRemove(item.id)} className="text-xs font-semibold" style={{ color: "#b42318" }}>Remove</button>
+          <button type="button" onClick={() => handleRemove(item.id)} className="text-xs font-semibold" style={{ color: "var(--color-danger)" }}>Remove</button>
         </div>
       ),
     },

@@ -50,7 +50,7 @@ export function PayNowButton({
         description: `Invoice ${data.invoiceNumber}`,
         order_id: data.orderId,
         prefill: { name: customerName, email: customerEmail },
-        theme: { color: "#fdc500" },
+        theme: { color: "var(--color-accent)" },
         handler: async (response) => {
           try {
             const verifyRes = await fetch("/api/payments/verify", {

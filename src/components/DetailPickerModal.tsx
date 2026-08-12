@@ -131,11 +131,11 @@ export function BalanceSummary({
           Requesting: <span className="font-semibold" style={{ color: "var(--color-ink)" }}>{requested} {unit}</span>
         </span>
         <span style={{ color: "var(--color-ink-soft)" }}>
-          Remaining after: <span className="font-semibold" style={{ color: overflow ? "#b42318" : "var(--color-ink)" }}>{Math.max(0, remaining).toFixed(1)} {unit}</span>
+          Remaining after: <span className="font-semibold" style={{ color: overflow ? "var(--color-danger)" : "var(--color-ink)" }}>{Math.max(0, remaining).toFixed(1)} {unit}</span>
         </span>
       </div>
       {overflow && overflowNote && (
-        <p className="mt-1.5" style={{ color: "#b42318" }}>{overflowNote}</p>
+        <p className="mt-1.5" style={{ color: "var(--color-danger)" }}>{overflowNote}</p>
       )}
     </div>
   );

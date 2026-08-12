@@ -97,7 +97,7 @@ export default function EmailFailuresPage() {
       key: "error",
       header: "Error",
       className: "max-w-[200px]",
-      render: (f) => (f.error_message ? <TruncatedText text={f.error_message} style={{ color: "#b42318" }} /> : "—"),
+      render: (f) => (f.error_message ? <TruncatedText text={f.error_message} style={{ color: "var(--color-danger)" }} /> : "—"),
       exportValue: (f) => f.error_message ?? "",
     },
     { key: "sentAt", header: "Sent At", className: "w-[14%] whitespace-nowrap", render: (f) => new Date(f.created_at).toLocaleString("en-IN"), exportValue: (f) => new Date(f.created_at).toLocaleString("en-IN"), sortValue: (f) => f.created_at },

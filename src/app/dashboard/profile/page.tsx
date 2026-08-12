@@ -296,7 +296,7 @@ export default function ProfilePage() {
         )}
 
         {saved && (
-          <p className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "#d0f4db", color: "#116a2c" }}>
+          <p className="rounded-lg px-3 py-2 text-sm" style={{ backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" }}>
             Saved.
           </p>
         )}

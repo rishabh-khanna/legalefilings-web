@@ -37,7 +37,7 @@ test("admin manually runs a recurring template and a real invoice is generated",
   // guarantees this template is the only row that will ever match it.
   const customerEmail = `recurring-run-now-${suffix}@example.com`;
   await page.goto("/dashboard/invoice-crm");
-  await expect(page.getByRole("heading", { name: "Invoice CRM" })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("heading", { name: "Invoice Generator" })).toBeVisible({ timeout: 15000 });
   await page.getByRole("button", { name: "+ Generate Invoice" }).click();
   const setupWizard = page.getByText("Generate Invoice", { exact: true }).locator("xpath=ancestor::div[contains(@class,'fixed')][1]");
   await expect(setupWizard).toBeVisible();
@@ -80,7 +80,7 @@ test("admin manually runs a recurring template and a real invoice is generated",
   expect(template.next_run_date).toBe(startDate);
 
   await page.goto("/dashboard/invoice-crm");
-  await expect(page.getByRole("heading", { name: "Invoice CRM" })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("heading", { name: "Invoice Generator" })).toBeVisible({ timeout: 15000 });
   await page.getByRole("button", { name: "Recurring", exact: true }).click();
 
   const templateRow = page.locator("tr", { hasText: customer.full_name ?? customer.company ?? "" }).first();

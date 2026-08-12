@@ -1,11 +1,16 @@
 "use client";
 
+import { ChevronLeft, ChevronRight } from "lucide-react";
 import { PAGE_SIZE_OPTIONS } from "@/lib/use-pagination";
 
 // One shared pagination bar for every dashboard table — rows-per-page
 // selector (20/50/100) plus a "X–Y of Z" range and prev/next, instead of
-// each page inventing its own. Renders nothing below 1 page so it never
-// adds clutter under a short, unfiltered list.
+// each page inventing its own.
+//
+// Styled as chrome, not content: this sits directly above a bordered
+// table card, and giving it its own white card + shadow made two stacked
+// panels competing for the same attention. It now reads as a quiet strip
+// belonging to the table below it.
 export function TablePagination({
   page,
   totalPages,
@@ -27,20 +32,20 @@ export function TablePagination({
   total: number;
   itemLabel?: string;
 }) {
+  const navButton =
+    "flex h-7 w-7 items-center justify-center rounded-lg border transition-colors hover:border-[var(--color-action)] hover:text-[var(--color-action-dark)] disabled:pointer-events-none disabled:opacity-35";
+
   return (
-    <div
-      className="my-3 flex flex-wrap items-center justify-between gap-3 rounded-xl border bg-white px-4 py-3 shadow-sm dark:bg-[var(--color-paper-raised)]"
-      style={{ borderColor: "var(--color-line)" }}
-    >
+    <div className="mt-4 flex flex-wrap items-center justify-between gap-3 px-0.5">
       <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold uppercase tracking-wide" style={{ color: "var(--color-ink-soft)" }}>
-          Rows per page
+        <span className="text-[11px] font-semibold uppercase tracking-[0.06em]" style={{ color: "var(--color-ink-soft)" }}>
+          Rows
         </span>
         <select
           value={pageSize}
           onChange={(e) => onPageSizeChange(Number(e.target.value))}
-          className="rounded-lg border bg-white px-2 py-1 text-sm font-semibold outline-none transition-colors focus:border-[var(--color-action)] dark:bg-[var(--color-paper-raised)]"
-          style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
+          className="h-7 rounded-lg border px-2 text-xs font-semibold outline-none"
+          style={{ borderColor: "var(--color-line)", color: "var(--color-ink)", backgroundColor: "var(--color-paper-raised)" }}
         >
           {PAGE_SIZE_OPTIONS.map((n) => (
             <option key={n} value={n}>{n}</option>
@@ -48,34 +53,41 @@ export function TablePagination({
         </select>
       </div>
       <div className="flex items-center gap-3">
-        <span className="text-xs font-medium" style={{ color: "var(--color-ink-soft)" }}>
-          {total === 0 ? `No ${itemLabel}` : `${start}–${end} of ${total} ${itemLabel}`}
+        <span className="text-xs tabular-nums" style={{ color: "var(--color-ink-soft)" }}>
+          {total === 0 ? (
+            `No ${itemLabel}`
+          ) : (
+            <>
+              <span className="font-semibold" style={{ color: "var(--color-ink)" }}>
+                {start}–{end}
+              </span>{" "}
+              of {total} {itemLabel}
+            </>
+          )}
         </span>
-        {/* Pill-shaped nav, matching the rounded-full language every other
-            control in the app already uses (filters, badges, buttons) —
-            the previous rounded-lg pair was the one place still using a
-            squarer radius, a small inconsistency once you notice it. */}
         <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={() => onPageChange(page - 1)}
             disabled={page <= 1}
-            className="rounded-full border bg-white px-3 py-1 text-xs font-semibold transition-colors hover:border-[var(--color-action)] hover:text-[var(--color-action-dark)] disabled:pointer-events-none disabled:opacity-40 dark:bg-[var(--color-paper-raised)]"
-            style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
+            aria-label="Previous page"
+            className={navButton}
+            style={{ borderColor: "var(--color-line)", color: "var(--color-ink)", backgroundColor: "var(--color-paper-raised)" }}
           >
-            Prev
+            <ChevronLeft className="h-3.5 w-3.5" />
           </button>
-          <span className="px-2 text-xs font-semibold tabular-nums" style={{ color: "var(--color-ink)" }}>
-            Page {page} of {totalPages}
+          <span className="px-1.5 text-xs font-semibold tabular-nums" style={{ color: "var(--color-ink)" }}>
+            {page} <span style={{ color: "var(--color-ink-soft)", fontWeight: 400 }}>/ {totalPages}</span>
           </span>
           <button
             type="button"
             onClick={() => onPageChange(page + 1)}
             disabled={page >= totalPages}
-            className="rounded-full border bg-white px-3 py-1 text-xs font-semibold transition-colors hover:border-[var(--color-action)] hover:text-[var(--color-action-dark)] disabled:pointer-events-none disabled:opacity-40 dark:bg-[var(--color-paper-raised)]"
-            style={{ borderColor: "var(--color-line)", color: "var(--color-ink)" }}
+            aria-label="Next page"
+            className={navButton}
+            style={{ borderColor: "var(--color-line)", color: "var(--color-ink)", backgroundColor: "var(--color-paper-raised)" }}
           >
-            Next
+            <ChevronRight className="h-3.5 w-3.5" />
           </button>
         </div>
       </div>

@@ -489,6 +489,71 @@ await insert("leave_requests", [
   { organization_id: chatakId, staff_id: ids["nusrat.ali@chataksingh.in"], leave_type: "sick", leave_type_id: lt("SL"), start_date: iso(daysFromNow(-12)), end_date: iso(daysFromNow(-11)), reason: "Viral fever, doctor advised rest", status: "approved", reviewed_by: ids["vikas.dwivedi@chataksingh.in"], day_fraction: 1 },
   { organization_id: chatakId, staff_id: ids["anjali.verma@chataksingh.in"], leave_type: "casual", leave_type_id: lt("CL"), start_date: iso(daysFromNow(-25)), end_date: iso(daysFromNow(-24)), reason: "Personal work", status: "rejected", reviewed_by: ids["vikas.dwivedi@chataksingh.in"], review_note: "Peak dispatch week before Raksha Bandhan — please reschedule.", day_fraction: 1 },
 ]);
+// Business Finance book for Aarti Deshpande. Seeded here rather than
+// left to the e2e suite: business-finance-pages.spec.ts assumes a book
+// already exists, but it sorts alphabetically BEFORE
+// business-finance-setup.spec.ts which creates one — so on a genuinely
+// empty database those specs fail, and only ever passed because a book
+// survived from an earlier run.
+console.log("\nSeeding a Business Finance book for Aarti Deshpande");
+{
+  const aarti = await signIn("aarti.deshpande@deshpandetextiles.in");
+  await post(aarti.api, "/api/expense-manager/setup", {
+    businessType: "llp", financialYear: "2026-27", currency: "INR", cashOpeningBalance: 25000,
+    accounts: [
+      { bankName: "HDFC Bank", accountName: "Deshpande Textiles — Current", openingBalance: 480000, openingDate: "2026-04-01" },
+      { bankName: "Bank of Maharashtra", accountName: "Deshpande Textiles — Savings", openingBalance: 125000, openingDate: "2026-04-01" },
+    ],
+  });
+  const { categories } = await (await aarti.api.get("/api/expense-manager/categories")).json().catch(() => ({ categories: [] }));
+  const category = (categories ?? [])[0];
+  for (const [type, amount, description, mode] of [
+    ["expense", 42000, "Godown rent — August", "Bank Transfer"],
+    ["expense", 8600, "Courier and freight charges", "Cash"],
+    ["income", 165000, "Fabric consignment — Pune retailer", "Bank Transfer"],
+  ]) {
+    await post(aarti.api, "/api/expense-manager/transactions", {
+      type, amount, description, paymentMode: mode,
+      categoryId: category?.id ?? undefined,
+      transactionDate: new Date().toISOString().slice(0, 10),
+    }).catch((e) => console.log(`   (transaction skipped: ${String(e).slice(0, 90)})`));
+  }
+  console.log("   book + 2 bank accounts + opening cash + 3 transactions");
+  await aarti.ctx.close();
+}
+
+// Transactional emails that failed to send. There's no way to make a
+// real send fail on demand, and an empty Email Failures page tells an
+// admin nothing about what the screen is for — so seed a realistic
+// spread of the failure modes that actually happen: a bounced mailbox,
+// a typo'd domain, an SMTP timeout, and a full inbox. One is already
+// resolved, since the page hides resolved rows by default and that
+// distinction is the whole point of the screen.
+console.log("Seeding email failures");
+await insert("email_failures", [
+  { organization_id: chatakId, email_type: "account_created", recipient_email: "priyanka.nigam@chataksingh.in",
+    related_entity: "profile:new-dispatch-hire", resolved: false,
+    error_message: "550 5.1.1 Recipient address rejected: User unknown in virtual mailbox table" },
+  { organization_id: chatakId, email_type: "payment_reminder", recipient_email: "accounts@rajwadistores.in",
+    related_entity: "invoice:CS/2026-27/0007", resolved: false,
+    error_message: "Connection timed out after 30000ms while connecting to smtp-relay.brevo.com:587" },
+  { organization_id: chatakId, email_type: "payment_confirmation", recipient_email: "deepak.anand@anmolsweet.in",
+    related_entity: "invoice:CS/2026-27/0006", resolved: false,
+    error_message: "551 Domain anmolsweet.in not found — did you mean anmolsweets.in?" },
+  { organization_id: chatakId, email_type: "order_completed", recipient_email: "sunil.gupta@guptakirana.co.in",
+    related_entity: "order:festive-gift-tin-consignment", resolved: false,
+    error_message: "452 4.2.2 Mailbox full — quota exceeded" },
+  { organization_id: chatakId, email_type: "documents_requested", recipient_email: "naresh.agarwal@shreebalajistores.in",
+    related_entity: "order:monthly-mukhwas-supply", resolved: true,
+    error_message: "421 Service temporarily unavailable — retried manually and delivered" },
+  { organization_id: legalOrg.id, email_type: "account_created", recipient_email: "imran.shaikh@crescenttraders.co.in",
+    related_entity: "profile:crescent-traders", resolved: false,
+    error_message: "550 5.7.1 Message rejected as spam by recipient mail server" },
+  { organization_id: legalOrg.id, email_type: "bill_reminder", recipient_email: "aarti.deshpande@deshpandetextiles.in",
+    related_entity: "invoice:LE/2026-27/0003", resolved: false,
+    error_message: "SMTP authentication failed — EMAIL_SERVER_PASSWORD rejected by relay" },
+]);
+
 await insert("account_requests", [{ organization_id: chatakId, full_name: "Priyanka Nigam", email: "priyanka.nigam@chataksingh.in",
   phone: "+91 94155 33810", requested_account_type: "staff", requested_staff_level: "rater",
   message: "Joining the Kanpur dispatch desk from the 1st — referred by Vikas.", status: "pending" }]);

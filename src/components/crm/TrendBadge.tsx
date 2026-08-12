@@ -11,8 +11,8 @@ export function TrendBadge({ changePct }: { changePct: number }) {
   const { bg, text } = flat
     ? { bg: "var(--color-paper)", text: "var(--color-ink-soft)" }
     : positive
-      ? { bg: "#d0f4db", text: "#116a2c" }
-      : { bg: "#fde2e2", text: "#b42318" };
+      ? { bg: "var(--color-success-tint)", text: "var(--color-success)" }
+      : { bg: "var(--color-danger-tint)", text: "var(--color-danger)" };
 
   return (
     <span className="inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[11px] font-bold" style={{ backgroundColor: bg, color: text }}>

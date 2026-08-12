@@ -97,7 +97,7 @@ export function GettingStartedChecklist({
             >
               <span
                 className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full"
-                style={item.done ? { backgroundColor: "#d0f4db", color: "#116a2c" } : { backgroundColor: "var(--color-accent-tint)", color: "var(--color-action-dark)" }}
+                style={item.done ? { backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" } : { backgroundColor: "var(--color-accent-tint)", color: "var(--color-action-dark)" }}
               >
                 {item.done ? <CheckCircle2 className="h-4 w-4" /> : <Icon className="h-4 w-4" />}
               </span>

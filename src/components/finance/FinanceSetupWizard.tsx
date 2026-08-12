@@ -130,7 +130,7 @@ export function FinanceSetupWizard({ onComplete }: { onComplete: () => void }) {
           </p>
         </div>
         <p className="shrink-0 text-xs" style={{ color: "var(--color-ink-soft)" }}>
-          <span style={{ color: "#b42318" }}>*</span> Required
+          <span style={{ color: "var(--color-danger)" }}>*</span> Required
         </p>
       </div>
 
@@ -178,7 +178,7 @@ export function FinanceSetupWizard({ onComplete }: { onComplete: () => void }) {
             style={touched && cashBalanceInvalid ? invalidBorder : validBorder}
             placeholder="0"
           />
-          {touched && cashBalanceInvalid && <p className="mt-1 text-xs" style={{ color: "#b42318" }}>Can&apos;t be negative.</p>}
+          {touched && cashBalanceInvalid && <p className="mt-1 text-xs" style={{ color: "var(--color-danger)" }}>Can&apos;t be negative.</p>}
         </div>
       </div>
 
@@ -223,7 +223,7 @@ export function FinanceSetupWizard({ onComplete }: { onComplete: () => void }) {
                   />
                 </div>
                 {(bank.bankName.trim() || bank.accountName.trim() || banks.length > 1) && (
-                  <button type="button" onClick={() => removeBank(i)} className="mt-2 text-xs font-medium" style={{ color: "#b42318" }}>
+                  <button type="button" onClick={() => removeBank(i)} className="mt-2 text-xs font-medium" style={{ color: "var(--color-danger)" }}>
                     Remove this bank
                   </button>
                 )}
@@ -241,7 +241,7 @@ export function FinanceSetupWizard({ onComplete }: { onComplete: () => void }) {
         </button>
       </div>
 
-      {error && <p className="text-sm" style={{ color: "#b42318" }}>{error}</p>}
+      {error && <p className="text-sm" style={{ color: "var(--color-danger)" }}>{error}</p>}
 
       <button
         type="submit"

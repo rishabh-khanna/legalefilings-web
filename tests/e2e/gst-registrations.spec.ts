@@ -33,7 +33,7 @@ test("admin adds, uses, and removes an additional GST registration", async ({ pa
   // registration picker (step "Details") reads from the same API this
   // page just wrote to.
   await page.goto("/dashboard/invoice-crm");
-  await expect(page.getByRole("heading", { name: "Invoice CRM" })).toBeVisible({ timeout: 15000 });
+  await expect(page.getByRole("heading", { name: "Invoice Generator" })).toBeVisible({ timeout: 15000 });
   await page.getByRole("button", { name: "+ Generate Invoice" }).click();
   const wizard = page.getByText("Generate Invoice", { exact: true }).locator("xpath=ancestor::div[contains(@class,'fixed')][1]");
   await expect(wizard).toBeVisible();

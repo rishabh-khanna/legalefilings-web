@@ -117,7 +117,7 @@ export const DASHBOARD_MANUAL: ManualEntry[] = [
     title: "Request CRM Access",
     summary: "Request your own free CRM workspace, or check your request status.",
     details:
-      "Every plan comes with a free year of a separate CRM workspace — your own admin login, your own team, your own leads pipeline, and your own invoicing, entirely apart from Legal Efilings' own CRM. This page is where a customer with at least one completed purchase requests it, tracks whether their request is pending/approved/rejected, and sees a preview of exactly what tools (Leads CRM, Invoice CRM, Team Management, Attendance & Leave, Payroll) they'll unlock once approved. Approval is handled by a Legal Efilings platform admin, who promotes the requester's existing login to admin of a brand-new organization — same email/password, no new account to set up.",
+      "Every plan comes with a free year of a separate CRM workspace — your own admin login, your own team, your own leads pipeline, and your own invoicing, entirely apart from Legal Efilings' own CRM. This page is where a customer with at least one completed purchase requests it, tracks whether their request is pending/approved/rejected, and sees a preview of exactly what tools (Team Pipeline, Invoice Generator, Team Management, Attendance & Leave, Payroll) they'll unlock once approved. Approval is handled by a Legal Efilings platform admin, who promotes the requester's existing login to admin of a brand-new organization — same email/password, no new account to set up.",
     access: "Customer accounts only — a staff/admin account is redirected away, since they already have (or are) a CRM.",
     keywords: ["own crm", "workspace", "request access", "upgrade", "free crm", "organization"],
   },
@@ -289,7 +289,7 @@ export const DASHBOARD_MANUAL: ManualEntry[] = [
     title: "Invoice Item Catalog",
     summary: "Products/services with HSN/SAC code, GST rate, and default price.",
     details:
-      "The Invoice Item Catalog holds products and services with their HSN/SAC code, GST rate, unit, and a default rate. Picking one on an ad-hoc Invoice CRM line auto-fills those fields. This is separate from the public pricing pages — editing a price here only changes the autofill default on a new invoice line; it never changes what a customer pays through checkout or Buy Plan for Customer.",
+      "The Invoice Item Catalog holds products and services with their HSN/SAC code, GST rate, unit, and a default rate. Picking one on an ad-hoc Invoice Generator line auto-fills those fields. This is separate from the public pricing pages — editing a price here only changes the autofill default on a new invoice line; it never changes what a customer pays through checkout or Buy Plan for Customer.",
     access: "Admin only.",
     keywords: ["hsn", "sac", "gst rate", "default price"],
   },
@@ -306,7 +306,7 @@ export const DASHBOARD_MANUAL: ManualEntry[] = [
     title: "Business Settings",
     summary: "Company details, branding, and invoicing defaults — required before invoices can be generated.",
     details:
-      "Business Settings holds the company's address, GSTIN, PAN, PF/ESIC numbers, state, financial-year start, logo and authorized-signature images, invoicing defaults (bank details, invoice number prefix, default notes), and any additional GST registrations. Address, GSTIN, PAN, State, and at least one payment method (bank details or UPI) are mandatory — invoice generation (Buy Plan for Customer, converting a lead, and the Invoice CRM wizard) is blocked with a clear error until these are filled in. These fields also show up on every generated invoice PDF and the customer-facing payment page.",
+      "Business Settings holds the company's address, GSTIN, PAN, PF/ESIC numbers, state, financial-year start, logo and authorized-signature images, invoicing defaults (bank details, invoice number prefix, default notes), and any additional GST registrations. Address, GSTIN, PAN, State, and at least one payment method (bank details or UPI) are mandatory — invoice generation (Buy Plan for Customer, converting a lead, and the Invoice Generator wizard) is blocked with a clear error until these are filled in. These fields also show up on every generated invoice PDF and the customer-facing payment page.",
     access: "Admin only, or a staff member individually delegated the \"Business Settings\" tool (see Delegated Access).",
     keywords: ["logo", "signature", "gstin", "bank details", "invoice prefix", "business settings"],
   },
@@ -347,10 +347,10 @@ export const DASHBOARD_MANUAL: ManualEntry[] = [
   },
   {
     path: "/dashboard/admin/leads",
-    title: "Team Leads CRM (Pipeline)",
+    title: "Team Pipeline",
     summary: "The full sales pipeline for the team — board or table view.",
     details:
-      "Team Leads CRM shows the whole team's lead pipeline (or filter to one person's), as a drag-and-drop board grouped by stage or a sortable, paginated table. From here you can add a note (explicit Save/Discard, not autosave), change stage, reassign a lead, filter by received date, and convert a Won lead straight into a real customer account plus order.",
+      "Team Pipeline shows the whole team's lead pipeline (or filter to one person's), as a drag-and-drop board grouped by stage or a sortable, paginated table. From here you can add a note (explicit Save/Discard, not autosave), change stage, reassign a lead, filter by received date, and convert a Won lead straight into a real customer account plus order.",
     access:
       "Visible only to leader/group_leader/admin (or a manager-level department role) — a plain rater doesn't get this page (they have My Leads instead). Shows every lead in your org, scoped to your reporting chain unless you're admin (whole org) or platform_admin (every org).",
     keywords: ["pipeline", "board", "kanban", "convert lead", "reassign"],
@@ -360,7 +360,7 @@ export const DASHBOARD_MANUAL: ManualEntry[] = [
     title: "My Leads",
     summary: "Leads assigned to you, from first contact to close.",
     details:
-      "My Leads is the leads assigned to you specifically — add a new one, track it through New → Contacted → In Progress → Won/Lost, and message them on WhatsApp directly from the row. For the whole team's pipeline, that's Team Leads CRM instead.",
+      "My Leads is the leads assigned to you specifically — add a new one, track it through New → Contacted → In Progress → Won/Lost, and message them on WhatsApp directly from the row. For the whole team's pipeline, that's Team Pipeline instead.",
     access: "Every staff member (any level) — always only the leads assigned to you by name, even for a leader/group_leader/admin.",
     keywords: ["my pipeline", "assigned leads"],
   },
@@ -375,10 +375,10 @@ export const DASHBOARD_MANUAL: ManualEntry[] = [
   },
   {
     path: "/dashboard/invoice-crm",
-    title: "Invoice CRM",
+    title: "Invoice Generator",
     summary: "Ad-hoc GST/non-GST invoicing, statements, and recurring invoices.",
     details:
-      "Invoice CRM is for ad-hoc billing outside of a normal purchase — GST, non-GST, export, and proforma invoices, plus credit/debit notes, built line-by-line from the product/service catalog. It also has each customer's running account statement (every invoice raised and payment received, with a running balance), the full invoice list across all customers, and recurring invoice templates. For invoices tied to an actual order/purchase, see Order Invoices/My Invoices instead.",
+      "Invoice Generator is for ad-hoc billing outside of a normal purchase — GST, non-GST, export, and proforma invoices, plus credit/debit notes, built line-by-line from the product/service catalog. It also has each customer's running account statement (every invoice raised and payment received, with a running balance), the full invoice list across all customers, and recurring invoice templates. For invoices tied to an actual order/purchase, see Order Invoices/My Invoices instead.",
     access: "Any staff member or admin, scoped to their own org (every org for platform_admin) — not shown to customers at all.",
     keywords: ["gst invoice", "credit note", "debit note", "statement", "ledger"],
   },
@@ -387,7 +387,7 @@ export const DASHBOARD_MANUAL: ManualEntry[] = [
     title: "Order Invoices",
     summary: "Invoices generated from actual purchases.",
     details:
-      "Order Invoices (shown to a customer as \"My Invoices\") lists invoices generated from a real purchase — Buy Plan for Customer or direct checkout. Customers can download or pay outstanding invoices here; staff can record a manual payment. Unpaid invoices chase themselves: the customer is emailed a reminder three days before the due date, then again at 1, 7, 14 and 30 days overdue, each with a direct payment link. Reminders stop as soon as the balance is cleared. For billing that isn't tied to a purchase — ad-hoc GST invoices, credit/debit notes — use Invoice CRM instead.",
+      "Order Invoices (shown to a customer as \"My Invoices\") lists invoices generated from a real purchase — Buy Plan for Customer or direct checkout. Customers can download or pay outstanding invoices here; staff can record a manual payment. Unpaid invoices chase themselves: the customer is emailed a reminder three days before the due date, then again at 1, 7, 14 and 30 days overdue, each with a direct payment link. Reminders stop as soon as the balance is cleared. For billing that isn't tied to a purchase — ad-hoc GST invoices, credit/debit notes — use Invoice Generator instead.",
     access:
       "A customer sees only their own invoices. Staff see invoices they created plus their reporting chain's; admin sees every invoice in the org (every org for platform_admin).",
     keywords: ["my invoices", "pay invoice", "download invoice", "record payment", "reminder", "overdue", "chase payment", "dunning"],

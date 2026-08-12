@@ -30,8 +30,8 @@ type LeaveBalance = { leaveType: LeaveTypeOption & { annual_credit_days: number 
 
 const STATUS_STYLE: Record<LeaveRequest["status"], { bg: string; fg: string }> = {
   pending: { bg: "var(--color-muted-tint)", fg: "var(--color-muted-dark)" },
-  approved: { bg: "#d0f4db", fg: "#116a2c" },
-  rejected: { bg: "#fde2e2", fg: "#b42318" },
+  approved: { bg: "var(--color-success-tint)", fg: "var(--color-success)" },
+  rejected: { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" },
   // Deliberately neutral, not red — a withdrawn request isn't a refusal
   // and shouldn't read like one next to a genuine rejection.
   cancelled: { bg: "var(--color-paper)", fg: "var(--color-ink-soft)" },
@@ -192,7 +192,7 @@ export default function LeavePage() {
       className: "max-w-[160px]",
       render: (r) =>
         r.status === "rejected" && r.review_note ? (
-          <TruncatedText text={r.review_note} style={{ color: "#b42318" }} />
+          <TruncatedText text={r.review_note} style={{ color: "var(--color-danger)" }} />
         ) : (
           <span style={{ color: "var(--color-ink-soft)" }}>—</span>
         ),
@@ -209,7 +209,7 @@ export default function LeavePage() {
             onClick={() => handleCancel(r)}
             disabled={cancellingId === r.id}
             className="rounded-full border px-3 py-1.5 text-xs font-semibold transition-colors hover:bg-red-50 disabled:opacity-60"
-            style={{ borderColor: "var(--color-line)", color: "#b42318" }}
+            style={{ borderColor: "var(--color-line)", color: "var(--color-danger)" }}
           >
             {cancellingId === r.id ? "Cancelling…" : r.status === "pending" ? "Withdraw" : "Cancel"}
           </button>

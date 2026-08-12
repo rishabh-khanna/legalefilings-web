@@ -74,9 +74,9 @@ export default async function PayPage({ params }: { params: Promise<{ id: string
             className="rounded-full px-3 py-1 text-xs font-semibold"
             style={
               isPaid
-                ? { backgroundColor: "#d0f4db", color: "#116a2c" }
+                ? { backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" }
                 : isPartiallyPaid
-                  ? { backgroundColor: "#fff6d9", color: "#8a6700" }
+                  ? { backgroundColor: "var(--color-action-tint)", color: "var(--color-action-dark)" }
                   : { backgroundColor: "var(--color-muted-tint)", color: "var(--color-muted-dark)" }
             }
           >
@@ -102,7 +102,7 @@ export default async function PayPage({ params }: { params: Promise<{ id: string
           {isPartiallyPaid && (
             <div className="flex items-center justify-between text-sm">
               <span style={{ color: "var(--color-ink-soft)" }}>Already Paid</span>
-              <span style={{ color: "#116a2c" }}>− ₹{totalPaid.toLocaleString("en-IN")}</span>
+              <span style={{ color: "var(--color-success)" }}>− ₹{totalPaid.toLocaleString("en-IN")}</span>
             </div>
           )}
           <div className="flex items-center justify-between border-t pt-2" style={{ borderColor: "var(--color-line)" }}>
@@ -112,7 +112,7 @@ export default async function PayPage({ params }: { params: Promise<{ id: string
         </div>
 
         {isPaid ? (
-          <p className="mt-6 rounded-lg px-4 py-3 text-center text-sm" style={{ backgroundColor: "#d0f4db", color: "#116a2c" }}>
+          <p className="mt-6 rounded-lg px-4 py-3 text-center text-sm" style={{ backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" }}>
             This invoice has been marked as paid — thank you!
           </p>
         ) : (

@@ -125,7 +125,7 @@ export default function FinanceTeamPage() {
       header: "Role",
       render: (m) =>
         m.role === "owner" ? (
-          <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: "#fff6d9", color: "#8a6700" }}>Owner</span>
+          <span className="rounded-full px-2.5 py-1 text-xs font-semibold" style={{ backgroundColor: "var(--color-action-tint)", color: "var(--color-action-dark)" }}>Owner</span>
         ) : (
           <select value={m.role} onChange={(e) => handleRoleChange(m.id, e.target.value)} className="rounded-lg border px-2 py-1 text-xs" style={{ borderColor: "var(--color-line)" }}>
             {ROLE_OPTIONS.map((r) => (
@@ -142,7 +142,7 @@ export default function FinanceTeamPage() {
       className: "text-right",
       render: (m) =>
         m.role !== "owner" ? (
-          <button type="button" onClick={() => handleRemove(m.id, m.profiles?.full_name ?? "this member")} className="text-xs font-medium" style={{ color: "#b42318" }}>Remove</button>
+          <button type="button" onClick={() => handleRemove(m.id, m.profiles?.full_name ?? "this member")} className="text-xs font-medium" style={{ color: "var(--color-danger)" }}>Remove</button>
         ) : null,
     },
   ];
@@ -171,7 +171,7 @@ export default function FinanceTeamPage() {
         <p className="sm:col-span-4 text-xs" style={{ color: "var(--color-ink-soft)" }}>{ROLE_DESCRIPTIONS[role]}</p>
 
         {result && (
-          <div className="sm:col-span-4 rounded-lg px-4 py-3 text-sm" style={result.ok ? { backgroundColor: "#d0f4db", color: "#116a2c" } : { backgroundColor: "#fde2e2", color: "#b42318" }}>
+          <div className="sm:col-span-4 rounded-lg px-4 py-3 text-sm" style={result.ok ? { backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" } : { backgroundColor: "var(--color-danger-tint)", color: "var(--color-danger)" }}>
             <p>{result.text}</p>
             {result.password && (
               <p className="mt-1">Temporary password (share securely, once): <span className="font-mono font-semibold">{result.password}</span></p>
