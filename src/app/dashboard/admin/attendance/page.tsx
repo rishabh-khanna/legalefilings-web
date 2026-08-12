@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { Users, CalendarCheck, ClipboardList, Check, X } from "lucide-react";
 import { formatHoursMinutes } from "@/lib/format-duration";
 import { useActionMessage } from "@/lib/use-action-message";
@@ -83,15 +84,34 @@ function groupByDay(events: AttendanceEvent[]) {
   return Array.from(byDay.entries()).sort();
 }
 
+// useSearchParams needs a Suspense boundary around it or the whole page
+// opts out of static rendering with a build error — this thin wrapper is
+// that boundary; the real page (and all its own state) lives below.
 export default function AdminAttendancePage() {
+  return (
+    <Suspense fallback={null}>
+      <AdminAttendancePageInner />
+    </Suspense>
+  );
+}
+
+function AdminAttendancePageInner() {
+  const searchParams = useSearchParams();
   const { message, showSuccess, showError } = useActionMessage();
-  const [view, setView] = useState<"log" | "corrections">("log");
+  // Present/Absent Today on the Overview HR tiles link here with
+  // ?view=today so the number a viewer clicks and the roster they land
+  // on are the same one, instead of the log tab's unrelated single-staff
+  // month view.
+  const initialView = searchParams.get("view") === "today" ? "today" : "log";
+  const [view, setView] = useState<"log" | "corrections" | "today">(initialView);
   const [staffOptions, setStaffOptions] = useState<StaffOption[]>([]);
   const [staffId, setStaffId] = useState("");
   const [month, setMonth] = useState(currentMonth());
   const [events, setEvents] = useState<AttendanceEvent[]>([]);
   const [corrections, setCorrections] = useState<CorrectionRow[]>([]);
   const [correctionsEmployeeFilter, setCorrectionsEmployeeFilter] = useState<Set<string>>(new Set());
+  const [todayStaff, setTodayStaff] = useState<{ id: string; name: string; present: boolean; checkInAt: string | null }[]>([]);
+  const [todayLoaded, setTodayLoaded] = useState(false);
 
   useEffect(() => {
     const kickoff = setTimeout(async () => {
@@ -121,6 +141,16 @@ export default function AdminAttendancePage() {
       .then((res) => res.json())
       .then((data) => setCorrections(data.requests ?? []));
   }, []);
+
+  useEffect(() => {
+    if (view !== "today" || todayLoaded) return;
+    fetch("/api/admin/attendance-today")
+      .then((res) => res.json())
+      .then((data) => {
+        setTodayStaff(data.staff ?? []);
+        setTodayLoaded(true);
+      });
+  }, [view, todayLoaded]);
 
   async function decideCorrection(id: string, decision: "approve" | "reject") {
     const reason = decision === "reject" ? prompt("Rejection reason?") : undefined;
@@ -310,6 +340,34 @@ export default function AdminAttendancePage() {
     },
   ];
 
+  type TodayRow = (typeof todayStaff)[number];
+  const todayColumns: DataTableColumn<TodayRow>[] = [
+    { key: "name", header: "Name", render: (s) => <span className="font-semibold" style={{ color: "var(--color-ink)" }}>{s.name}</span>, exportValue: (s) => s.name, sortValue: (s) => s.name },
+    {
+      key: "status",
+      header: "Status",
+      className: "w-[16%] whitespace-nowrap",
+      render: (s) => (
+        <span
+          className="inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-xs font-semibold"
+          style={s.present ? { backgroundColor: "var(--color-success-tint)", color: "var(--color-success)" } : { backgroundColor: "var(--color-danger-tint)", color: "var(--color-danger)" }}
+        >
+          {s.present ? "Present" : "Absent"}
+        </span>
+      ),
+      exportValue: (s) => (s.present ? "Present" : "Absent"),
+      sortValue: (s) => (s.present ? 1 : 0),
+    },
+    {
+      key: "checkInAt",
+      header: "Check In",
+      className: "w-[18%] whitespace-nowrap",
+      render: (s) => (s.checkInAt ? new Date(s.checkInAt).toLocaleTimeString("en-IN") : "—"),
+      exportValue: (s) => (s.checkInAt ? new Date(s.checkInAt).toLocaleTimeString("en-IN") : ""),
+      sortValue: (s) => s.checkInAt ?? "",
+    },
+  ];
+
   return (
     <div>
       <DashboardPageHero title="Team Attendance" subtitle="Review check-ins and manage correction requests across your team.">
@@ -324,8 +382,8 @@ export default function AdminAttendancePage() {
         <ActionMessage message={message} />
       </div>
 
-      <div className="mt-4 flex items-center gap-1 rounded-full border p-1" style={{ borderColor: "var(--color-line)" }}>
-        {([["log", "Attendance Log"], ["corrections", `Correction Requests${pendingCorrections.length > 0 ? ` (${pendingCorrections.length})` : ""}`]] as const).map(([value, label]) => (
+      <div className="mt-4 flex flex-wrap items-center gap-1 rounded-full border p-1" style={{ borderColor: "var(--color-line)" }}>
+        {([["today", "Today's Status"], ["log", "Attendance Log"], ["corrections", `Correction Requests${pendingCorrections.length > 0 ? ` (${pendingCorrections.length})` : ""}`]] as const).map(([value, label]) => (
           <button
             key={value}
             type="button"
@@ -337,6 +395,19 @@ export default function AdminAttendancePage() {
           </button>
         ))}
       </div>
+
+      {view === "today" && (
+        <DataTable
+          columns={todayColumns}
+          fixedLayout
+          rows={todayStaff}
+          getRowKey={(s) => s.id}
+          itemLabel="team members"
+          emptyMessage="No team members yet."
+          search={{ placeholder: "Search name…", filter: (s, q) => s.name.toLowerCase().includes(q) }}
+          exportFilename="attendance-today"
+        />
+      )}
 
       {view === "log" && (
         <>

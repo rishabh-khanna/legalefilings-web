@@ -288,8 +288,13 @@ export default async function DashboardOverviewPage() {
               // people (and their birthdates) these numbers count for
               // actually live.
               { label: "Total Employees", value: hrOverview.totalEmployees, href: "/dashboard/admin/employees", icon: Users, tint: { bg: "var(--color-info-tint)", fg: "var(--color-info)" } },
-              { label: "Present Today", value: hrOverview.presentToday, href: "/dashboard/admin/attendance", icon: UserCheck, tint: { bg: "var(--color-success-tint)", fg: "var(--color-success)" } },
-              { label: "Absent Today", value: hrOverview.absentToday, href: "/dashboard/admin/attendance", icon: UserX, tint: { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" } },
+              // Both used to link to the Attendance Log tab, which shows
+              // one staff member's whole month, not who's in/out today —
+              // clicking "35 Absent" landed on an arbitrary single person
+              // marked all "Present", nothing to do with the count. The
+              // "Today's Status" tab is the actual answer to this tile.
+              { label: "Present Today", value: hrOverview.presentToday, href: "/dashboard/admin/attendance?view=today", icon: UserCheck, tint: { bg: "var(--color-success-tint)", fg: "var(--color-success)" } },
+              { label: "Absent Today", value: hrOverview.absentToday, href: "/dashboard/admin/attendance?view=today", icon: UserX, tint: { bg: "var(--color-danger-tint)", fg: "var(--color-danger)" } },
               { label: "Today's Birthdays", value: hrOverview.birthdaysToday, href: "/dashboard/admin/employees", icon: Gift, tint: { bg: "#fce7f3", fg: "#9d174d" } },
               { label: "Payroll Due", value: hrOverview.payrollDue, href: "/dashboard/admin/payroll", icon: IndianRupee, tint: { bg: "var(--color-accent-tint)", fg: "var(--color-action-dark)" } },
             ].map((s) => (
