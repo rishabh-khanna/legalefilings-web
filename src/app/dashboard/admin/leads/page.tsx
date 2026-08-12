@@ -490,6 +490,14 @@ export default function AdminDashboard() {
       sortValue: (lead) => lead.createdAt,
     },
     {
+      key: "createdBy",
+      header: "Created By",
+      className: "w-[10%] whitespace-nowrap",
+      render: (lead) => lead.createdBy ?? <span style={{ color: "var(--color-ink-soft)" }}>Self-submitted</span>,
+      exportValue: (lead) => lead.createdBy ?? "Self-submitted",
+      sortValue: (lead) => lead.createdBy,
+    },
+    {
       key: "whatsapp",
       header: "",
       className: "w-[13%]",

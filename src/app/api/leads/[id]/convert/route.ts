@@ -118,6 +118,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       plan_price: price,
       status: "new",
       assigned_to: profile.id,
+      created_by: profile.id,
     })
     .select()
     .single();

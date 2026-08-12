@@ -27,6 +27,7 @@ type LeadRow = {
   created_at: string;
   converted_to_profile_id: string | null;
   assignee?: { full_name: string | null } | null;
+  creator?: { full_name: string | null } | null;
 };
 
 // assigned_to is a profiles FK (see 20260829000000) — NULL is the one
@@ -52,10 +53,13 @@ function toLead(row: LeadRow): Lead {
     assignedTo: row.assignee?.full_name ?? "Unassigned",
     notes: row.notes,
     convertedToProfileId: row.converted_to_profile_id ?? undefined,
+    createdBy: row.creator?.full_name ?? undefined,
   };
 }
 
-const LEAD_SELECT = "*, assignee:profiles!leads_assigned_to_fkey(full_name)";
+// Two FKs to profiles (assigned_to, created_by) — creator needs the
+// explicit profiles!leads_created_by_fkey form.
+const LEAD_SELECT = "*, assignee:profiles!leads_assigned_to_fkey(full_name), creator:profiles!leads_created_by_fkey(full_name)";
 
 // The staff a viewer is allowed to see leads for: themselves plus their
 // reporting chain. Returned as ids — scoping used to compare display
@@ -186,6 +190,9 @@ export async function POST(request: Request) {
       message: message ? String(message) : null,
       ...(assignedTo ? { assigned_to: assignedTo } : {}),
       ...(source ? { source } : {}),
+      // null for a public/website submission — no staff member created
+      // it, and that's the correct, honest value, not an omission.
+      created_by: profile && profile.account_type !== "customer" ? profile.id : null,
     })
     .select(LEAD_SELECT)
     .single();

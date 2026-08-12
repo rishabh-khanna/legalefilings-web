@@ -20,6 +20,7 @@ type OrderRow = {
   organization_id: string;
   profiles?: { full_name: string | null; company: string | null } | null;
   organizations?: { name: string | null } | null;
+  creator?: { full_name: string | null } | null;
 };
 
 export default async function OrderHistoryPage() {
@@ -29,9 +30,11 @@ export default async function OrderHistoryPage() {
   // organizations(name) only actually matters for a platform_admin, who
   // sees every org's orders pooled together here — without it, there'd
   // be no way to tell which tenant an order belongs to.
+  // Two FKs to profiles (customer_id, created_by) — creator needs the
+  // explicit profiles!orders_created_by_fkey form.
   let query = supabase
     .from("orders")
-    .select("*, profiles!orders_customer_id_fkey(full_name, company), organizations(name)")
+    .select("*, profiles!orders_customer_id_fkey(full_name, company), organizations(name), creator:profiles!orders_created_by_fkey(full_name)")
     .order("created_at", { ascending: false });
   if (profile?.account_type === "customer") {
     query = query.eq("customer_id", profile.id);

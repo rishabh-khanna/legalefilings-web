@@ -35,4 +35,6 @@ export type Lead = {
   notes: string;
   /** Set once this lead has actually been turned into a customer account + order (see /api/leads/[id]/convert) — undefined means not yet converted. */
   convertedToProfileId?: string;
+  /** Display name of the staff member who added this lead, or undefined for a public/website submission (no staff creator). */
+  createdBy?: string;
 };

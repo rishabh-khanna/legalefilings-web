@@ -6,6 +6,7 @@ import { OrderDocumentsDrawer, DOCUMENT_STATUS_LABEL, DOCUMENT_STATUS_STYLE, typ
 import { ORDER_STATUS_LABEL, ORDER_STATUS_STYLE, type OrderStatus } from "@/lib/order-status";
 import { DataTable, type DataTableColumn } from "@/components/DataTable";
 import { MultiSelect } from "@/components/MultiSelect";
+import { SearchButton } from "@/components/SearchButton";
 
 type OrderRow = {
   id: string;
@@ -19,6 +20,7 @@ type OrderRow = {
   created_at: string;
   profiles?: { full_name: string | null; company: string | null } | null;
   organizations?: { name: string | null } | null;
+  creator?: { full_name: string | null } | null;
 };
 
 const PAYMENT_STATUS_LABEL: Record<string, string> = {
@@ -71,6 +73,11 @@ export function OrdersTableClient({ orders: initialOrders, isStaff, spansMultipl
   const readyCount = useMemo(() => orders.filter(isReadyToWork).length, [orders]);
   const visibleOrders = isStaff && readyOnly ? orders.filter(isReadyToWork) : orders;
 
+  // Both apply on Search rather than the instant an option is checked —
+  // draft* is what the MultiSelects are bound to, the non-draft pair is
+  // what actually filters. Same convention every other status/type
+  // toolbar filter in the app uses.
+  const [draftStatusFilter, setDraftStatusFilter] = useState<Set<string>>(new Set());
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set());
   const statusFilteredOrders = useMemo(
     () => (statusFilter.size === 0 ? visibleOrders : visibleOrders.filter((o) => statusFilter.has(o.status))),
@@ -81,6 +88,7 @@ export function OrdersTableClient({ orders: initialOrders, isStaff, spansMultipl
   // customer's own order list was never grouped, it's already just
   // theirs) with one dropdown to narrow the table to a single customer
   // instead of the whole list visually reorganized around them.
+  const [draftCustomerFilter, setDraftCustomerFilter] = useState<Set<string>>(new Set());
   const [customerFilter, setCustomerFilter] = useState<Set<string>>(new Set());
   const customerOptions = useMemo(() => {
     if (!isStaff) return [];
@@ -94,6 +102,9 @@ export function OrdersTableClient({ orders: initialOrders, isStaff, spansMultipl
     () => (customerFilter.size === 0 ? statusFilteredOrders : statusFilteredOrders.filter((o) => customerFilter.has(o.customer_id))),
     [statusFilteredOrders, customerFilter]
   );
+  const orderFiltersDirty =
+    draftStatusFilter.size !== statusFilter.size || [...draftStatusFilter].some((v) => !statusFilter.has(v)) ||
+    draftCustomerFilter.size !== customerFilter.size || [...draftCustomerFilter].some((v) => !customerFilter.has(v));
 
   function orderSearchText(o: OrderRow) {
     return `${o.service} ${o.plan} ${o.id} ${o.profiles?.full_name ?? ""} ${o.profiles?.company ?? ""}`;
@@ -151,6 +162,16 @@ export function OrdersTableClient({ orders: initialOrders, isStaff, spansMultipl
       exportValue: (order) => new Date(order.created_at).toLocaleDateString("en-IN"),
       sortValue: (order) => order.created_at,
     },
+    ...(isStaff
+      ? [{
+          key: "createdBy",
+          header: "Created By",
+          className: "w-[10%] whitespace-nowrap",
+          render: (order: OrderRow) => order.creator?.full_name ?? <span style={{ color: "var(--color-ink-soft)" }}>Self-checkout</span>,
+          exportValue: (order: OrderRow) => order.creator?.full_name ?? "Self-checkout",
+          sortValue: (order: OrderRow) => order.creator?.full_name,
+        } as DataTableColumn<OrderRow>]
+      : []),
     {
       key: "payment",
       header: "Payment",
@@ -246,19 +267,26 @@ export function OrdersTableClient({ orders: initialOrders, isStaff, spansMultipl
             )}
             <MultiSelect
               options={Object.entries(ORDER_STATUS_LABEL).map(([value, label]) => ({ value, label }))}
-              selected={statusFilter}
-              onChange={setStatusFilter}
+              selected={draftStatusFilter}
+              onChange={setDraftStatusFilter}
               placeholder="All statuses"
             />
             {isStaff && (
               <MultiSelect
                 options={customerOptions.map(([id, name]) => ({ value: id, label: name }))}
-                selected={customerFilter}
-                onChange={setCustomerFilter}
+                selected={draftCustomerFilter}
+                onChange={setDraftCustomerFilter}
                 placeholder="All customers"
                 searchable
               />
             )}
+            <SearchButton
+              onClick={() => {
+                setStatusFilter(draftStatusFilter);
+                setCustomerFilter(draftCustomerFilter);
+              }}
+              dirty={orderFiltersDirty}
+            />
           </>
         }
       />

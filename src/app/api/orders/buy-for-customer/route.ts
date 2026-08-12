@@ -101,6 +101,7 @@ export async function POST(request: Request) {
         plan_price: price,
         status: "new",
         assigned_to: profile.id,
+        created_by: profile.id,
       })
       .select()
       .single();
