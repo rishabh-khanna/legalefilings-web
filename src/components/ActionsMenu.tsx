@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
+import { createPortal } from "react-dom";
 import { MoreHorizontal } from "lucide-react";
 import { Tooltip } from "@/components/Tooltip";
 
@@ -29,12 +30,17 @@ export type ActionItem = {
 // visible, no menu, because there's only ever one row of it on screen).
 export function ActionsMenu({ primary, overflow }: { primary: ActionItem[]; overflow?: ActionItem[] }) {
   const [open, setOpen] = useState(false);
+  const [menuPos, setMenuPos] = useState<{ top: number; right: number } | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open) return;
     function handlePointerDown(e: MouseEvent) {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (rootRef.current?.contains(target)) return;
+      if (menuRef.current?.contains(target)) return;
+      setOpen(false);
     }
     document.addEventListener("mousedown", handlePointerDown);
     return () => document.removeEventListener("mousedown", handlePointerDown);
@@ -70,6 +76,10 @@ export function ActionsMenu({ primary, overflow }: { primary: ActionItem[]; over
             type="button"
             onClick={(e) => {
               e.stopPropagation();
+              if (!open) {
+                const rect = rootRef.current?.getBoundingClientRect();
+                if (rect) setMenuPos({ top: rect.bottom + 6, right: window.innerWidth - rect.right });
+              }
               setOpen((v) => !v);
             }}
             aria-label="More actions"
@@ -79,43 +89,54 @@ export function ActionsMenu({ primary, overflow }: { primary: ActionItem[]; over
           >
             <MoreHorizontal className="h-3.5 w-3.5" />
           </button>
-          {open && (
-            <div
-              className="absolute right-0 top-full z-30 mt-1.5 w-44 overflow-hidden rounded-xl border bg-white py-1 shadow-xl dark:bg-[var(--color-paper-raised)]"
-              style={{ borderColor: "var(--color-line)" }}
-              onClick={(e) => e.stopPropagation()}
-            >
-              {overflow.map((item) => {
-                const Icon = item.icon;
-                const content = (
-                  <>
-                    <Icon className="h-3.5 w-3.5 shrink-0 text-[var(--color-ink-soft)]" />
-                    {item.label}
-                  </>
-                );
-                const className = "flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs font-medium transition-colors hover:bg-[var(--color-muted-tint)] disabled:pointer-events-none disabled:opacity-40";
-                return item.href ? (
-                  <a key={item.key} href={item.href} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} className={className} style={{ color: "var(--color-ink)" }}>
-                    {content}
-                  </a>
-                ) : (
-                  <button
-                    key={item.key}
-                    type="button"
-                    disabled={item.disabled}
-                    onClick={() => {
-                      setOpen(false);
-                      item.onClick?.();
-                    }}
-                    className={className}
-                    style={{ color: "var(--color-ink)" }}
-                  >
-                    {content}
-                  </button>
-                );
-              })}
-            </div>
-          )}
+          {/* Portaled to <body> with position: fixed rather than
+              CSS-absolute inside this row's own DOM position. Every
+              caller of this component lives inside a DataTable, whose
+              scroll wrapper carries overflow-x-auto — which per the CSS
+              spec forces overflow-y to stop being `visible` too, so a
+              plain absolute dropdown got silently clipped for any row
+              near the table's bottom edge. Same fix, same reasoning, as
+              Tooltip.tsx and NotificationBell.tsx. */}
+          {open && menuPos &&
+            createPortal(
+              <div
+                ref={menuRef}
+                className="fixed z-[200] w-44 overflow-hidden rounded-xl border bg-white py-1 shadow-xl dark:bg-[var(--color-paper-raised)]"
+                style={{ top: menuPos.top, right: menuPos.right, borderColor: "var(--color-line)" }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                {overflow.map((item) => {
+                  const Icon = item.icon;
+                  const content = (
+                    <>
+                      <Icon className="h-3.5 w-3.5 shrink-0 text-[var(--color-ink-soft)]" />
+                      {item.label}
+                    </>
+                  );
+                  const className = "flex w-full items-center gap-2.5 px-3 py-2 text-left text-xs font-medium transition-colors hover:bg-[var(--color-muted-tint)] disabled:pointer-events-none disabled:opacity-40";
+                  return item.href ? (
+                    <a key={item.key} href={item.href} target="_blank" rel="noopener noreferrer" onClick={() => setOpen(false)} className={className} style={{ color: "var(--color-ink)" }}>
+                      {content}
+                    </a>
+                  ) : (
+                    <button
+                      key={item.key}
+                      type="button"
+                      disabled={item.disabled}
+                      onClick={() => {
+                        setOpen(false);
+                        item.onClick?.();
+                      }}
+                      className={className}
+                      style={{ color: "var(--color-ink)" }}
+                    >
+                      {content}
+                    </button>
+                  );
+                })}
+              </div>,
+              document.body
+            )}
         </>
       )}
     </div>

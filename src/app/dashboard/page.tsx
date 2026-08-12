@@ -92,8 +92,20 @@ export default async function DashboardOverviewPage() {
   // policy. Orders scope by assigned_to; invoices scope by created_by —
   // matching each table's own canonical page.
   let ordersQuery = supabase.from("orders").select("id, service, status, created_at").order("created_at", { ascending: false });
-  let invoicesQuery = supabase.from("invoices").select("id, invoice_number, total, status, created_at").order("created_at", { ascending: false });
-  let leadsQuery = supabase.from("leads").select("id", { count: "exact", head: true }).eq("assigned_to", profile?.full_name ?? "");
+  // order_id: /dashboard/invoices (what this stat card links to) only
+  // ever shows a STAFF/admin viewer their order-linked invoices — ad-hoc
+  // ones from Invoice Generator are deliberately excluded there (see
+  // that page's own top comment). Without filtering the same way here,
+  // this count included every ad-hoc invoice too, so "14 Invoices"
+  // landed on a page showing 3.
+  let invoicesQuery = supabase.from("invoices").select("id, invoice_number, total, status, created_at, order_id").order("created_at", { ascending: false });
+  // assigned_to is a profiles FK (uuid) as of 20260829000000 — comparing
+  // it against the profile's full_name instead of its id meant this
+  // count could never actually match a row (a uuid column will never
+  // equal a display-name string), so "My Leads" always read 0 regardless
+  // of how many leads a rater actually had. /dashboard/crm already
+  // scopes by id correctly; this now matches it.
+  let leadsQuery = supabase.from("leads").select("id", { count: "exact", head: true }).eq("assigned_to", profile?.id ?? "");
   if (profile && !staff) {
     ordersQuery = ordersQuery.eq("customer_id", profile.id);
     invoicesQuery = invoicesQuery.eq("customer_id", profile.id);
@@ -122,7 +134,10 @@ export default async function DashboardOverviewPage() {
   ]);
 
   const orderList = orders ?? [];
-  const invoiceList = invoices ?? [];
+  // Same filter /dashboard/invoices applies for a staff/admin viewer —
+  // a plain customer's own invoice list there is never narrowed, so
+  // theirs isn't here either.
+  const invoiceList = staff ? (invoices ?? []).filter((i) => i.order_id) : (invoices ?? []);
   const activeOrders = orderList.filter((o) => !["completed", "cancelled"].includes(o.status)).length;
   const pendingInvoices = invoiceList.filter((i) => i.status !== "paid").length;
 
