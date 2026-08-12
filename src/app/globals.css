@@ -425,6 +425,25 @@ button:not(:disabled) {
   text-overflow: ellipsis;
 }
 
+/* Excel-style column resize grip — a thin invisible-until-hovered strip
+   on the right edge of every header cell. Widened well past its visible
+   1px line (to 8px, centered on the border) purely as a hit target;
+   dragging a bare 1px line with a mouse is not realistic. */
+.dt-col-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 3;
+  touch-action: none;
+}
+.dt-col-resize-handle:hover,
+.dt-col-resize-handle:active {
+  background: color-mix(in srgb, var(--color-action) 45%, transparent);
+}
+
 .dt-table tbody tr {
   background-color: var(--color-paper-raised);
   transition: background-color var(--dur-fast) var(--ease-out);

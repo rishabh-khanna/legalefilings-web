@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState, type ReactNode, type CSSProperties } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode, type CSSProperties } from "react";
 import { Search, ChevronUp, ChevronDown, ChevronsUpDown, Rows3, Rows4, Inbox, SearchX } from "lucide-react";
 import { usePagination } from "@/lib/use-pagination";
 import { useDateRangeFilter } from "@/lib/use-date-range-filter";
@@ -44,6 +44,11 @@ const ROW_NUMBER_TINTS = [
 
 type Density = "comfortable" | "compact";
 const DENSITY_KEY = "dt-density";
+
+// Synthetic column key for the leading "#" row-number column, which
+// isn't part of the caller-supplied `columns` array but is still
+// resizable like any other.
+const ROWNUM_KEY = "__rownum__";
 
 // Past this many rows on screen, the table gets its own scroll
 // container so the header can stick to the top of the card. Below it,
@@ -218,6 +223,88 @@ export function DataTable<T>({
   const hasToolbarRow = Boolean(search || dateFilter || exportFilename || toolbar);
   const scrolls = pageItems.length >= STICKY_THRESHOLD;
 
+  // Excel-style drag-to-resize columns. Starts null (untouched — the
+  // table keeps whatever layout `fixedLayout` already gives it); the
+  // first drag anywhere freezes every column's *current* rendered width
+  // into this map in one shot, so dragging one column doesn't also make
+  // its neighbors jump to their own natural width at the same moment.
+  // From then on every column gets an explicit <col> width and the table
+  // is forced into table-layout: fixed, the only mode where an explicit
+  // width is actually obeyed instead of fought by content-based auto-sizing.
+  const [colWidths, setColWidths] = useState<Record<string, number> | null>(null);
+  const thRefs = useRef<Record<string, HTMLTableCellElement | null>>({});
+  const [resizing, setResizing] = useState<{ key: string; startX: number; startWidth: number } | null>(null);
+
+  function startResize(key: string, e: React.MouseEvent) {
+    e.preventDefault();
+    e.stopPropagation();
+
+    let widths = colWidths;
+    if (!widths) {
+      widths = {};
+      for (const k of Object.keys(thRefs.current)) {
+        const el = thRefs.current[k];
+        if (el) widths[k] = el.getBoundingClientRect().width;
+      }
+      setColWidths(widths);
+    }
+    const startWidth = widths[key] ?? thRefs.current[key]?.getBoundingClientRect().width ?? 120;
+    setResizing({ key, startX: e.clientX, startWidth });
+  }
+
+  // Body cursor/selection and the document-level move/up listeners are a
+  // side effect of `resizing` becoming non-null, not something to do
+  // straight from the mousedown handler — keeps every DOM mutation here
+  // paired with its own cleanup on the same render pass that undoes it.
+  useEffect(() => {
+    if (!resizing) return;
+    const prevCursor = document.body.style.cursor;
+    const prevUserSelect = document.body.style.userSelect;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    function onMove(ev: MouseEvent) {
+      if (!resizing) return;
+      const next = Math.max(48, resizing.startWidth + (ev.clientX - resizing.startX));
+      setColWidths((prev) => ({ ...(prev ?? {}), [resizing.key]: next }));
+    }
+    function onUp() {
+      setResizing(null);
+    }
+    document.addEventListener("mousemove", onMove);
+    document.addEventListener("mouseup", onUp);
+    return () => {
+      document.body.style.cursor = prevCursor;
+      document.body.style.userSelect = prevUserSelect;
+      document.removeEventListener("mousemove", onMove);
+      document.removeEventListener("mouseup", onUp);
+    };
+  }, [resizing]);
+
+  // Double-click resets a single column back to auto width — Excel's
+  // "auto-fit" convention — by dropping it out of the frozen map.
+  function resetColumnWidth(key: string) {
+    setColWidths((prev) => {
+      if (!prev) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  }
+
+  function resizeHandle(key: string) {
+    return (
+      <span
+        onMouseDown={(e) => startResize(key, e)}
+        onDoubleClick={(e) => {
+          e.stopPropagation();
+          resetColumnWidth(key);
+        }}
+        className="dt-col-resize-handle"
+      />
+    );
+  }
+
   const controlBase =
     "inline-flex h-9 items-center gap-1.5 rounded-[10px] border px-3 text-xs font-semibold transition-colors";
 
@@ -300,8 +387,16 @@ export function DataTable<T>({
             <table
               className="dt-table w-full text-left text-sm"
               data-density={density}
-              style={{ minWidth, tableLayout: fixedLayout ? "fixed" : undefined }}
+              style={{ minWidth, tableLayout: fixedLayout || colWidths ? "fixed" : undefined }}
             >
+              {colWidths && (
+                <colgroup>
+                  <col style={{ width: colWidths[ROWNUM_KEY] }} />
+                  {columns.map((c) => (
+                    <col key={c.key} style={{ width: colWidths[c.key] }} />
+                  ))}
+                </colgroup>
+              )}
               <thead>
                 <tr>
                   {/* whitespace-nowrap is load-bearing here, not cosmetic —
@@ -311,14 +406,21 @@ export function DataTable<T>({
                       separate lines the moment the row number hit double
                       digits — every table with fixedLayout and more than 9
                       rows on a page had this. */}
-                  <th className="whitespace-nowrap" style={fixedLayout ? { width: "4%" } : undefined}>#</th>
+                  <th
+                    ref={(el) => { thRefs.current[ROWNUM_KEY] = el; }}
+                    className="relative whitespace-nowrap"
+                    style={!colWidths && fixedLayout ? { width: "4%" } : undefined}
+                  >
+                    #{resizeHandle(ROWNUM_KEY)}
+                  </th>
                   {columns.map((c) => {
                     const sortable = Boolean(c.sortValue);
                     const active = sortKey === c.key;
                     return (
                       <th
                         key={c.key}
-                        className={c.className}
+                        ref={(el) => { thRefs.current[c.key] = el; }}
+                        className={`relative ${c.className ?? ""}`}
                         // Drives both the screen-reader announcement and the
                         // sorted-column styling in globals.css — one source
                         // of truth for "this column is sorted" instead of a
@@ -353,6 +455,7 @@ export function DataTable<T>({
                         ) : (
                           c.header
                         )}
+                        {resizeHandle(c.key)}
                       </th>
                     );
                   })}
