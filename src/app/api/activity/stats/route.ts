@@ -1,7 +1,7 @@
 // GET /api/activity/stats - Get activity statistics (platform admin only)
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/current-profile";
-import { createClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function GET(req: NextRequest) {
   try {
@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const supabase = await createClient();
+    const supabase = await createSupabaseServerClient();
     const { searchParams } = new URL(req.url);
     
     const orgId = searchParams.get("org_id");

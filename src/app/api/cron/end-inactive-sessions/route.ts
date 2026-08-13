@@ -1,7 +1,7 @@
 // Cron job to end inactive sessions
-// Runs every hour to mark sessions as inactive if no activity for 60+ minutes
+// Runs daily to mark sessions as inactive if no activity for 60+ minutes
 import { NextRequest, NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase-admin";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const supabase = createClient();
+    const supabase = getSupabaseAdmin();
 
     // Call the database function to end inactive sessions (60 minutes)
     const { data, error } = await supabase.rpc("end_inactive_sessions", {

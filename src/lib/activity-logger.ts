@@ -1,8 +1,8 @@
 // Activity Logger - Client and Server-side activity tracking
 // Comprehensive logging of user actions, page views, and system events
 
-import { createClient as createBrowserClient } from "@/lib/supabase/browser";
-import { createClient as createServerClient } from "@/lib/supabase/server";
+import { createSupabaseBrowserClient } from "@/lib/supabase/browser";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 // Type definitions matching database enums
 export type ActivityCategory =
@@ -134,7 +134,7 @@ export async function createUserSession(
   session: UserSession
 ): Promise<string | null> {
   try {
-    const supabase = await createServerClient();
+    const supabase = await createSupabaseServerClient();
     
     const userAgent = session.userAgent || "";
     
@@ -173,7 +173,7 @@ export async function createUserSession(
  */
 export async function endUserSession(sessionId: string): Promise<void> {
   try {
-    const supabase = await createServerClient();
+    const supabase = await createSupabaseServerClient();
     
     await supabase
       .from("user_sessions")
@@ -199,7 +199,7 @@ export async function logActivityServer(
   ipAddress?: string
 ): Promise<void> {
   try {
-    const supabase = await createServerClient();
+    const supabase = await createSupabaseServerClient();
     
     await supabase.from("activity_logs").insert({
       session_id: sessionId,

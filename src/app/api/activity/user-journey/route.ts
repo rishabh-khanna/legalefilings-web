@@ -1,7 +1,7 @@
 // GET /api/activity/user-journey - Get user journey timeline (platform admin only)
 import { NextRequest, NextResponse } from "next/server";
 import { getCurrentProfile } from "@/lib/current-profile";
-import { createClient } from "@/lib/supabase/server";
+import { createSupabaseServerClient } from "@/lib/supabase/server";
 
 export async function GET(req: NextRequest) {
   try {
@@ -23,6 +23,8 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    const supabase = await createSupabaseServerClient();
+    
     let query = supabase
       .from("activity_logs")
       .select("*")
