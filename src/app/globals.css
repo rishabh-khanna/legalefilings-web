@@ -557,3 +557,201 @@ button:not(:disabled) {
     animation: none !important;
   }
 }
+
+/* ============================================================
+   MOBILE-FRIENDLY CRM UTILITIES
+   ============================================================
+   Responsive utilities for better mobile/tablet experience */
+
+/* Mobile-optimized table cards */
+@media (max-width: 768px) {
+  .mobile-card-table {
+    display: block !important;
+  }
+  
+  .mobile-card-table thead {
+    display: none;
+  }
+  
+  .mobile-card-table tbody {
+    display: block;
+  }
+  
+  .mobile-card-table tr {
+    display: block;
+    margin-bottom: 1rem;
+    border: 1px solid var(--color-line);
+    border-radius: 12px;
+    padding: 1rem;
+    background: var(--color-paper-raised);
+  }
+  
+  .mobile-card-table td {
+    display: flex;
+    justify-content: space-between;
+    padding: 0.5rem 0;
+    border: none;
+  }
+  
+  .mobile-card-table td:before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--color-ink-soft);
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+}
+
+/* Touch-friendly action buttons */
+@media (max-width: 768px) {
+  .touch-action-btn {
+    min-height: 44px;
+    min-width: 44px;
+  }
+}
+
+/* Mobile-optimized Kanban */
+@media (max-width: 768px) {
+  .kanban-column {
+    min-width: 100% !important;
+    margin-bottom: 1.5rem;
+  }
+  
+  .kanban-container {
+    display: block !important;
+    overflow-x: visible !important;
+  }
+}
+
+/* Swipeable actions */
+.swipe-actions {
+  position: relative;
+  overflow: hidden;
+}
+
+.swipe-actions-bg {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0 1rem;
+  transform: translateX(100%);
+  transition: transform 0.2s ease-out;
+}
+
+.swipe-actions.swiping .swipe-actions-bg {
+  transform: translateX(0);
+}
+
+/* Bottom navigation for mobile */
+.mobile-bottom-nav {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--color-paper-raised);
+  border-top: 1px solid var(--color-line);
+  padding: 0.5rem;
+  display: none;
+  z-index: 50;
+}
+
+@media (max-width: 768px) {
+  .mobile-bottom-nav {
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+  }
+  
+  .mobile-bottom-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 1rem;
+    min-width: 44px;
+    font-size: 0.75rem;
+    color: var(--color-ink-soft);
+    text-decoration: none;
+    transition: color 0.2s;
+  }
+  
+  .mobile-bottom-nav-item.active {
+    color: var(--color-action);
+  }
+  
+  .mobile-bottom-nav-item:active {
+    transform: scale(0.95);
+  }
+}
+
+/* Mobile drawer filters */
+.mobile-filter-drawer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--color-paper-raised);
+  border-top-left-radius: 1.5rem;
+  border-top-right-radius: 1.5rem;
+  max-height: 80vh;
+  overflow-y: auto;
+  transform: translateY(100%);
+  transition: transform 0.3s ease-out;
+  z-index: 100;
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.1);
+}
+
+.mobile-filter-drawer.open {
+  transform: translateY(0);
+}
+
+.mobile-filter-drawer-handle {
+  width: 40px;
+  height: 4px;
+  background: var(--color-line);
+  border-radius: 2px;
+  margin: 0.75rem auto;
+}
+
+/* Responsive grid helpers */
+@media (max-width: 640px) {
+  .grid-cols-2,
+  .grid-cols-3,
+  .grid-cols-4,
+  .sm\:grid-cols-2,
+  .sm\:grid-cols-3,
+  .sm\:grid-cols-4 {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Mobile-friendly modals */
+@media (max-width: 768px) {
+  .modal-content {
+    max-width: 95vw !important;
+    max-height: 90vh !important;
+    margin: 1rem !important;
+  }
+}
+
+/* Horizontal scroll for tables */
+@media (max-width: 768px) {
+  .table-scroll-container {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  .table-scroll-container::-webkit-scrollbar {
+    height: 6px;
+  }
+  
+  .table-scroll-container::-webkit-scrollbar-thumb {
+    background: var(--color-line);
+    border-radius: 3px;
+  }
+}
