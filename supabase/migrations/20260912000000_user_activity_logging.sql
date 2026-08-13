@@ -131,12 +131,13 @@ COMMENT ON TABLE activity_logs IS 'Comprehensive log of all user actions and pag
 -- 3. Login History View (Quick Access)
 -- ============================================================================
 -- Materialized view for fast login analytics
+-- Note: email comes from auth.users, not profiles
 CREATE VIEW login_history AS
 SELECT 
   al.user_id,
   al.organization_id,
   p.full_name,
-  p.email,
+  au.email,
   p.account_type,
   al.created_at as login_time,
   al.ip_address,
@@ -149,6 +150,7 @@ SELECT
   END as success
 FROM activity_logs al
 JOIN profiles p ON p.id = al.user_id
+LEFT JOIN auth.users au ON au.id = al.user_id
 WHERE al.category = 'auth' AND al.action IN ('login', 'login_failed')
 ORDER BY al.created_at DESC;
 
