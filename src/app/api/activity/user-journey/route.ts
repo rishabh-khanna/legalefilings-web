@@ -48,23 +48,26 @@ export async function GET(req: NextRequest) {
 
     // Group activities into sessions if user_id query
     if (userId && !sessionId) {
-      const sessions = activities?.reduce((acc, activity) => {
+      const sessions = (activities as any[])?.reduce((acc: any, activity: any) => {
         const sid = activity.session_id || "no-session";
         if (!acc[sid]) {
           acc[sid] = [];
         }
         acc[sid].push(activity);
         return acc;
-      }, {} as Record<string, typeof activities>) || {};
+      }, {} as Record<string, any[]>) || {};
 
       return NextResponse.json({
-        journey: Object.entries(sessions).map(([sessionId, activities]) => ({
-          sessionId: sessionId === "no-session" ? null : sessionId,
-          activities,
-          startTime: activities[0]?.created_at,
-          endTime: activities[activities.length - 1]?.created_at,
-          activityCount: activities.length,
-        })),
+        journey: Object.entries(sessions).map(([sessionId, acts]) => {
+          const activityList = acts as any[];
+          return {
+            sessionId: sessionId === "no-session" ? null : sessionId,
+            activities: activityList,
+            startTime: activityList[0]?.created_at,
+            endTime: activityList[activityList.length - 1]?.created_at,
+            activityCount: activityList.length,
+          };
+        }),
       });
     }
 

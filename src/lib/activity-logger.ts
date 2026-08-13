@@ -67,7 +67,7 @@ export type ActivityLog = {
   category: ActivityCategory;
   action: ActivityAction;
   description?: string;
-  pageePath?: string;
+  pagePath?: string;
   pageTitle?: string;
   referrer?: string;
   entityType?: string;
