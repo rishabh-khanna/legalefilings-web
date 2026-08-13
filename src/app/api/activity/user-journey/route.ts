@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const supabase = await createClient();
+    const supabase = await createSupabaseServerClient();
     const { searchParams } = new URL(req.url);
     
     const userId = searchParams.get("user_id");
@@ -22,8 +22,6 @@ export async function GET(req: NextRequest) {
         { status: 400 }
       );
     }
-
-    const supabase = await createSupabaseServerClient();
     
     let query = supabase
       .from("activity_logs")
