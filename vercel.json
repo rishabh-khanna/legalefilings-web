@@ -22,7 +22,7 @@
     },
     {
       "path": "/api/cron/end-inactive-sessions",
-      "schedule": "0 * * * *"
+      "schedule": "0 2 * * *"
     }
   ]
 }
