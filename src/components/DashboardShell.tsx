@@ -162,6 +162,7 @@ const PROFILE_ITEM: NavItem = { href: "/dashboard/profile", label: "Edit Profile
 const PLATFORM_ITEMS: NavItem[] = [
   { href: "/dashboard/platform/organizations", label: "Organizations", section: "Platform" },
   { href: "/dashboard/platform/crm-requests", label: "CRM Requests", section: "Platform" },
+  { href: "/dashboard/platform/activity", label: "Activity Monitor", section: "Platform" },
 ];
 
 // isManagerLevel comes from the staff member's assigned department_role
@@ -463,6 +464,11 @@ const NAV_ICONS: Record<string, (props: { className?: string }) => React.JSX.Ele
     <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
       <path d="M4 12h4.5l1.5 3h4l1.5-3H20" strokeLinecap="round" strokeLinejoin="round" />
       <path d="M4 12 5.5 5A1 1 0 0 1 6.5 4h11a1 1 0 0 1 1 1L20 12v6a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-6Z" strokeLinejoin="round" />
+    </svg>
+  ),
+  "/dashboard/platform/activity": ({ className }) => (
+    <svg viewBox="0 0 24 24" className={className} fill="none" stroke="currentColor" strokeWidth="1.75">
+      <path d="M3 12h4l2-6 4 12 2-6h6" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   ),
 };
